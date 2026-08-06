@@ -11,7 +11,8 @@
 - **Source path:** `C:\Users\Muhsin Dahlab\Downloads\product manager\pm-os-phase1`
 - **Destination path:** `C:\Users\Muhsin Dahlab\Downloads\NEXVORA`
 - **Source repo (للمرجع فقط، غير مربوط):** `github.com/teachermohsenashraf-hue/pm-os`
-- **New repo:** `github.com/teachermohsenashraf-hue/NEXVORA`
+- **New repo:** `github.com/dhlbmhsn357-wq/NEXVORA` (Public)
+- **New repo owner:** `dhlbmhsn357-wq` — حساب مختلف تمامًا عن حساب VELORA (`teachermohsenashraf-hue`) لضمان عزل الملكية على مستوى حساب GitHub نفسه
 
 ## ما تم نسخه
 
