@@ -1,0 +1,339 @@
+<title>UI/UX Audit — PM Operating System</title>
+<style>
+  :root {
+    --ink:#0A1735; --ink-soft:#4A5578; --ink-faint:#7C86A8;
+    --paper:#F6F7FC; --surface:#FFFFFF; --surface-2:#EEF0F9; --border:#DFE3F0;
+    --accent:#3D5CFF; --accent-soft:#EAEEFF; --accent-ink:#1F3AD1;
+    --crit:#C22B45; --crit-soft:#FBE7EA;
+    --high:#C1651A; --high-soft:#FBEEE0;
+    --med:#9C7A0C; --med-soft:#FBF3D9;
+    --low:#1E7A4C; --low-soft:#E4F5EC;
+    --font-display: "Segoe UI Semibold", "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-body: "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:#E8EAF6; --ink-soft:#AEB6D6; --ink-faint:#7680A6;
+      --paper:#0B0E1E; --surface:#121732; --surface-2:#1A2044; --border:#2B3260;
+      --accent:#7C93FF; --accent-soft:rgba(124,147,255,.14); --accent-ink:#AEBBFF;
+      --crit:#F0728A; --crit-soft:rgba(240,114,138,.14);
+      --high:#F0A15C; --high-soft:rgba(240,161,92,.14);
+      --med:#E0C05C; --med-soft:rgba(224,192,92,.14);
+      --low:#5FD79A; --low-soft:rgba(95,215,154,.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink:#E8EAF6; --ink-soft:#AEB6D6; --ink-faint:#7680A6;
+    --paper:#0B0E1E; --surface:#121732; --surface-2:#1A2044; --border:#2B3260;
+    --accent:#7C93FF; --accent-soft:rgba(124,147,255,.14); --accent-ink:#AEBBFF;
+    --crit:#F0728A; --crit-soft:rgba(240,114,138,.14);
+    --high:#F0A15C; --high-soft:rgba(240,161,92,.14);
+    --med:#E0C05C; --med-soft:rgba(224,192,92,.14);
+    --low:#5FD79A; --low-soft:rgba(95,215,154,.14);
+  }
+  :root[data-theme="light"] {
+    --ink:#0A1735; --ink-soft:#4A5578; --ink-faint:#7C86A8;
+    --paper:#F6F7FC; --surface:#FFFFFF; --surface-2:#EEF0F9; --border:#DFE3F0;
+    --accent:#3D5CFF; --accent-soft:#EAEEFF; --accent-ink:#1F3AD1;
+    --crit:#C22B45; --crit-soft:#FBE7EA;
+    --high:#C1651A; --high-soft:#FBEEE0;
+    --med:#9C7A0C; --med-soft:#FBF3D9;
+    --low:#1E7A4C; --low-soft:#E4F5EC;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-body); line-height: 1.7; font-size: 15px; }
+  h1,h2,h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+  .shell { display:flex; max-width: 1280px; margin: 0 auto; align-items: flex-start; }
+  .toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; width: 230px; flex-shrink: 0; padding: 28px 18px; border-inline-start: 1px solid var(--border); font-size: 12.5px; }
+  .toc-title { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); font-size: 10.5px; margin-bottom: 10px; }
+  .toc a { display:block; color: var(--ink-soft); text-decoration:none; padding: 5px 8px; border-radius: 6px; }
+  .toc a:hover { background: var(--surface-2); color: var(--ink); }
+  .main { flex: 1; min-width: 0; padding: 40px 48px 120px; }
+  @media (max-width: 900px) { .toc { display:none; } .main { padding: 24px 18px 100px; } }
+  header.hero { padding-bottom: 24px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent-soft); display:inline-block; padding: 4px 10px; border-radius: 999px; margin-bottom: 12px; }
+  h1.title { font-size: 30px; font-weight: 800; line-height: 1.25; }
+  .subtitle { color: var(--ink-soft); font-size: 15px; margin-top: 10px; max-width: 70ch; }
+  .verdict-card { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 14px; padding: 20px 22px; margin: 24px 0 32px; }
+  .verdict-card .label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing:.08em; color: var(--accent-ink); font-weight: 700; }
+  .verdict-card p { color: var(--ink-soft); margin: 8px 0 0; max-width: 76ch; }
+  .stat-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(130px,1fr)); gap: 10px; margin: 18px 0 36px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat .n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; color: var(--accent-ink); }
+  .stat .l { font-size: 11px; color: var(--ink-faint); margin-top: 2px; }
+  section { margin-bottom: 44px; scroll-margin-top: 20px; }
+  .section-head { display:flex; align-items:baseline; gap: 10px; margin-bottom: 6px; }
+  .section-num { font-family: var(--font-mono); color: var(--ink-faint); font-size: 13px; }
+  .section-head h2 { font-size: 20px; }
+  .persona { font-size: 12px; color: var(--ink-faint); margin: 2px 0 16px; }
+  .finding { background: var(--surface); border: 1px solid var(--border); border-inline-start: 4px solid var(--ink-faint); border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; }
+  .finding[data-sev="crit"] { border-inline-start-color: var(--crit); }
+  .finding[data-sev="high"] { border-inline-start-color: var(--high); }
+  .finding[data-sev="med"] { border-inline-start-color: var(--med); }
+  .finding[data-sev="low"] { border-inline-start-color: var(--low); }
+  .f-title { font-weight: 700; font-size: 14.5px; }
+  .badge { font-family: var(--font-mono); font-size: 10px; padding: 2px 7px; border-radius: 6px; margin-inline-start: 8px; }
+  .badge.crit { background: var(--crit-soft); color: var(--crit); }
+  .badge.high { background: var(--high-soft); color: var(--high); }
+  .badge.med { background: var(--med-soft); color: var(--med); }
+  .badge.low { background: var(--low-soft); color: var(--low); }
+  .f-body { margin-top: 8px; font-size: 13.5px; color: var(--ink-soft); }
+  .f-body code { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  table.rt { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0 24px; }
+  table.rt th, table.rt td { border: 1px solid var(--border); padding: 8px 10px; text-align: start; }
+  table.rt th { background: var(--surface-2); font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; color: var(--ink-faint); }
+  .table-wrap { overflow-x: auto; }
+  .swatch-row { display:flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 24px; }
+  .swatch { width: 100px; }
+  .swatch .chip { height: 48px; border-radius: 10px; border: 1px solid var(--border); }
+  .swatch .lbl { font-family: var(--font-mono); font-size: 10px; margin-top: 4px; color: var(--ink-faint); }
+  .callout { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 14px 0; font-size: 13.5px; }
+  .callout b { color: var(--accent-ink); }
+  footer { margin-top: 50px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--ink-faint); font-family: var(--font-mono); }
+</style>
+
+<div class="shell" dir="rtl" lang="ar">
+  <nav class="toc">
+    <p class="toc-title">التنقل</p>
+    <a href="#verdict">الخلاصة</a>
+    <a href="#s1">1. Design Tokens</a>
+    <a href="#s2">2. تكرار المكوّنات</a>
+    <a href="#s3">3. Typography</a>
+    <a href="#s4">4. Spacing وRadius</a>
+    <a href="#s5">5. الموبايل والاستجابة</a>
+    <a href="#s6">6. إمكانية الوصول</a>
+    <a href="#s7">7. Loading وAnimation</a>
+    <a href="#s8">8. الملاحة والهيكل</a>
+    <a href="#s9">9. Design System المقترح</a>
+    <a href="#s10">10. خطة التنفيذ المرحلية</a>
+    <a href="#s11">11. المقارنة بالبرومبت الأصلي</a>
+  </nav>
+
+  <main class="main">
+    <header class="hero">
+      <span class="eyebrow">UI/UX Audit</span>
+      <h1 class="title">PM Operating System — تدقيق واجهة قبل إعادة التصميم</h1>
+      <p class="subtitle">
+        مراجعة فعلية للكود الحالي (مش تقييم عام) — أرقام حقيقية من فحص كل ملفات app/*.tsx، لتحديد
+        إيه اللي محتاج فعليًا يتحسّن قبل أي إعادة بناء، وإيه اللي مطلوب في برومبت الـ Redesign
+        الأصلي بس مش مبرر لحجم VELORA الفعلي (فريق داخلي ~10، عملاء محدودين).
+      </p>
+    </header>
+
+    <section id="verdict">
+      <div class="verdict-card">
+        <span class="label">الحكم العام</span>
+        <p>
+          الواجهة الحالية <b>متسقة بصريًا بشكل معقول</b> (نفس النظام اللوني، نفس الخط) لكنها <b>مبنية بأسلوب
+          "انسخ والصق" لا نظام</b> — كل لوحة بتعيد كتابة نفس الزرار والكارت والمودال بصياغة شبه متطابقة بدل
+          استخدام مكوّن مشترك. المشكلة الحقيقية مش "شكل قديم"، المشكلة إنه <b>مفيش Design System فعلي خلف
+          الشكل الموجود</b> — وده بالظبط اللي المفروض يتحل الأول قبل أي تجميل بصري.
+        </p>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="n">14</div><div class="l">نسخة من نفس زرار Primary</div></div>
+        <div class="stat"><div class="n">14</div><div class="l">نسخة من نفس زرار Secondary</div></div>
+        <div class="stat"><div class="n">38</div><div class="l">تكرار حرفي لنمط الكارت</div></div>
+        <div class="stat"><div class="n">156 / 59</div><div class="l">rounded-lg مقابل rounded-xl (بلا قاعدة)</div></div>
+        <div class="stat"><div class="n">90 / 32</div><div class="l">أزرار بلا Focus Ring واضح</div></div>
+        <div class="stat"><div class="n">4</div><div class="l">Modal بمنطق مكرر خارج المكوّنات المشتركة</div></div>
+      </div>
+    </section>
+
+    <section id="s1">
+      <div class="section-head"><span class="section-num">01</span><h2>Design Tokens — الموجود فعليًا</h2></div>
+      <p class="persona">فحص <code>app/globals.css</code> الفعلي بالكامل — مش افتراض.</p>
+
+      <div class="callout">
+        <b>الخبر الجيد:</b> فيه فعلًا نظام ألوان مركزي (CSS Variables) مطابق لموقع VELORA الحقيقي — مش لون
+        Hardcoded من الصفر. ده أساس ممتاز نبني عليه، مش نبدأ منه من جديد.
+      </div>
+
+      <div class="swatch-row">
+        <div class="swatch"><div class="chip" style="background:#3D5CFF"></div><div class="lbl">--v-primary</div></div>
+        <div class="swatch"><div class="chip" style="background:#0A1735"></div><div class="lbl">--v-text</div></div>
+        <div class="swatch"><div class="chip" style="background:#F6F8FC"></div><div class="lbl">--v-surface</div></div>
+        <div class="swatch"><div class="chip" style="background:#EEF1FF"></div><div class="lbl">--v-primary-tint</div></div>
+        <div class="swatch"><div class="chip" style="background:#16A34A"></div><div class="lbl">--v-green</div></div>
+        <div class="swatch"><div class="chip" style="background:#DC2626"></div><div class="lbl">--v-red</div></div>
+        <div class="swatch"><div class="chip" style="background:#F0A12B"></div><div class="lbl">--v-amber</div></div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <p class="f-title">مفيش Spacing Scale أو Radius Scale أو Shadow Scale — كل قيمة بتتكتب يدوي</p>
+        <div class="f-body">
+          كل رقم (px-4, py-2, rounded-lg, shadow) بيتكرر يدويًا في كل ملف بدل ما يبقى Token واحد. النتيجة:
+          مفيش طريقة تضمن إن كل الأزرار بنفس الـ Radius غير المراجعة اليدوية لكل ملف (زي ما الأرقام فوق بتوضح).
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <p class="f-title">مفيش Typography Scale مسمّى (H1-H4, Body, Caption) — بس Tailwind utilities خام</p>
+        <div class="f-body">
+          <code>text-2xl</code>, <code>text-sm</code>, <code>text-xs</code> منتشرين بدون تسلسل هرمي واضح
+          موثّق. النتيجة: عنوان صفحة في مكان ممكن يبقى نفس حجم عنوان قسم في مكان تاني.
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <p class="f-title">صفر Dark Mode فعلي — رغم إن Tailwind v4 و<code>@theme inline</code> بيدعموه بسهولة</p>
+        <div class="f-body">مفيش <code>@media (prefers-color-scheme: dark)</code> ولا <code>data-theme</code> في globals.css خالص.</div>
+      </div>
+    </section>
+
+    <section id="s2">
+      <div class="section-head"><span class="section-num">02</span><h2>تكرار المكوّنات — الدليل بالأرقام</h2></div>
+      <p class="persona">استخراج فعلي بـ grep عبر كل ملفات app/**/*.tsx — مش تقدير.</p>
+
+      <div class="table-wrap">
+        <table class="rt">
+          <thead><tr><th>النمط</th><th>عدد التكرارات الحرفية</th><th>الخطورة</th></tr></thead>
+          <tbody>
+            <tr><td>زرار Primary (نفس الـ className بالحرف)</td><td>14 ملف</td><td>🟠 High</td></tr>
+            <tr><td>زرار Secondary/Outline (نفس الـ className بالحرف)</td><td>14 ملف</td><td>🟠 High</td></tr>
+            <tr><td>Container كارت (<code>rounded-xl border bg-[var(--v-bg)]</code>)</td><td>38 موضع</td><td>🟡 Medium</td></tr>
+            <tr><td>Modal كامل مكتوب يدوي (خارج المكوّنات المشتركة الجديدة)</td><td>4 مواضع</td><td>🟡 Medium</td></tr>
+            <tr><td>Banner تحذير Amber (نفس الـ className بالحرف)</td><td>6 مواضع</td><td>🟢 Low</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <b>ملاحظة مهمة:</b> جزء من التكرار ده اتحل بالفعل جزئيًا في جلسة سابقة (استخراج
+        <code>RegenerateConfirmDialog</code> و<code>CompareModalShell</code> و<code>EditableSectionCard</code>) —
+        لكن ده كان محصور في تبويبات المشروع الست بس. باقي الواجهة (Leads, Projects, Clients, Dashboard,
+        Settings) لسه فيها نفس المشكلة بلا حل.
+      </div>
+    </section>
+
+    <section id="s3">
+      <div class="section-head"><span class="section-num">03</span><h2>Typography</h2></div>
+      <div class="finding" data-sev="med">
+        <p class="f-title">خط واحد فقط (Tajawal) بوزنين فعليين مُستخدمين (400 عادي، 800 <code>.font-display</code>)</p>
+        <div class="f-body">مقبول تمامًا لهوية VELORA (مش عيب)، لكن غياب مستويات وسطى (600 لعناوين الأقسام) بيخلي التسلسل الهرمي البصري ضعيف أحيانًا — كل حاجة إما عادي جدًا أو Bold جدًا.</div>
+      </div>
+    </section>
+
+    <section id="s4">
+      <div class="section-head"><span class="section-num">04</span><h2>Spacing وRadius</h2></div>
+      <div class="finding" data-sev="high">
+        <p class="f-title"><code>rounded-lg</code> (8px) و<code>rounded-xl</code> (12px) بيتستخدموا بالتبادل على عناصر من نفس النوع</p>
+        <div class="f-body">مثال حقيقي: أزرار الـ Primary الكبيرة بتستخدم <code>rounded-lg</code>، بينما الكروت اللي بتحويها بتستخدم <code>rounded-xl</code> — مفيش قاعدة واضحة "الأزرار = كذا، الكروت = كذا".</div>
+      </div>
+    </section>
+
+    <section id="s5">
+      <div class="section-head"><span class="section-num">05</span><h2>الموبايل والاستجابة</h2></div>
+      <div class="finding" data-sev="high">
+        <p class="f-title">Top Navigation (<code>app/dashboard/layout.tsx</code>) بلا أي معالجة للموبايل — صفر Drawer، صفر Hamburger</p>
+        <div class="f-body">الروابط السبعة (نظرة عامة، عملاء محتملون، عملاء، مشاريع، الإعدادات، دليل الاستخدام...) في <code>flex items-center gap-5</code> واحد بدون <code>flex-wrap</code> ولا نسخة موبايل — على شاشة 375px هتتقطع أو تعمل Scroll أفقي غير مقصود.</div>
+      </div>
+      <div class="finding" data-sev="med">
+        <p class="f-title">استخدام Breakpoints محدود جدًا (12 ملف بس من ~60) — الجداول ومعظم الكروت بلا نسخة موبايل مخصصة</p>
+        <div class="f-body">Support Requests وLeads/Projects lists بتعرض جداول/كروت بعرض ثابت نسبيًا؛ تشتغل لكن مش محسّنة للمس أو الشاشات الصغيرة فعليًا.</div>
+      </div>
+      <div class="callout">
+        <b>لكن بصراحة:</b> السؤال الحقيقي قبل أي استثمار هنا: <b>هل فريقك الداخلي (10 أشخاص) بيستخدم النظام
+        من الموبايل أصلًا؟</b> لو الإجابة "نادرًا"، الأولوية الصح هي إصلاح الـ Overflow في الـ Top Nav بس (High)،
+        مش Redesign كامل Mobile-First من 360px (اللي البرومبت الأصلي طلبه) — ده مجهود كبير لسيناريو استخدام
+        نادر.
+      </div>
+    </section>
+
+    <section id="s6">
+      <div class="section-head"><span class="section-num">06</span><h2>إمكانية الوصول</h2></div>
+      <div class="finding" data-sev="med">
+        <p class="f-title">90 عنصر <code>&lt;button&gt;</code> في الكود، 32 بس عندهم <code>focus-visible:outline</code> صريح</p>
+        <div class="f-body">الباقي بيعتمد على الـ Focus Ring الافتراضي للمتصفح (شغّال فعليًا، بس شكله غير متسق مع الأزرار اللي مخصص لها Style).</div>
+      </div>
+      <div class="finding" data-sev="low">
+        <p class="f-title">استخدام <code>aria-*</code> موجود بس محدود (18 ملف) — أغلبه <code>aria-expanded</code> و<code>aria-modal</code> بس، بدون <code>aria-label</code> على أزرار الأيقونات (زي 📎 في الـ Widget)</p>
+      </div>
+    </section>
+
+    <section id="s7">
+      <div class="section-head"><span class="section-num">07</span><h2>Loading وAnimation</h2></div>
+      <div class="finding" data-sev="low">
+        <p class="f-title">Skeleton موجود جزئيًا (5 صفحات <code>loading.tsx</code> + Skeletons داخلية في بعض اللوحات) — مش شامل لكل الحالات</p>
+        <div class="f-body">3 مواضع بس لسه بتستخدم نص "جاري التحميل…" عادي بدل Skeleton بصري.</div>
+      </div>
+      <div class="finding" data-sev="low">
+        <p class="f-title">صفر مكتبة Animation (Framer Motion مش موجودة، ولا أي حركة CSS منظمة) — الانتقالات محصورة في <code>transition</code> Tailwind البسيطة (hover fade)</p>
+        <div class="f-body">شغّال ومحترم، بس بلا حركات دخول/خروج للـ Modals أو الكروت.</div>
+      </div>
+    </section>
+
+    <section id="s8">
+      <div class="section-head"><span class="section-num">08</span><h2>الملاحة والهيكل العام</h2></div>
+      <div class="finding" data-sev="med">
+        <p class="f-title">مفيش Breadcrumbs، مفيش بحث عام (Global Search)، مفيش مركز إشعارات</p>
+        <div class="f-body">مقبول جزئيًا لحجم النظام الحالي (عدد الصفحات محدود)، لكن مع نمو عدد المشاريع (بعد ما عملنا Pagination) البحث العام هيبقى مفيد فعليًا.</div>
+      </div>
+      <div class="finding" data-sev="low">
+        <p class="f-title">تبويبات المشروع (10 تبويبات دلوقتي بعد إضافة Activity) بتفضل في صف واحد <code>flex-wrap</code> — شغّالة لكن هتبقى مزدحمة بصريًا مع أي تبويب جديد</p>
+      </div>
+    </section>
+
+    <section id="s9">
+      <div class="section-head"><span class="section-num">09</span><h2>Design System المقترح — امتداد مش استبدال</h2></div>
+      <p class="persona">القرار المعماري الأهم: نبني فوق <code>--v-*</code> الموجودة، مش نبدأ من صفر.</p>
+
+      <div class="table-wrap">
+        <table class="rt">
+          <thead><tr><th>الطبقة</th><th>الموجود</th><th>المقترح إضافته</th></tr></thead>
+          <tbody>
+            <tr><td>الألوان</td><td>✅ كامل ومطابق لـ VELORA</td><td>إضافة <code>--v-info</code> فقط (الباقي موجود)</td></tr>
+            <tr><td>Spacing</td><td>❌ غير موجود كـ Tokens</td><td>مقياس بسيط: xs/sm/md/lg/xl/2xl مبني على 4px</td></tr>
+            <tr><td>Radius</td><td>❌ غير موجود كـ Tokens</td><td>sm(6) / md(10) / lg(14) / full — قاعدة واحدة: أزرار وحقول = md، كروت وModals = lg</td></tr>
+            <tr><td>Shadow</td><td>❌ ظل واحد بس في <code>.hud-frame</code></td><td>sm/md/lg ناعمين (مطابق للبرومبت: بدون Drop Shadow ثقيل)</td></tr>
+            <tr><td>Typography</td><td>🟡 وزنين بس</td><td>إضافة مستوى نص متوسط (600) لعناوين الأقسام</td></tr>
+            <tr><td>Components</td><td>🟡 3 مكوّنات مشتركة (تبويبات المشروع بس)</td><td>Button, Card, Badge, Modal, EmptyState, Skeleton عامّين لكل الموقع</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="s10">
+      <div class="section-head"><span class="section-num">10</span><h2>خطة التنفيذ المرحلية المقترحة</h2></div>
+      <div class="table-wrap">
+        <table class="rt">
+          <thead><tr><th>المرحلة</th><th>المحتوى</th><th>لماذا بهذا الترتيب</th></tr></thead>
+          <tbody>
+            <tr><td><b>1. الأساس</b></td><td>توسيع Tokens (Spacing/Radius/Shadow) في globals.css + بناء المكوّنات المشتركة (Button, Card, Badge, Modal shell, EmptyState, Skeleton)</td><td>كل حاجة بعد كده بتبني على المكوّنات دي — لازم تتعمل صح من الأول</td></tr>
+            <tr><td><b>2. الصفحات الأساسية</b></td><td>Dashboard, Leads, Projects, Clients — أول حاجة يشوفها أي مستخدم</td><td>أعلى تكرار استخدام يومي</td></tr>
+            <tr><td><b>3. تبويبات المشروع</b></td><td>تطبيق نفس المكوّنات الجديدة على الست تبويبات (استبدال الأنماط القديمة المتبقية)</td><td>أكبر حجم كود، لكن البنية جاهزة بالفعل جزئيًا</td></tr>
+            <tr><td><b>4. Settings + Widget + صفحات المشاركة العامة</b></td><td>باقي الصفحات</td><td>أقل استخدامًا</td></tr>
+            <tr><td><b>5. إصلاح Overflow في Top Nav على الموبايل</b></td><td>Drawer بسيط بدل الروابط المتكدسة</td><td>الإصلاح الموبايل الوحيد المبرر فعليًا (قسم 5 فوق)</td></tr>
+            <tr><td><b>6. مراجعة أخيرة</b></td><td>Build نظيف + Lint + اختبار حي + تقرير Before/After</td><td>ضمان صفر Regression</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="s11">
+      <div class="section-head"><span class="section-num">11</span><h2>المقارنة الصريحة بالبرومبت الأصلي</h2></div>
+      <div class="table-wrap">
+        <table class="rt">
+          <thead><tr><th>مطلوب في البرومبت</th><th>القرار</th><th>السبب</th></tr></thead>
+          <tbody>
+            <tr><td>Design Tokens موحّدة، Buttons/Cards/Forms/Modals موحّدة</td><td>✅ ننفّذه بالكامل</td><td>مشكلة حقيقية موثّقة بالأرقام فوق</td></tr>
+            <tr><td>Empty States بـ Illustration + Actions</td><td>✅ ننفّذه (بدون Illustrations رسومية مخصصة — أيقونة بسيطة تكفي)</td><td>قيمة حقيقية، لكن رسم Illustrations مخصصة مجهود تصميمي منفصل عن الكود</td></tr>
+            <tr><td>Skeleton شامل لكل شيء</td><td>✅ ننفّذه</td><td>الأساس موجود، توسعته منطقي</td></tr>
+            <tr><td>إصلاح Overflow في التنقل على الموبايل</td><td>✅ ننفّذه</td><td>مشكلة حقيقية فعلية</td></tr>
+            <tr><td>Framer Motion + Card Lift + Button Ripple + Layout Animation</td><td>❌ نتجاهله</td><td>مكتبة كاملة جديدة لصالح حركات تجميلية — يعارض فلسفة "صفر Dependencies إلا لو مبرر" المتّبعة طول المشروع</td></tr>
+            <tr><td>Virtualization للجداول الكبيرة</td><td>❌ نتجاهله</td><td>مفيش جدول فيه أكتر من عشرات الصفوف حاليًا</td></tr>
+            <tr><td>Mobile-First كامل من 360px مع كل الجداول → Cards والـ Filters → Bottom Sheet</td><td>🟡 نصّه بس (إصلاح الـ Overflow الحرج، مش Redesign كامل)</td><td>استخدام الموبايل غير مؤكد لفريق داخلي 10 أشخاص</td></tr>
+            <tr><td>Global Search + Notifications + Glass Effect Topbar</td><td>❌ نتجاهله الآن</td><td>ميزات جديدة كاملة، مش Redesign بصري — تستاهل طلب منفصل لو فعلاً مطلوبة</td></tr>
+            <tr><td>Dark Mode</td><td>❌ نتجاهله الآن</td><td>يحتاج Palette غامقة كاملة (قرار تصميمي واعٍ)، مذكور بالفعل في تقرير سابق كـ Low Priority</td></tr>
+            <tr><td>تقرير Before/After بالصور لكل شاشة</td><td>✅ ننفّذه</td><td>جزء طبيعي من تسليم أي مرحلة تصميم — هيتوثّق في النهاية</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>UI/UX Audit · PM Operating System — VELORA · مرجعية داخلية، أساس القرار قبل مرحلة الـ Redesign</footer>
+  </main>
+</div>

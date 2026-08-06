@@ -1,0 +1,1214 @@
+<title>Deep Product Audit v2.0 — PM Operating System</title>
+<style>
+  @font-face {
+    font-family: "system-ar";
+    src: local("Segoe UI"), local("Tahoma");
+  }
+  :root {
+    --ink:#0A1735; --ink-soft:#4A5578; --ink-faint:#7C86A8;
+    --paper:#F6F7FC; --surface:#FFFFFF; --surface-2:#EEF0F9; --border:#DFE3F0;
+    --accent:#3D5CFF; --accent-soft:#EAEEFF; --accent-ink:#1F3AD1;
+    --crit:#C22B45; --crit-soft:#FBE7EA;
+    --high:#C1651A; --high-soft:#FBEEE0;
+    --med:#9C7A0C; --med-soft:#FBF3D9;
+    --low:#1E7A4C; --low-soft:#E4F5EC;
+    --future:#4A5A8C; --future-soft:#E9EBF6;
+    --font-display: "system-ar", "Segoe UI Semibold", "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-body: "system-ar", "Segoe UI", Tahoma, Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:#E8EAF6; --ink-soft:#AEB6D6; --ink-faint:#7680A6;
+      --paper:#0B0E1E; --surface:#121732; --surface-2:#1A2044; --border:#2B3260;
+      --accent:#7C93FF; --accent-soft:rgba(124,147,255,.14); --accent-ink:#AEBBFF;
+      --crit:#F0728A; --crit-soft:rgba(240,114,138,.14);
+      --high:#F0A15C; --high-soft:rgba(240,161,92,.14);
+      --med:#E0C05C; --med-soft:rgba(224,192,92,.14);
+      --low:#5FD79A; --low-soft:rgba(95,215,154,.14);
+      --future:#9AA6DD; --future-soft:rgba(154,166,221,.14);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink:#E8EAF6; --ink-soft:#AEB6D6; --ink-faint:#7680A6;
+    --paper:#0B0E1E; --surface:#121732; --surface-2:#1A2044; --border:#2B3260;
+    --accent:#7C93FF; --accent-soft:rgba(124,147,255,.14); --accent-ink:#AEBBFF;
+    --crit:#F0728A; --crit-soft:rgba(240,114,138,.14);
+    --high:#F0A15C; --high-soft:rgba(240,161,92,.14);
+    --med:#E0C05C; --med-soft:rgba(224,192,92,.14);
+    --low:#5FD79A; --low-soft:rgba(95,215,154,.14);
+    --future:#9AA6DD; --future-soft:rgba(154,166,221,.14);
+  }
+  :root[data-theme="light"] {
+    --ink:#0A1735; --ink-soft:#4A5578; --ink-faint:#7C86A8;
+    --paper:#F6F7FC; --surface:#FFFFFF; --surface-2:#EEF0F9; --border:#DFE3F0;
+    --accent:#3D5CFF; --accent-soft:#EAEEFF; --accent-ink:#1F3AD1;
+    --crit:#C22B45; --crit-soft:#FBE7EA;
+    --high:#C1651A; --high-soft:#FBEEE0;
+    --med:#9C7A0C; --med-soft:#FBF3D9;
+    --low:#1E7A4C; --low-soft:#E4F5EC;
+    --future:#4A5A8C; --future-soft:#E9EBF6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  h1,h2,h3,h4 { font-family: var(--font-display); text-wrap: balance; color: var(--ink); margin: 0; }
+  a { color: var(--accent-ink); }
+  ::selection { background: var(--accent-soft); }
+
+  .shell { display:flex; max-width: 1320px; margin: 0 auto; align-items: flex-start; }
+  .toc {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    width: 240px; flex-shrink: 0; padding: 28px 18px; border-inline-start: 1px solid var(--border);
+    font-size: 12.5px;
+  }
+  .toc-title { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); font-size: 10.5px; margin-bottom: 10px; }
+  .toc a { display:block; color: var(--ink-soft); text-decoration:none; padding: 5px 8px; border-radius: 6px; }
+  .toc a:hover { background: var(--surface-2); color: var(--ink); }
+  .toc a.verdict { color: var(--crit); font-weight: 600; }
+
+  .main { flex: 1; min-width: 0; padding: 40px 48px 120px; }
+  @media (max-width: 900px) {
+    .toc { display:none; }
+    .main { padding: 28px 20px 100px; }
+  }
+
+  header.hero { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 32px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent-soft); display:inline-block; padding: 4px 10px; border-radius: 999px; margin-bottom: 14px; }
+  h1.title { font-size: 34px; font-weight: 800; line-height: 1.25; }
+  .subtitle { color: var(--ink-soft); font-size: 15.5px; margin-top: 10px; max-width: 68ch; }
+  .meta-row { display:flex; gap: 22px; margin-top: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .meta-row b { color: var(--ink-soft); font-weight: 600; }
+
+  .verdict-card {
+    background: var(--crit-soft); border: 1px solid var(--crit); border-radius: 14px;
+    padding: 22px 24px; margin: 28px 0 36px;
+  }
+  .verdict-card .verdict-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing:.08em; color: var(--crit); font-weight: 700; }
+  .verdict-card h2 { font-size: 21px; margin-top: 6px; color: var(--ink); }
+  .verdict-card p { color: var(--ink-soft); margin: 10px 0 0; max-width: 74ch; }
+
+  .stat-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 10px; margin: 22px 0 8px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat .n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; }
+  .stat .l { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+  .stat.crit .n { color: var(--crit); } .stat.high .n { color: var(--high); }
+  .stat.med .n { color: var(--med); } .stat.low .n { color: var(--low); } .stat.future .n { color: var(--future); }
+
+  .legend { display:flex; gap: 10px; flex-wrap: wrap; margin: 20px 0 40px; position: sticky; top: 0; z-index: 5; background: var(--paper); padding: 10px 0; }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-family: var(--font-mono); font-size: 12px; padding: 6px 11px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; user-select:none; }
+  .chip[data-sev="crit"] { background: var(--crit-soft); color: var(--crit); border-color: var(--crit); }
+  .chip[data-sev="high"] { background: var(--high-soft); color: var(--high); border-color: var(--high); }
+  .chip[data-sev="med"] { background: var(--med-soft); color: var(--med); border-color: var(--med); }
+  .chip[data-sev="low"] { background: var(--low-soft); color: var(--low); border-color: var(--low); }
+  .chip[data-sev="future"] { background: var(--future-soft); color: var(--future); border-color: var(--future); }
+  .chip.off { opacity: .35; }
+
+  section.audit { margin-bottom: 52px; scroll-margin-top: 20px; }
+  .section-head { display:flex; align-items:baseline; gap: 12px; margin-bottom: 6px; }
+  .section-num { font-family: var(--font-mono); color: var(--ink-faint); font-size: 14px; }
+  .section-head h2 { font-size: 23px; }
+  .persona { font-size: 12.5px; color: var(--ink-faint); margin: 4px 0 20px; font-style: normal; }
+  .persona b { color: var(--ink-soft); }
+
+  .finding { background: var(--surface); border: 1px solid var(--border); border-inline-start: 4px solid var(--ink-faint); border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; }
+  .finding[data-sev="crit"] { border-inline-start-color: var(--crit); }
+  .finding[data-sev="high"] { border-inline-start-color: var(--high); }
+  .finding[data-sev="med"] { border-inline-start-color: var(--med); }
+  .finding[data-sev="low"] { border-inline-start-color: var(--low); }
+  .finding[data-sev="future"] { border-inline-start-color: var(--future); }
+
+  .f-top { display:flex; justify-content: space-between; align-items:flex-start; gap: 14px; flex-wrap: wrap; }
+  .f-title { font-weight: 700; font-size: 15.5px; color: var(--ink); max-width: 62ch; }
+  .f-badges { display:flex; gap: 6px; flex-wrap: wrap; flex-shrink:0; }
+  .badge { font-family: var(--font-mono); font-size: 10.5px; padding: 3px 8px; border-radius: 6px; white-space:nowrap; }
+  .badge.sev-crit { background: var(--crit-soft); color: var(--crit); }
+  .badge.sev-high { background: var(--high-soft); color: var(--high); }
+  .badge.sev-med { background: var(--med-soft); color: var(--med); }
+  .badge.sev-low { background: var(--low-soft); color: var(--low); }
+  .badge.sev-future { background: var(--future-soft); color: var(--future); }
+  .badge.neutral { background: var(--surface-2); color: var(--ink-faint); }
+
+  .f-body { margin-top: 12px; font-size: 14px; color: var(--ink-soft); }
+  .f-body p { margin: 0 0 8px; }
+  .f-body b { color: var(--ink); font-weight: 600; }
+
+  .f-meta { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
+  .f-meta div { font-size: 11.5px; }
+  .f-meta .k { font-family: var(--font-mono); text-transform: uppercase; letter-spacing:.04em; color: var(--ink-faint); font-size: 10px; margin-bottom: 2px; }
+  .f-meta .v { color: var(--ink-soft); font-weight: 600; }
+
+  table.rt { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 10px 0 30px; }
+  table.rt th, table.rt td { border: 1px solid var(--border); padding: 8px 10px; text-align: start; }
+  table.rt th { background: var(--surface-2); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing:.03em; color: var(--ink-faint); }
+  table.rt td { color: var(--ink-soft); }
+  .table-wrap { overflow-x: auto; }
+
+  .callout { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 12px; padding: 16px 18px; margin: 16px 0; font-size: 14px; color: var(--ink); }
+  .callout b { color: var(--accent-ink); }
+
+  .pass-marker { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); background: var(--surface-2); padding: 3px 9px; border-radius: 999px; display:inline-block; margin-bottom: 10px; }
+
+  footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-size: 12px; color: var(--ink-faint); font-family: var(--font-mono); }
+</style>
+
+<div class="shell" dir="rtl" lang="ar">
+  <nav class="toc" aria-label="جدول المحتويات">
+    <p class="toc-title">التنقل</p>
+    <a href="#verdict" class="verdict">⚠ حكم الإطلاق</a>
+    <a href="#s1">1. Product Audit</a>
+    <a href="#s2">2. Business Logic</a>
+    <a href="#s3">3. UX Audit</a>
+    <a href="#s4">4. UI Audit</a>
+    <a href="#s5">5. Workflow Audit</a>
+    <a href="#s6">6. Database Audit</a>
+    <a href="#s7">7. Security Audit</a>
+    <a href="#s8">8. Performance Audit</a>
+    <a href="#s9">9. Architecture Audit</a>
+    <a href="#s10">10. QA Audit</a>
+    <a href="#s11">11. Future Readiness</a>
+    <a href="#s12">12. مبادئ المنافسين</a>
+    <a href="#s13">Pass 3 — اكتشافات إضافية</a>
+    <a href="#s14">الخلاصة النهائية</a>
+  </nav>
+
+  <main class="main">
+    <header class="hero">
+      <span class="eyebrow">Deep Product Audit v2.0</span>
+      <h1 class="title">PM Operating System — مراجعة معمارية ومنتجية شاملة</h1>
+      <p class="subtitle">
+        مراجعة نقدية كاملة لنظام VELORA الداخلي عبر 14 شخصية مراجعة (Product / Architecture / UX / UI / Frontend /
+        Backend / Database / Security / DevOps / QA / Performance / Tech Lead / Business Analyst)، بمنطق فريق داخلي
+        من ~10 مستخدمين وعدد محدود من العملاء الحقيقيين — بدون افتراض Multi-Tenant أو أهداف SaaS عامة.
+      </p>
+      <div class="meta-row">
+        <span><b>النطاق:</b> 11 مرحلة تطوير مكتملة، ~90 ملف كود، 15 Migration</span>
+        <span><b>الحالة:</b> ما قبل الاعتماد للإنتاج</span>
+        <span><b>المرجع:</b> الكود الفعلي المنشور على main</span>
+      </div>
+    </header>
+
+    <section id="verdict">
+      <div class="verdict-card">
+        <span class="verdict-label">حكم الإطلاق — لو كنت المسؤول، هل سأوافق غدًا؟</span>
+        <h2>لا. المحرك المنتجي قوي وغير عادي في عمقه، لكن 4 فجوات تمنع الاعتماد النهائي</h2>
+        <p>
+          الطبقة الذكية (AI Provider Layer، Versioning، Evidence Rules، Escalation) مبنية بانضباط حقيقي ونادر لمشروع
+          بهذا الحجم. لكن النظام ناقص في: (1) صفر إمكانية حذف/أرشفة لأي كيان، (2) تغطية اختبارات شبه معدومة لمنطق
+          الأعمال المُنشأ في آخر 6 مراحل، (3) RBAC شكلي غير مُفعّل فعليًا، (4) روابط عامة بدون انتهاء صلاحية أو حماية
+          من إساءة الاستخدام. التفاصيل والحلول في الأقسام تحت — كل واحدة من الأربعة قابلة للحل خلال أسبوعين تقريبًا.
+        </p>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat crit"><div class="n">6</div><div class="l">🔴 Critical</div></div>
+        <div class="stat high"><div class="n">11</div><div class="l">🟠 High</div></div>
+        <div class="stat med"><div class="n">13</div><div class="l">🟡 Medium</div></div>
+        <div class="stat low"><div class="n">9</div><div class="l">🟢 Low</div></div>
+        <div class="stat future"><div class="n">8</div><div class="l">🔵 Future</div></div>
+      </div>
+
+      <div class="legend" role="group" aria-label="فلتر حسب الخطورة">
+        <span class="chip" data-sev="crit">🔴 Critical</span>
+        <span class="chip" data-sev="high">🟠 High</span>
+        <span class="chip" data-sev="med">🟡 Medium</span>
+        <span class="chip" data-sev="low">🟢 Low</span>
+        <span class="chip" data-sev="future">🔵 Future</span>
+      </div>
+    </section>
+
+    <!-- ============ 1. PRODUCT ============ -->
+    <section class="audit" id="s1">
+      <div class="section-head"><span class="section-num">01</span><h2>Product Audit</h2></div>
+      <p class="persona">منظور <b>Principal Product Manager</b> — هل النظام يخدم هدف VELORA الفعلي بأقل تعقيد ممكن؟</p>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">مفيش صفحة "عملاء" (Clients) خالص رغم وجود جدول clients كامل في القاعدة</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل مرحلة اتبنت حول Lead أو Project، ومفيش حد رجع يبني شاشة مركزية للعميل نفسه.</p>
+          <p><b>الأثر:</b> مفيش مكان واحد تشوف فيه كل مشاريع عميل معيّن، بيانات التواصل بتاعته، أو تاريخه — ده معلومة PM أساسية، والفريق مضطر يدور يدويًا بين المشاريع.</p>
+          <p><b>الحل المقترح:</b> صفحة <code>/dashboard/clients</code> بسيطة: قائمة + صفحة تفاصيل تجمع كل مشاريع العميل ومعلومات التواصل.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">كل استخدام يومي</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">1–2 أيام</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Leads، Projects</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">مفيش "لوحة صحة" تجمع حالة كل المشاريع (Blocked Reviews، Pending Support، PRDs ناقصة)</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل مرحلة بُنيت داخل تبويبات المشروع الواحد، الداشبورد الرئيسي فيه عدّاد بسيط بس (leads/projects count).</p>
+          <p><b>الأثر:</b> المدير مضطر يفتح كل مشروع لوحده عشان يعرف إيه المحتاج تدخل — بطء في اكتشاف المشاكل عبر المحفظة كلها.</p>
+          <p><b>الحل المقترح:</b> إضافة Widgets في الداشبورد الرئيسي: "مراجعات Blocked"، "طلبات دعم Pending"، "مشاريع من غير PRD".</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">استخدام إداري متكرر</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">2–3 أيام</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">بعد الاستقرار</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Dashboard الرئيسي فقط</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">8 تبويبات متتالية داخل المشروع الواحد بدون مؤشر تقدّم واضح بين المراحل</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل مرحلة (Brain → PRD → Prompt → Review → Presentation → Handoff → Support) بُنيت كتبويب مستقل، من غير ربط بصري بترتيب دورة الحياة.</p>
+          <p><b>الأثر:</b> مستخدم جديد ما يعرفش إيه الترتيب الصحيح للعمل، أو إيه المرحلة اللي المفروض ينفّذها دلوقتي.</p>
+          <p><b>الحل المقترح:</b> Stepper بسيط فوق التبويبات يوضح الترتيب المنطقي وحالة كل مرحلة (مكتمل/جاري/لم يبدأ).</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">كل مستخدم جديد</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">2 أيام</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Project Tabs فقط</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">لا يوجد Onboarding أو شرح داخل الواجهة لأول استخدام</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> فريق داخلي صغير (~10)، افتُرض تدريب شفهي بدل توثيق داخل المنتج.</p>
+          <p><b>الأثر:</b> منخفض حاليًا نظرًا لحجم الفريق، لكن أي عضو جديد هياخد وقت أطول يفهم الترتيب الصحيح للمراحل.</p>
+          <p><b>الحل المقترح:</b> صفحة "دليل الاستخدام" مختصرة داخل Settings — مش أولوية الآن.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">نادر (فريق ثابت)</div></div>
+          <div><div class="k">الأولوية</div><div class="v">منخفضة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">لا شيء</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 2. BUSINESS LOGIC ============ -->
+    <section class="audit" id="s2">
+      <div class="section-head"><span class="section-num">02</span><h2>Business Logic Audit</h2></div>
+      <p class="persona">منظور <b>Business Analyst</b> — هل كل Workflow يعكس طريقة عمل VELORA الحقيقية؟</p>
+
+      <div class="finding" data-sev="crit">
+        <div class="f-top">
+          <div class="f-title">مفيش أي مسار لتصحيح خطأ بعد الحفظ — لا حذف، لا تراجع، لا أرشفة لأي كيان في النظام</div>
+          <div class="f-badges"><span class="badge sev-crit">🔴 Critical</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل مرحلة رُكّزت على "الإنشاء والتوليد"، ومفيش مرحلة اتعاملت مع "دورة حياة الخطأ البشري" (Lead مكرر، مشروع اتعمل غلط، اجتماع اترفع غلط).</p>
+          <p><b>الأثر:</b> أي غلطة إدخال بتفضل في النظام للأبد، وبتلوّث كل الإحصائيات والقوائم بمرور الوقت — مشكلة هتتضح بوضوح بعد أشهر استخدام.</p>
+          <p><b>الحل المقترح:</b> Soft Delete (<code>archived_at</code>) على الأقل لـ Leads/Projects/Meetings، مع فلتر "إخفاء المؤرشف" كافتراضي.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">حتمي مع الوقت</div></div>
+          <div><div class="k">الأولوية</div><div class="v">حرجة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">3–4 أيام</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">كل الجداول الأساسية</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">"إعادة فتح مشروع" بعد Handoff/Support غير موجودة كمفهوم Workflow</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> دورة الحياة اتفهمت كخط مستقيم (Brain→...→Support)، من غير تصميم لحالة "العميل رجع بعد شهور محتاج تعديل كبير".</p>
+          <p><b>الأثر:</b> لو مشروع "اتقفل" منطقيًا وبعدين احتاج مرحلة Build جديدة، مفيش حالة رسمية توثّق كده — هيتلخبط الفريق في تفسير الحالة الحقيقية للمشروع.</p>
+          <p><b>الحل المقترح:</b> توضيح مفهوم <code>stage</code> ليشمل دورة تكرارية، مش خط مستقيم فقط — إضافة قيمة <code>maintenance</code>/<code>re-opened</code>.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">متوسط (عملاء عائدون)</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">بعد الاستقرار</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Project stage logic</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">"Outdated" في PRD/Prompt/Review تحذير بصري فقط — مفيش قرار Business واضح لما يحصل</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> شارة "Outdated" اتبنت في كل مرحلة كمؤشر، لكن مفيش قاعدة تمنع أو تحذّر بجدية عند استخدام مستند قديم (مثلاً توليد Handoff من مراجعة قديمة).</p>
+          <p><b>الأثر:</b> ممكن يتولّد Developer Handoff بناءً على PRD قديم من غير ما حد ينتبه، والشارة وحدها مش كافية كضمانة عمل.</p>
+          <p><b>الحل المقترح:</b> تحويل الشارة لتحذير Confirm صريح عند أي عملية توليد تعتمد على مستند Outdated.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">متوسط</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">PRD/Prompt/Review/Handoff</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">حالة "in_progress" في Support Requests بدون تعيين مسؤول (Assignee)</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> نموذج البيانات ركّز على الحالة (Status) بدون حقل "مين بيتابع الطلب ده".</p>
+          <p><b>الأثر:</b> مع فريق 10 أشخاص، ممكن يحصل تضارب أو طلب يتم تجاهله لو أكتر من شخص فاتح نفس التبويب.</p>
+          <p><b>الحل المقترح:</b> حقل <code>assigned_to</code> اختياري — مش عاجل بحجم الفريق الحالي.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">نادر بحجم الفريق</div></div>
+          <div><div class="k">الأولوية</div><div class="v">منخفضة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Support Requests فقط</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 3. UX ============ -->
+    <section class="audit" id="s3">
+      <div class="section-head"><span class="section-num">03</span><h2>UX Audit</h2></div>
+      <p class="persona">منظور <b>Senior UX Designer</b> — الرحلة، الحالات الفارغة، الأخطاء، الـ Undo، والـ Accessibility.</p>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">مفيش بحث ولا فلاتر في قوائم Leads وProjects الرئيسية</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> الصفحتان اتبنيا في المرحلة الأولى بقائمة مسطحة <code>order by created_at desc</code> فقط، ومفيش فلتر Stage/Status ولا مربع بحث.</p>
+          <p><b>الأثر:</b> مع نمو عدد المشاريع والعملاء المحتملين، الصفحة هتبقى غير قابلة للاستخدام عمليًا خلال شهور قليلة.</p>
+          <p><b>الحل المقترح:</b> فلتر Stage + بحث بالاسم، بنفس نمط الفلاتر الموجود فعليًا في تبويب Support Requests.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">يومي</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Leads، Projects pages</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">تعدد أزرار "Re-Generate/Rebuild" بدون Undo — استبدال المحتوى الحالي فوري بعد Confirm واحد</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل مرحلة (PRD، Prompt، Review، Presentation، Handoff) فيها نفس نمط "Confirm ثم استبدال فوري"، معتمدة بالكامل على Version History كشبكة أمان بدل Undo مباشر.</p>
+          <p><b>الأثر:</b> لو حصل ضغط بالغلط بعد الـ Confirm، المستخدم لازم يعرف يفتح Compare Versions يدويًا عشان يرجع — مش واضح للمستخدم الجديد.</p>
+          <p><b>الحل المقترح:</b> Toast بعد كل توليد كامل يقول "تم الاستبدال — النسخة القديمة محفوظة" مع رابط مباشر لـ Compare.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">متكرر (كل مرحلة)</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">5 مراحل توليد</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">لا يوجد مؤشر "غير محفوظ" عند التعديل اليدوي داخل الأقسام (Section Cards)</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> نمط التعديل موحّد عبر كل المراحل (Textarea → Save/Cancel)، لكن مفيش تحذير لو المستخدم قفل الصفحة أو غيّر التبويب وهو لسه في وضع تعديل.</p>
+          <p><b>الأثر:</b> فقدان تعديل مكتوب لو اتقفلت الصفحة بالغلط — منخفض التكرار لكن مزعج لما يحصل.</p>
+          <p><b>الحل المقترح:</b> <code>beforeunload</code> guard بسيط وقت وجود Draft غير محفوظ.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">منخفض</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">كل SectionCard patterns</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">Accessibility جزئية — Focus States وARIA موجودة في أماكن، غائبة في أخرى</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>focus-visible</code> و<code>aria-expanded</code> اتضافوا بانضباط في المكونات الأحدث (Section Cards، Modals)، لكن الصفحات الأقدم (Leads، Projects، Dashboard) اتبنيت قبل ما النمط ده يستقر.</p>
+          <p><b>الأثر:</b> تجربة غير متسقة لمستخدم بيعتمد على الكيبورد — مش حرج لفريق 10 أشخاص لكنه دَين تقني متراكم.</p>
+          <p><b>الحل المقترح:</b> Pass موحّد على الصفحات الأقدم لإضافة نفس معايير الـ Focus/ARIA.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">حسب المستخدم</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">الصفحات الأقدم فقط</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">Widget الدعم: لا يوجد مؤشر "الفريق هيرد خلال كذا" بعد التصعيد</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> قرار تصميم مقصود (منع الوعود بمواعيد) — لكن ده بيسيب العميل بدون أي تقدير زمني حقيقي.</p>
+          <p><b>الأثر:</b> تجربة عميل أضعف قليلاً، لكن التريد-أوف مقصود لصالح منع الهلوسة — مقبول كما هو حاليًا.</p>
+          <p><b>الحل المقترح:</b> لا شيء عاجل — يمكن مستقبلًا إضافة SLA حقيقي (مذكور في Future Readiness) بدل وعد غير موثّق.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">كل تصعيد</div></div>
+          <div><div class="k">الأولوية</div><div class="v">منخفضة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">—</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا (يحتاج SLA أولاً)</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Widget فقط</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 4. UI ============ -->
+    <section class="audit" id="s4">
+      <div class="section-head"><span class="section-num">04</span><h2>UI Audit</h2></div>
+      <p class="persona">منظور <b>Senior UI Designer + Frontend Engineer</b> — الاتساق البصري ومكونات النظام.</p>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">تكرار كامل لمكوّنات UI متطابقة عبر 5 مراحل (SectionCard، CompareModal، ConfirmModal)</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل Panel (PRD، Prompt، Review، Presentation، Handoff) اتبنى بنسخة منفصلة من نفس النمط بدل مكوّن مشترك — قرار مقصود وقتها لتقليل الترابط بين المراحل، لكنه بقى تكرار حقيقي دلوقتي.</p>
+          <p><b>الأثر:</b> أي تحسين بصري أو إصلاح Bug في نمط الـ Compare Modal لازم يتكرر 5 مرات يدويًا.</p>
+          <p><b>الحل المقترح:</b> استخراج <code>components/ui/CompareModal.tsx</code> و<code>SectionCard.tsx</code> عامّين — Refactor تدريجي بدون تغيير سلوك.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">بنيوي (5 مواضع)</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">2–3 أيام</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">بعد الاستقرار</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">5 Panels</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">لا يوجد Skeleton Loading حقيقي — الاعتماد الكامل على <code>router.refresh()</code> بدون حالة انتقالية واضحة</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> أغلب الشاشات بتعتمد على Server Components + <code>router.refresh()</code> بعد كل Action، من غير Skeleton مؤقت أثناء إعادة الجلب.</p>
+          <p><b>الأثر:</b> Flash بسيط أو تجمّد مؤقت للواجهة أثناء التحديث، خصوصًا في الشبكات البطيئة.</p>
+          <p><b>الحل المقترح:</b> <code>loading.tsx</code> على مستوى الصفحة لمسارات المشروع الرئيسية.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">كل عملية Refresh</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">كل الصفحات</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">لا يوجد Dark Mode للتطبيق نفسه (فقط الـ CSS Variables جاهزة لكن غير مُستخدمة كتبديل)</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> نظام الألوان مبني على متغيرات <code>--v-*</code> بشكل مركزي (جيد معماريًا)، لكن مفيش زر تبديل Theme فعلي في الواجهة.</p>
+          <p><b>الأثر:</b> تفضيل شخصي بحت، لا يعيق العمل.</p>
+          <p><b>الحل المقترح:</b> غير ضروري الآن — البنية جاهزة له وقت الحاجة.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">—</div></div>
+          <div><div class="k">الأولوية</div><div class="v">منخفضة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">—</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">—</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 5. WORKFLOW ============ -->
+    <section class="audit" id="s5">
+      <div class="section-head"><span class="section-num">05</span><h2>Workflow Audit</h2></div>
+      <p class="persona">منظور <b>Technical Lead</b> — السيناريوهات كاملة من البداية للنهاية، الـ Happy Path والـ Edge Cases.</p>
+
+      <div class="finding" data-sev="crit">
+        <div class="f-top">
+          <div class="f-title">"تحويل Lead إلى Project" — لا يوجد تحقق من التكرار (نفس العميل يتحول مرتين)</div>
+          <div class="f-badges"><span class="badge sev-crit">🔴 Critical</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>ConvertLeadButton</code> بينشئ مشروع جديد مباشرة من غير أي فحص لو نفس الـ Client عنده مشروع مفتوح بالفعل أو لو الزر اتضغط مرتين بسرعة (Double-Click).</p>
+          <p><b>الأثر:</b> إمكانية إنشاء مشروعين مكررين بضغطة مزدوجة واحدة، بدون أي منع أو تحذير.</p>
+          <p><b>الحل المقترح:</b> تعطيل الزر فور الضغط (<code>disabled</code> أثناء pending) + فحص بسيط لمشروع مفتوح لنفس العميل.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">محتمل مع أي استخدام سريع</div></div>
+          <div><div class="k">الأولوية</div><div class="v">حرجة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Leads → Projects</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">Meeting Pipeline: فشل في أي خطوة بيوقف على "failed" بدون آلية إعادة محاولة تلقائية أو يدوية من الواجهة</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>processMeetingPipeline</code> بيوقف فورًا على أول فشل (تفريغ صوتي أو استخراج بيانات) ويبعت رسالة تليجرام، لكن مفيش زر "إعادة المحاولة" من لوحة التحكم — الحل الوحيد هو رفع التسجيل من جديد بالكامل.</p>
+          <p><b>الأثر:</b> فقدان وقت ومجهود لو فشل التفريغ لسبب مؤقت (Timeout مثلاً) رغم إن الملف نفسه سليم.</p>
+          <p><b>الحل المقترح:</b> زر "Retry" في MeetingsPanel يعيد تشغيل الخطوة الفاشلة بس، من غير إعادة رفع الملف.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">متوسط (اعتماد على Gemini API)</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Meeting Pipeline</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">Developer Handoff وPrototype Review يعتمدان على GITHUB_TOKEN واحد مشترك لكل المشاريع</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> توكن GitHub واحد بصلاحية Read-Only على مستوى الحساب/المنظمة، مش مربوط بمشروع معيّن.</p>
+          <p><b>الأثر:</b> أي عضو فريق قادر يشغّل مراجعة على أي Repository يقدر التوكن يوصله، حتى لو مش المفروض يشوفه (تضارب مصالح لو VELORA بتخدم عملاء منافسين لبعض).</p>
+          <p><b>الحل المقترح:</b> توثيق الحد ده بوضوح كقيد تشغيلي الآن (استخدام Repos منفصلة/مؤسسات منفصلة لكل عميل)، والتفكير في Token-per-client لاحقًا لو الحجم كبر.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">هيكلي</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية (توثيق)</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">توثيق فوري / تنفيذ لاحق</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">توثيق الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Review، Handoff</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">Discovery Form: مفيش سيناريو "العميل فتح الرابط بعد ما اتقفل/انتهت صلاحيته"</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>discovery_forms.status</code> بيدعم <code>draft/sent/submitted</code> لكن مفيش قفل فعلي يمنع تعديل نموذج بعد <code>submitted</code>.</p>
+          <p><b>الأثر:</b> العميل ممكن يعدّل إجاباته بعد التسليم من غير ما الفريق ياخد باله، وده ممكن يغيّر أساس الـ Project Brain بصمت.</p>
+          <p><b>الحل المقترح:</b> قفل الحقول بعد <code>submitted</code> (Read-only)، مع خيار "إعادة فتح" صريح من الفريق فقط.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">منخفض لكن خطير لما يحصل</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Discovery Form → Brain</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">"إعادة توليد Widget Key" بعد التفعيل بتلغي الرابط القديم فورًا بدون فترة سماح</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>widget_key</code> عمود واحد فريد — أي Revoke أو إعادة تفعيل بيغيّر القيمة فورًا.</p>
+          <p><b>الأثر:</b> لو الرابط القديم متضمّن فعليًا في موقع العميل، هيتكسر فورًا لحظة إعادة التفعيل، من غير تنبيه مسبق للفريق.</p>
+          <p><b>الحل المقترح:</b> تحذير Confirm واضح في الواجهة قبل Revoke: "الرابط الحالي هيتوقف فورًا لو متضمّن في موقع مباشر".</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">نادر</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">ساعتين</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Support Widget</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 6. DATABASE ============ -->
+    <section class="audit" id="s6">
+      <div class="section-head"><span class="section-num">06</span><h2>Database Audit</h2></div>
+      <p class="persona">منظور <b>Database Architect</b> — العلاقات، القيود، الفهارس، وسلامة البيانات.</p>
+
+      <div class="finding" data-sev="crit">
+        <div class="f-top">
+          <div class="f-title">كل العلاقات <code>on delete cascade</code> بدون طبقة حماية في الواجهة — حذف مشروع من Supabase مباشرة يمسح كل تاريخه فورًا وبلا رجعة</div>
+          <div class="f-badges"><span class="badge sev-crit">🔴 Critical</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل جدول من الـ 15 Migration مربوط بـ <code>project_id ... on delete cascade</code> — قرار معماري سليم لسلامة البيانات، لكنه خطير بدون طبقة حماية فوقه لأن الواجهة نفسها مفيش فيها زر حذف مشروع خالص (المستخدم لو احتاج يحذف، هيروح لـ Supabase مباشرة).</p>
+          <p><b>الأثر:</b> حذف مشروع واحد بالغلط من الـ Dashboard الخاص بـ Supabase = فقدان كل Brain/PRD/Prompt/Review/Presentation/Handoff/Support المرتبطين بيه فورًا، بدون تأكيد ثانٍ وبدون نسخة احتياطية داخل التطبيق.</p>
+          <p><b>الحل المقترح:</b> يرتبط مباشرة بإصلاح "صفر حذف/أرشفة" في القسم 2 — بمجرد ما تتوفر أرشفة داخل الواجهة، مفيش داعي لحد يلمس Supabase مباشرة أصلًا.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">نادر لكن كارثي</div></div>
+          <div><div class="k">الأولوية</div><div class="v">حرجة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">مرتبط بـ Soft Delete</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">كل الجداول</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">مفيش Index على <code>projects.stage</code> أو <code>leads.status</code> رغم إنهم هيبقوا أعمدة فلترة أساسية بمجرد إضافة الفلاتر (قسم UX)</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> الجداول الأساسية من Phase 1 اتصممت قبل ما فلاتر الحالة تبقى معروفة كحاجة مطلوبة.</p>
+          <p><b>الأثر:</b> منخفض حاليًا (حجم بيانات صغير)، لكنه هيتحول لمشكلة أداء حقيقية بمجرد ما الفلاتر تتضاف وعدد الصفوف يكبر.</p>
+          <p><b>الحل المقترح:</b> إضافة الفهرسين مع نفس Migration اللي هتضيف الفلاتر.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">يتفاقم مع الوقت</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">ساعة</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">مع فلاتر UX</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Leads، Projects</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">لا يوجد Audit Trail موحّد على التغييرات — <code>audit_log</code> من Phase 1 غير مُستخدم فعليًا في المراحل الأحدث</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> جدول <code>audit_log</code> اتعمل في Phase 1 لأحداث معيّنة (login/stage_change)، لكن كل الـ Versioning اللي اتبنى بعد كده (PRD، Review، Handoff...) بيسجّل في جداول <code>*_versions</code> منفصلة بدل ما يوحّد مع <code>audit_log</code> الأصلي.</p>
+          <p><b>الأثر:</b> مفيش "خط زمني" واحد موحّد يوريك كل اللي حصل في مشروع معيّن — لازم تدور في 6 جداول Versions منفصلة.</p>
+          <p><b>الحل المقترح:</b> غير عاجل — نمط الـ Versions لكل مرحلة أدق فعليًا (بيحفظ Snapshot كامل مش سطر نص)، لكن يستحق View موحّد يجمعهم بصريًا لاحقًا.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">—</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Reporting فقط</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">Naming متسق بدرجة عالية عبر كل الـ 15 Migration — ملاحظة إيجابية لا تستدعي تدخل</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>الملاحظة:</b> snake_case ثابت، أنماط <code>*_versions</code> و<code>sync_status</code> و<code>*_key</code> متكررة بانضباط عبر كل مرحلة — هذا مستوى اتساق نادر، لا يحتاج أي تغيير.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">لا شيء مطلوب</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 7. SECURITY ============ -->
+    <section class="audit" id="s7">
+      <div class="section-head"><span class="section-num">07</span><h2>Security Audit</h2></div>
+      <p class="persona">منظور <b>Security Engineer</b> — أخطر قسم في هذه المراجعة.</p>
+
+      <div class="finding" data-sev="crit">
+        <div class="f-top">
+          <div class="f-title">RBAC شكلي بالكامل — عمود <code>profiles.role</code> موجود ومعروض لكن غير مُفعّل في أي سياسة RLS أو منطق تطبيق</div>
+          <div class="f-badges"><span class="badge sev-crit">🔴 Critical</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل سياسة RLS عبر الـ 15 Migration مكتوبة <code>using (auth.uid() is not null)</code> — أي مستخدم مسجّل دخول (owner/admin/member) عنده صلاحية كاملة قراءة وكتابة على كل شيء، بما فيه إعدادات AI Provider في Settings.</p>
+          <p><b>الأثر:</b> لو حصل اختراق لحساب أضعف عضو في الفريق، المهاجم عنده وصول كامل لكل بيانات كل العملاء + القدرة يغيّر إعدادات النظام. مع 10 أشخاص موثوقين المخاطرة عملية منخفضة الآن، لكنها فجوة معمارية حقيقية موثّقة صراحة في طلبك الأصلي ("تحديد من يستطيع...").</p>
+          <p><b>الحل المقترح:</b> إما تفعيل <code>role</code> فعليًا في السياسات الحساسة (Settings، حذف/أرشفة مستقبلًا)، أو توثيق صراحة إن كل عضو داخلي = ثقة كاملة كقرار Business مقصود (وحذف الحقل لو مش هيتفعّل أبدًا لتفادي إيحاء زائف بالأمان).</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">هيكلي (كل الجداول)</div></div>
+          <div><div class="k">الأولوية</div><div class="v">حرجة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">2–3 أيام (لو هيتفعّل)</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">قرار الآن، تنفيذ حسب القرار</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">كل النظام</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="crit">
+        <div class="f-top">
+          <div class="f-title">لا يوجد Rate Limiting على أي مسار عام (Widget Chat API، Telegram Webhook، Present/Share Pages)</div>
+          <div class="f-badges"><span class="badge sev-crit">🔴 Critical</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>/api/support/chat</code> و<code>/api/telegram/webhook</code> بيقبلوا أي عدد طلبات بدون أي سقف زمني أو IP-based throttling.</p>
+          <p><b>الأثر:</b> أي زائر (أو Bot) يقدر يضرب <code>/api/support/chat</code> آلاف المرات في الدقيقة، وكل طلب بيستدعي Gemini API فعليًا (تكلفة حقيقية مباشرة) — نقطة استنزاف مالي واضحة وسهلة الاستغلال.</p>
+          <p><b>الحل المقترح:</b> Rate Limit بسيط بالـ IP أو بالـ widget_key (مثلاً 10 رسائل/دقيقة) — حتى بدون Redis، ممكن Middleware بسيط بجدول <code>rate_limit_hits</code> في Supabase.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">قابل للاستغلال فورًا</div></div>
+          <div><div class="k">الأولوية</div><div class="v">حرجة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Widget API، Webhook</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">Share Tokens وWidget Keys بدون تاريخ انتهاء صلاحية</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>share_token</code> (Presentation، Developer Handoff) و<code>widget_key</code> كلهم UUID دائم لحد ما حد يعمل Revoke يدوي — مفيش TTL أو تدوير تلقائي.</p>
+          <p><b>الأثر:</b> رابط مُسرّب بالغلط (Screenshot، رسالة منسية) يفضل صالح للأبد لحد ما حد يتذكر يلغيه يدويًا.</p>
+          <p><b>الحل المقترح:</b> غير عاجل بحجم الاستخدام الحالي — يكفي توثيق واضح للفريق إن أي رابط لازم يتراجع (Revoke) بعد كل استخدام مؤقت.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">نادر لكن مستمر</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">3 أنواع روابط عامة</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">Widget Chat API بيقبل <code>history</code> خام من العميل بدون تحقق من صحة تسلسله</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>sanitizeHistory</code> بتتحقق من الشكل (role/content) بس، لكن أي زائر يقدر يبعت <code>history</code> مُلفّق بالكامل (محادثة وهمية بردود Assistant مزيّفة) عشان "يوهم" الـ AI بسياق مختلف عن الحقيقي.</p>
+          <p><b>الأثر:</b> Prompt Injection محتمل عبر الـ history نفسه — العميل يقدر يحط رسائل "Assistant" مزوّرة تحاول تغيّر سلوك النموذج.</p>
+          <p><b>الحل المقترح:</b> الاعتماد على الـ history بس كسياق عرض، مش كمصدر ثقة كامل — أضف تعليمة صريحة في البرومت تتجاهل أي تعليمات داخل نص العميل نفسه (موجود جزئيًا عبر STRICT_RULES، يحتاج تدقيق إضافي لسيناريو الـ history المزوّر تحديدًا).</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">يحتاج معرفة تقنية للاستغلال</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Support Chat Engine</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">Console Logging لأخطاء AI/Validation ممكن يسرّب تفاصيل داخلية في Vercel Logs (وليس للعميل، لكن بلا تصنيف حساسية)</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> <code>console.error</code> منتشر في كل Engine (Review، Handoff، Support) بيطبع رسائل تحقق كاملة، أحيانًا فيها جزء من محتوى المشروع.</p>
+          <p><b>الأثر:</b> منخفض (Logs مش متاحة للعملاء)، لكنه دَين مراقبة — مفيش تصنيف لمستوى الحساسية قبل الطباعة.</p>
+          <p><b>الحل المقترح:</b> غير عاجل — مقبول لحجم الفريق الحالي.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">كل خطأ</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">—</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">كل الـ Engines</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">إدارة الأسرار (Secrets) منضبطة فعليًا — ملاحظة إيجابية</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>الملاحظة:</b> صفر Secrets في قاعدة البيانات، فصل واضح بين Service Role Client وClient العادي، Guard صريح ضد تخزين Credentials في Developer Handoff. هذا انضباط أمني حقيقي نادر — لا يحتاج تدخل.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">لا شيء مطلوب</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 8. PERFORMANCE ============ -->
+    <section class="audit" id="s8">
+      <div class="section-head"><span class="section-num">08</span><h2>Performance Audit</h2></div>
+      <p class="persona">منظور <b>Performance Engineer</b> — واقعي بحجم 10 مستخدمين، مش افتراضات Scale ضخمة.</p>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">كل الاستعلامات بدون Pagination — <code>select("*")</code> بدون <code>.range()</code> في كل مكان</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> حجم البيانات الحالي صغير جدًا (فريق 10، عملاء محدودين)، فمفيش داعي واقعي للـ Pagination دلوقتي.</p>
+          <p><b>الأثر:</b> لو عدد الـ Support Requests أو الـ Meetings كبر لمئات الصفوف لكل مشروع، هتبطأ صفحة المشروع بشكل ملحوظ (بيانات كاملة بتتجاب لكل تحميل).</p>
+          <p><b>الحل المقترح:</b> غير عاجل الآن — يستحق المتابعة كمؤشر لاحق (لو عدد الصفوف تجاوز ~200 لمشروع واحد، وقتها نضيف Pagination).</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">يتفاقم مع الوقت</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم لكل قائمة</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">القوائم كلها</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">لا يوجد Caching لاستدعاءات AI متكررة بنفس المدخلات (مثلاً إعادة توليد نفس القسم بدون تغيير في المصدر)</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل عملية توليد بتستدعي AIService مباشرة، حتى لو نفس المدخلات بالظبط اتبعتت قبل كده.</p>
+          <p><b>الأثر:</b> تكلفة إضافية بسيطة، غير مؤثرة بحجم الاستخدام الحالي.</p>
+          <p><b>الحل المقترح:</b> غير مبرر الآن — التعقيد المطلوب (Cache Invalidation صحيح) أكبر من القيمة الفعلية بحجم الفريق.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">منخفضة</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لا يستحق التنفيذ حاليًا</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">حجم الحزمة (Bundle Size) غير مُراقب — لا يوجد Bundle Analyzer في الإعدادات</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> عدد الاعتماديات قليل جدًا فعليًا (Supabase، pptxgenjs، React فقط) — مخاطرة نمو غير محسوس منخفضة حاليًا.</p>
+          <p><b>الحل المقترح:</b> إضافة <code>@next/bundle-analyzer</code> اختياريًا وقت إضافة مكتبات جديدة كبيرة مستقبلًا.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">منخفضة</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 9. ARCHITECTURE ============ -->
+    <section class="audit" id="s9">
+      <div class="section-head"><span class="section-num">09</span><h2>Architecture Audit</h2></div>
+      <p class="persona">منظور <b>Enterprise Software Architect + Senior Backend Engineer</b>.</p>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">منطق التحقق (Validation) مكتوب يدويًا 8 مرات منفصلة بدون مكتبة أو نمط موحّد (Zod أو ما شابه)</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> كل ملف <code>lib/ai/validation/*.ts</code> بيعيد كتابة نفس منطق "تحقق من المفاتيح، تحقق من الأنواع، تحقق من القيم" يدويًا بأسلوب شبه متطابق — قرار مقصود لتجنّب إضافة مكتبة، لكنه تكرار حقيقي كبير (8 ملفات، ~150 سطر لكل واحد بالمتوسط).</p>
+          <p><b>الأثر:</b> أي تحسين في منطق التحقق (رسائل أخطاء أوضح مثلاً) لازم يتكرر يدويًا 8 مرات، وفرصة عالية لاختلاف طفيف بين الملفات بمرور الوقت.</p>
+          <p><b>الحل المقترح:</b> تقديم Zod كاعتمادية واحدة خفيفة (Schema-based validation) — يقلل الكود لحوالي الثلث، ويبقى متوافق تمامًا مع "استخدام نفس الأنماط" لأنه استبدال لنمط تحقق موجود بالفعل، مش بنية جديدة.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">8 ملفات</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">2–3 أيام Refactor تدريجي</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">بعد الاستقرار</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">طبقة AI Validation بالكامل</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">قناة تنبيه واحدة فقط (Telegram) رغم الطلب الأصلي بـ WhatsApp — البنية جاهزة لكن التنفيذ الفعلي غير مكتمل</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> قرار مُتفق عليه مسبقًا (لا يوجد تكامل WhatsApp فعلي في المشروع، فبُني الـ Registry جاهز وبدون قناة WhatsApp حقيقية بعد).</p>
+          <p><b>الأثر:</b> لو Telegram فشل (تعطل الـ API، أو رفض الرسالة)، فمفيش قناة بديلة فعلية — الـ Case بتتسجل في قاعدة البيانات، لكن التنبيه الفوري ممكن يضيع كليًا.</p>
+          <p><b>الحل المقترح:</b> غير عاجل الآن (قرار موثّق ومقصود) — يستحق فقط مراقبة دورية لسجل <code>notification_delivery</code> للتأكد من عدم تكرار الفشل الصامت.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">حسب استقرار Telegram</div></div>
+          <div><div class="k">الأولوية</div><div class="v">عالية (كمراقبة)</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">—</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">مراقبة الآن، توسعة لاحقًا</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">Escalation Engine</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">فصل الطبقات (Engine → Versioning → Validation → Prompt) منضبط بدقة نادرة عبر كل الـ 11 مرحلة — ملاحظة إيجابية جوهرية</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>الملاحظة:</b> AI Provider Layer وNotification Channel Registry ونمط الـ Versioning موحّدين حرفيًا عبر كل مرحلة بدون أي انحراف — هذا مستوى انضباط معماري نادر لمشروع اتبنى تباعًا عبر جلسات متعددة. أقوى نقطة في المراجعة كلها.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">لا شيء مطلوب</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 10. QA ============ -->
+    <section class="audit" id="s10">
+      <div class="section-head"><span class="section-num">10</span><h2>Quality Assurance Audit</h2></div>
+      <p class="persona">منظور <b>QA Lead</b>.</p>
+
+      <div class="finding" data-sev="crit">
+        <div class="f-top">
+          <div class="f-title">صفر اختبارات على أهم 6 مراحل بُنيت (Review، Presentation، Handoff، Support، Notifications، Escalation)</div>
+          <div class="f-badges"><span class="badge sev-crit">🔴 Critical</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> 14 ملف اختبار موجودة فعليًا، لكنها كلها مركزة على المراحل الأولى (AI Provider الأساسي، PRD، Prototype Prompt، Gap Analyzer). كل منطق الأعمال الأحدث والأكثر حرجًا (Escalation Service، Chat Engine، Developer Handoff Versioning، Notification Registry) بلا اختبار واحد.</p>
+          <p><b>الأثر:</b> أي تعديل مستقبلي بسيط في هذه الملفات ممكن يكسر سلوك حرج (زي منع الهلوسة في Support Triage) بدون ما حد يكتشفه إلا بعد ما يحصل مع عميل حقيقي.</p>
+          <p><b>الحل المقترح:</b> أولوية فورية لاختبارات <code>validateSupportTriage</code> و<code>validateDeveloperHandoffGeneration</code> والـ Chat Engine guards (سؤال فارغ، تكرار لا نهائي، الرد المنتهي بسؤال) — دي أعلى قيمة لكل ساعة اختبار.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">6 مراحل كاملة</div></div>
+          <div><div class="k">الأولوية</div><div class="v">حرجة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">3–5 أيام</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">استقرار كل توليد مستقبلي</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">صفر اختبارات E2E أو Integration — كل الاختبارات Unit فقط على دوال معزولة</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> Vitest مُعد لاختبارات منطقية بحتة فقط، مفيش Playwright أو أي أداة E2E.</p>
+          <p><b>الأثر:</b> السيناريوهات المتكاملة (تحويل Lead → مشروع → PRD → Widget حي) بتتفحص يدويًا فقط، زي ما حصل فعليًا في هذه الجلسة — مش قابل للتكرار الآلي.</p>
+          <p><b>الحل المقترح:</b> غير عاجل بحجم الفريق (10 أشخاص، اختبار يدوي مقبول حاليًا) — يستحق إعادة نظر لو الفريق كبر.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">عالية (نظريًا) / مقبول عمليًا الآن</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">Bug مُكتشف فعليًا أثناء هذه الجلسة: إغلاق محادثة الدعم رغم إن الرد نفسه سؤال — تم إصلاحه، لكنه يوضح نمط خطر</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p><b>السبب:</b> النموذج أحيانًا بيخالف تعليمات البرومت رغم وضوحها — تم اكتشاف الحالة دي فقط لأن صاحب المشروع جرّب لايف بنفسه، مش عبر اختبار آلي.</p>
+          <p><b>الأثر:</b> يرجّح وجود حالات مشابهة غير مكتشفة بعد في نفس المحرك أو محركات التوليد الأخرى (مثال: هل ممكن AI يعلّم <code>ready_to_escalate=true</code> بدون <code>structured_summary</code> كافي في حالة نادرة رغم التحقق؟).</p>
+          <p><b>الحل المقترح:</b> جرد منهجي لكل نقطة قرار AI-controlled عبر المشروع، وإضافة حماية Deterministic مشابهة (زي فحص علامة الاستفهام) لأي قرار حرج مماثل.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">التكرار</div><div class="v">مُكتشف مرة، يحتمل التكرار</div></div>
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">يوم واحد جرد</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن</div></div>
+          <div><div class="k">يؤثر على</div><div class="v">كل محركات AI Decision</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 11. FUTURE READINESS ============ -->
+    <section class="audit" id="s11">
+      <div class="section-head"><span class="section-num">11</span><h2>Future Readiness</h2></div>
+      <p class="persona">تصنيف حسب الأفق الزمني الواقعي — بدون افتراضات Enterprise لا تناسب الحجم.</p>
+
+      <div class="table-wrap">
+        <table class="rt">
+          <thead><tr><th>الأفق</th><th>الاقتراح</th><th>لماذا الآن وليس قبل</th></tr></thead>
+          <tbody>
+            <tr><td>🟢 قريب (شهر)</td><td>صفحة Clients + فلاتر/بحث Leads و Projects</td><td>فجوة استخدام يومي مباشرة</td></tr>
+            <tr><td>🟢 قريب (شهر)</td><td>Soft Delete / أرشفة للكيانات الأساسية</td><td>يمنع تلوث بيانات لا رجعة فيه</td></tr>
+            <tr><td>🟢 قريب (شهر)</td><td>Rate Limiting على Widget API</td><td>مخاطرة تكلفة مالية فورية</td></tr>
+            <tr><td>🟡 متوسط (بعد الاستقرار)</td><td>Zod لتوحيد طبقة Validation</td><td>يحتاج وقت Refactor بلا ضغط إطلاق</td></tr>
+            <tr><td>🟡 متوسط</td><td>مكوّنات UI مشتركة (CompareModal, SectionCard)</td><td>تحسين صيانة، ليس وظيفة جديدة</td></tr>
+            <tr><td>🟡 متوسط</td><td>SLA حقيقي وتتبّع أوقات استجابة للدعم</td><td>يحتاج بيانات استخدام فعلي أولاً لتحديد أرقام واقعية</td></tr>
+            <tr><td>🔵 بعيد</td><td>رفع صور/ملفات داخل محادثة الدعم</td><td>الحقل <code>attachments</code> جاهز فعليًا في البنية، ينتظر أولوية فقط</td></tr>
+            <tr><td>🔵 بعيد</td><td>Voice Messages / Live Agent Takeover</td><td>يحتاج حجم استخدام يبرر التعقيد أولاً</td></tr>
+            <tr><td>🔵 بعيد</td><td>Knowledge Base / تحليلات المشاكل المتكررة</td><td>يحتاج شهور بيانات Support Requests حقيقية أولاً</td></tr>
+            <tr><td>🔵 بعيد جدًا / غير مبرر الآن</td><td>Multi-Tenant حقيقي، White-Label، Marketplace</td><td>خارج هدف الشركة كليًا — ذُكر صراحة في السياق كغير مطلوب</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 12. COMPETITORS ============ -->
+    <section class="audit" id="s12">
+      <div class="section-head"><span class="section-num">12</span><h2>مبادئ من المنافسين — لا نسخ، مبادئ فقط</h2></div>
+      <p class="persona">استخراج المبدأ المناسب لحجم VELORA، وليس نقل الميزة كما هي.</p>
+
+      <div class="table-wrap">
+        <table class="rt">
+          <thead><tr><th>المصدر</th><th>المبدأ المستفاد</th><th>كيف يُطبّق على VELORA تحديدًا</th></tr></thead>
+          <tbody>
+            <tr><td>Linear</td><td>سرعة إدراك الحالة من نظرة واحدة (Status، Priority كـ Chips ملوّنة)</td><td>مطبّق فعليًا بجودة عالية في Support Requests — يستحق التعميم على Leads/Projects</td></tr>
+            <tr><td>Notion</td><td>مستند حي بنسخ تاريخية بدل ملفات منفصلة</td><td>مطبّق بالفعل بدقة أعلى من Notion نفسه (Evidence Rules، PM Override منفصل عن AI)</td></tr>
+            <tr><td>Jira</td><td>Workflow قابل للتخصيص بحالات صريحة</td><td>غير مناسب — VELORA أصغر من إن تحتاج Workflow Engine قابل للتهيئة؛ الحالات الثابتة الحالية كافية</td></tr>
+            <tr><td>Monday / ClickUp</td><td>لوحة تجميعية (Dashboard) متعددة الـ Widgets</td><td>مبدأ واحد بس يستحق التبني: "لوحة صحة المحفظة" (قسم 1) — بدون التعقيد الكامل لمنشئ Widgets مخصص</td></tr>
+            <tr><td>Trello</td><td>بساطة الحركة بالسحب والإفلات</td><td>غير مبرر — القوائم الحالية بسيطة بما يكفي، Drag & Drop تعقيد زائد لحجم الفريق</td></tr>
+            <tr><td>Asana</td><td>تبعيات المهام (Task Dependencies)</td><td>غير مناسب — لا يوجد نظام Tasks تفصيلي في VELORA أصلًا، ولا داعي لبنائه بهذا الحجم</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 13. PASS 3 ============ -->
+    <section class="audit" id="s13">
+      <div class="section-head"><span class="section-num">13</span><h2>Pass 3 — اكتشافات لم تُطلب صراحة</h2></div>
+      <span class="pass-marker">مراجعة ثالثة مستقلة — أشياء استنتجتها بنفسي</span>
+
+      <div class="finding" data-sev="high">
+        <div class="f-top">
+          <div class="f-title">لا يوجد Health Check دوري لتوكنات خارجية (GITHUB_TOKEN، TELEGRAM_BOT_TOKEN) — الاكتشاف بالفشل فقط وقت الاستخدام</div>
+          <div class="f-badges"><span class="badge sev-high">🟠 High</span></div>
+        </div>
+        <div class="f-body">
+          <p>لو GITHUB_TOKEN انتهت صلاحيته أو اتلغت، أول اكتشاف بيكون لما مستخدم فعلي يحاول يشغّل Prototype Review ويفشل — مفيش تنبيه استباقي. <code>AIService.healthCheck()</code> موجود للـ AI فقط، مش لباقي التكاملات.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">عالية</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">نصف يوم</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">Support Widget: لا حماية من فتح نفس الـ widgetKey في تابات متعددة بنفس الوقت (Race Condition خفيف على السياق المحلي فقط)</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p>كل تاب عنده <code>contextHistory</code> منفصل في الذاكرة، فمفيش تلوّث بيانات فعلي بين التابات — لكن العميل لو فتح تابين وتكلم في الاتنين، هيتولد Support Request منفصل تمامًا لكل تاب من غير ما الفريق ياخد باله إنهم لنفس الشخص/المشكلة (كشف التكرار بيعتمد على <code>customer_identifier</code> فقط، وده يعوّض جزئيًا).</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">لاحقًا</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="med">
+        <div class="f-top">
+          <div class="f-title">حساب "الطلبات المتكررة" في Support Dashboard بيعتمد بالكامل على تطابق نص <code>customer_identifier</code> الحرفي</div>
+          <div class="f-badges"><span class="badge sev-med">🟡 Medium</span></div>
+        </div>
+        <div class="f-body">
+          <p>لو نفس العميل كتب اسمه/إيميله بصيغة مختلفة شوية بين محادثة وتانية (فراغ زيادة، حروف كبيرة/صغيرة)، مش هيتحسب كتكرار. حل بسيط: توحيد الصيغة (<code>trim().toLowerCase()</code>) قبل المقارنة.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">متوسطة</div></div>
+          <div><div class="k">الوقت التقريبي</div><div class="v">ساعة</div></div>
+          <div><div class="k">الآن أم لاحقًا</div><div class="v">الآن (إصلاح سريع)</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="low">
+        <div class="f-top">
+          <div class="f-title">حقل <code>profiles.role</code> نفسه لا يظهر في أي واجهة إدارة مستخدمين — لا توجد طريقة لتغييره من الواجهة أصلًا</div>
+          <div class="f-badges"><span class="badge sev-low">🟢 Low</span></div>
+        </div>
+        <div class="f-body">
+          <p>يرتبط مباشرة بفجوة RBAC في القسم 7 — الحقل موجود في قاعدة البيانات لكن بلا أي مسار تعيين له من التطبيق نفسه، فهو Dead Weight فعليًا حتى لو اتفعّل مستقبلًا.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">منخفضة</div></div>
+        </div>
+      </div>
+
+      <div class="finding" data-sev="future">
+        <div class="f-top">
+          <div class="f-title">لا توجد نسخة احتياطية أو خطة Disaster Recovery موثّقة خارج نسخ Supabase التلقائية</div>
+          <div class="f-badges"><span class="badge sev-future">🔵 Future</span></div>
+        </div>
+        <div class="f-body">
+          <p>النظام بيعتمد بالكامل على Backups الافتراضية لـ Supabase. مقبول تمامًا بحجم الفريق الحالي، لكنه يستحق توثيق صريح (خطة استرجاع، تكرار الاختبار) بمجرد ما عدد العملاء الحقيقيين يكبر.</p>
+        </div>
+        <div class="f-meta">
+          <div><div class="k">الأولوية</div><div class="v">مستقبلية</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FINAL ============ -->
+    <section class="audit" id="s14">
+      <div class="section-head"><span class="section-num">14</span><h2>الخلاصة النهائية — الآن، لاحقًا، ولا يستحق التنفيذ أصلًا</h2></div>
+
+      <div class="table-wrap">
+        <table class="rt">
+          <thead><tr><th>نفّذ الآن (يمنع الاعتماد)</th><th>نفّذ خلال شهر</th><th>لاحقًا / بعد الاستقرار</th><th>لا يستحق التنفيذ أصلًا</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Soft Delete/أرشفة للكيانات الأساسية</td>
+              <td>صفحة Clients</td>
+              <td>Refactor مكوّنات UI مشتركة</td>
+              <td>Multi-Tenant حقيقي</td>
+            </tr>
+            <tr>
+              <td>Rate Limiting على Widget API</td>
+              <td>فلاتر/بحث Leads وProjects</td>
+              <td>توحيد Validation عبر Zod</td>
+              <td>White-Label كأولوية</td>
+            </tr>
+            <tr>
+              <td>قرار RBAC صريح (تفعيل أو توثيق الثقة الكاملة)</td>
+              <td>اختبارات للمنطق الحرج (Support/Handoff)</td>
+              <td>لوحة صحة المحفظة في Dashboard</td>
+              <td>Drag & Drop / Workflow Engine قابل للتهيئة</td>
+            </tr>
+            <tr>
+              <td>منع تكرار Lead→Project بضغطة مزدوجة</td>
+              <td>تحذير Confirm صريح عند استخدام مستند Outdated</td>
+              <td>SLA وتتبع أوقات الاستجابة</td>
+              <td>Marketplace</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <b>الخلاصة:</b> الطبقة الهندسية لهذا النظام أقوى بكثير من متوسط أدوات PM الداخلية المبنية بنفس الحجم والسرعة —
+        نمط Versioning وEvidence Rules ومنع الهلوسة في محركات AI منضبط بمستوى نادر. الفجوات المذكورة هنا ليست في
+        "جودة الكود"، بل في "اكتمال دورة الحياة التشغيلية" (حذف، صلاحيات، حماية من إساءة الاستخدام، اختبارات). أربعة
+        بنود Critical فقط تفصل النظام عن الاعتماد الكامل — وكلها قابلة للحل خلال أسبوعين تقريبًا بدون أي إعادة تصميم.
+      </div>
+    </section>
+
+    <footer>Deep Product Audit v2.0 · PM Operating System — VELORA · مرجعية داخلية، ليست للمشاركة الخارجية</footer>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var chips = document.querySelectorAll(".chip");
+    var findings = document.querySelectorAll(".finding");
+    var active = new Set(["crit", "high", "med", "low", "future"]);
+
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var sev = chip.getAttribute("data-sev");
+        if (active.has(sev)) { active.delete(sev); chip.classList.add("off"); }
+        else { active.add(sev); chip.classList.remove("off"); }
+        findings.forEach(function (f) {
+          var fsev = f.getAttribute("data-sev");
+          f.style.display = active.has(fsev) ? "" : "none";
+        });
+      });
+    });
+
+    document.querySelectorAll('.toc a[href^="#"]').forEach(function (a) {
+      a.addEventListener("click", function (e) {
+        var target = document.querySelector(a.getAttribute("href"));
+        if (target && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    });
+  })();
+</script>

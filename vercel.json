@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/production-monitoring",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/notifications-reconcile",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/knowledge-backup",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

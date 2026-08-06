@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>لا يوجد اتصال — VELORA</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      color: #1e293b;
+      font-family: -apple-system, "Segoe UI", Tahoma, sans-serif;
+      text-align: center;
+      padding: 24px;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0b0f1e; color: #e8eaf6; }
+    }
+    .mark {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px;
+      background: linear-gradient(135deg, #0a1a3d 0%, #152a63 45%, #3d5cff 100%);
+      -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M8 10 L38 10 L50 55 L62 10 L92 10 L58 90 L42 90 Z"/></svg>') center / contain no-repeat;
+      mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M8 10 L38 10 L50 55 L62 10 L92 10 L58 90 L42 90 Z"/></svg>') center / contain no-repeat;
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p { font-size: 14px; opacity: 0.7; margin: 0 0 20px; }
+    button {
+      border: none;
+      border-radius: 10px;
+      background: #0a1628;
+      color: #fff;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <div class="mark"></div>
+    <h1>لا يوجد اتصال بالإنترنت</h1>
+    <p>تأكد من الاتصال بالشبكة ثم أعد المحاولة.</p>
+    <button onclick="location.reload()">إعادة المحاولة</button>
+  </div>
+</body>
+</html>

@@ -1,0 +1,95 @@
+import {
+  LayoutDashboard, Activity, Users, Building2, FolderKanban, MessagesSquare,
+  ListChecks, Brain, Workflow, LayoutTemplate, Settings, BookOpen, CheckSquare, DatabaseZap, GitBranch, Sparkles, Wand2, FlaskConical, Rocket, BadgeCheck, HeartPulse, type LucideIcon,
+} from "lucide-react";
+
+/**
+ * مصدر وحيد لعناصر التنقّل (Sidebar الديسكتوب + Drawer الموبايل يستخدموه معًا)
+ * — مجمّعة في أقسام لتقليل الازدحام البصري (UI/UX Phase 1). ملف client-safe
+ * (بدون أي استيراد server) عشان يتقدر يُستورد من مكوّنات "use client".
+ */
+
+export interface NavItem {
+  href: string;
+  label: string;
+  /** مفتاح الترجمة (i18n) — يُستخدم في المكوّنات المُترجَمة؛ label عربي fallback. */
+  labelKey?: string;
+  icon: LucideIcon;
+  /** لو محدّدة، العنصر يظهر فقط للأدوار دي (غير محدّدة = للجميع). */
+  roles?: readonly ("owner" | "admin" | "supervisor" | "member")[];
+}
+
+export interface NavGroup {
+  /** null = عناصر أساسية بدون عنوان قسم (تظهر فوق). */
+  title: string | null;
+  /** مفتاح ترجمة عنوان القسم (i18n). */
+  titleKey?: string;
+  items: NavItem[];
+}
+
+/** فلترة عناصر التنقّل حسب دور المستخدم (يحافظ على الترتيب والأقسام). */
+export function filterNavByRole(
+  groups: NavGroup[],
+  role: string | null | undefined
+): NavGroup[] {
+  return groups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((it) => !it.roles || (role != null && it.roles.includes(role as never))),
+    }))
+    .filter((g) => g.items.length > 0);
+}
+
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    title: null,
+    items: [
+      { href: "/dashboard", label: "نظرة عامة", labelKey: "nav.overview", icon: LayoutDashboard },
+      { href: "/dashboard/executive", label: "غرفة القيادة", labelKey: "nav.executive", icon: Activity },
+    ],
+  },
+  {
+    title: "مساحة العمل",
+    titleKey: "nav.group.workspace",
+    items: [
+      { href: "/dashboard/leads", label: "العملاء المحتملون", labelKey: "nav.leads", icon: Users },
+      { href: "/dashboard/clients", label: "العملاء", labelKey: "nav.clients", icon: Building2 },
+      { href: "/dashboard/projects", label: "المشاريع", labelKey: "nav.projects", icon: FolderKanban },
+      { href: "/dashboard/workspace", label: "مساحتي", labelKey: "nav.workspace", icon: ListChecks },
+      { href: "/dashboard/tasks", label: "المهام", labelKey: "nav.tasks", icon: CheckSquare },
+      { href: "/dashboard/collaboration", label: "التعاون", labelKey: "nav.collaboration", icon: MessagesSquare },
+    ],
+  },
+  {
+    title: "الذكاء والأتمتة",
+    titleKey: "nav.group.intelligence",
+    items: [
+      { href: "/dashboard/organizational-intelligence", label: "الذكاء التنظيمي", labelKey: "nav.organizationalIntelligence", icon: Brain },
+      { href: "/dashboard/migration-sources", label: "اكتشاف الترحيل", labelKey: "nav.migrationSources", icon: DatabaseZap, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/migration-mapping", label: "Mapping الترحيل", labelKey: "nav.migrationMapping", icon: GitBranch, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/data-quality", label: "جودة البيانات", labelKey: "nav.dataQuality", icon: Sparkles, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/transformation", label: "محرّك التحويل", labelKey: "nav.transformation", icon: Wand2, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/migration-simulation", label: "محاكاة الترحيل", labelKey: "nav.migrationSimulation", icon: FlaskConical, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/production-migration", label: "الترحيل الحقيقي", labelKey: "nav.productionMigration", icon: Rocket, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/go-live", label: "التحقّق والإطلاق", labelKey: "nav.goLive", icon: BadgeCheck, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/hypercare", label: "Hypercare والتحسين", labelKey: "nav.hypercare", icon: HeartPulse, roles: ["owner", "admin", "supervisor"] },
+      { href: "/dashboard/automations", label: "الأتمتة", labelKey: "nav.automations", icon: Workflow },
+    ],
+  },
+  {
+    title: "الإعداد",
+    titleKey: "nav.group.setup",
+    items: [
+      { href: "/dashboard/templates", label: "قوالب الاكتشاف", labelKey: "nav.templates", icon: LayoutTemplate },
+      { href: "/dashboard/settings", label: "الإعدادات", labelKey: "nav.settings", icon: Settings },
+      { href: "/dashboard/help", label: "دليل الاستخدام", labelKey: "nav.help", icon: BookOpen },
+    ],
+  },
+];
+
+/** كل العناصر مسطّحة (لِـ Drawer الموبايل البسيط). */
+export const NAV_ITEMS_FLAT: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+
+export function isNavActive(pathname: string, href: string): boolean {
+  return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+}
