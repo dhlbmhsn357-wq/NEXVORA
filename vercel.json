@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/notifications-reconcile",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/knowledge-backup",
