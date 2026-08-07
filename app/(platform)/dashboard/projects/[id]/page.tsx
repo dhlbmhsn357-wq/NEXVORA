@@ -91,6 +91,7 @@ import PromoteExperienceButton from "./promote-experience-button";
 import ActivityPanel from "./activity-panel";
 import CommercialPanel from "./commercial-panel";
 import ResearchPanel from "./research-panel";
+import DefinitionPanel from "./definition-panel";
 import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
@@ -107,6 +108,11 @@ import {
   listMarketResearchItems,
   listProblemValidationItems,
 } from "@/lib/market-research/service";
+import {
+  listPersonas,
+  listFlows,
+  listRequirements,
+} from "@/lib/product-definition/service";
 import IncrementsPanel from "./increments-panel";
 import KnowledgeHubPanel from "./knowledge-hub-panel";
 import {
@@ -433,15 +439,22 @@ export default async function ProjectDetailPage({
 
   // ===== Commercial + Research (P4 + P5 — behind product_mode flag) =====
   const productModeEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
-  const [commercialLifecycle, commercialContracts, commercialPayments, marketResearchItems, problemValidationItems] = productModeEnabled
+  const [
+    commercialLifecycle, commercialContracts, commercialPayments,
+    marketResearchItems, problemValidationItems,
+    definitionPersonas, definitionFlows, definitionRequirements,
+  ] = productModeEnabled
     ? await Promise.all([
         getClientLifecycleStatus(project.id),
         listContracts(project.id),
         listPaymentSchedules(project.id),
         listMarketResearchItems(project.id),
         listProblemValidationItems(project.id),
+        listPersonas(project.id),
+        listFlows(project.id),
+        listRequirements(project.id),
       ])
-    : [null, [], [], [], []];
+    : [null, [], [], [], [], [], [], []];
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
   // Owner only can hard-delete
   const canDeleteProject = currentUserRole === "owner";
@@ -862,6 +875,19 @@ export default async function ProjectDetailPage({
             projectId={project.id}
             marketResearch={marketResearchItems}
             problemValidation={problemValidationItems}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "definition",
+        label: "تعريف المنتج",
+        content: (
+          <DefinitionPanel
+            projectId={project.id}
+            personas={definitionPersonas}
+            flows={definitionFlows}
+            requirements={definitionRequirements}
             canWrite={canWriteCommercial}
           />
         ),
