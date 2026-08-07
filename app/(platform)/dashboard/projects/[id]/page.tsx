@@ -93,6 +93,7 @@ import CommercialPanel from "./commercial-panel";
 import ResearchPanel from "./research-panel";
 import DefinitionPanel from "./definition-panel";
 import StoriesPanel from "./stories-panel";
+import TraceabilityPanel from "./traceability-panel";
 import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
@@ -118,6 +119,7 @@ import {
   listStories,
   listAcceptanceCriteria,
 } from "@/lib/user-stories/service";
+import { listEvidenceLinks } from "@/lib/evidence/service";
 import IncrementsPanel from "./increments-panel";
 import KnowledgeHubPanel from "./knowledge-hub-panel";
 import {
@@ -449,6 +451,7 @@ export default async function ProjectDetailPage({
     marketResearchItems, problemValidationItems,
     definitionPersonas, definitionFlows, definitionRequirements,
     storiesRows, acceptanceCriteriaRows,
+    evidenceLinkRows,
   ] = productModeEnabled
     ? await Promise.all([
         getClientLifecycleStatus(project.id),
@@ -461,8 +464,9 @@ export default async function ProjectDetailPage({
         listRequirements(project.id),
         listStories(project.id),
         listAcceptanceCriteria(project.id),
+        listEvidenceLinks(project.id),
       ])
-    : [null, [], [], [], [], [], [], [], [], []];
+    : [null, [], [], [], [], [], [], [], [], [], []];
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
   // Owner only can hard-delete
   const canDeleteProject = currentUserRole === "owner";
@@ -911,6 +915,22 @@ export default async function ProjectDetailPage({
             personas={definitionPersonas}
             flows={definitionFlows}
             requirements={definitionRequirements}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "traceability",
+        label: "الأدلة والربط",
+        content: (
+          <TraceabilityPanel
+            projectId={project.id}
+            requirements={definitionRequirements}
+            stories={storiesRows}
+            acs={acceptanceCriteriaRows}
+            marketResearch={marketResearchItems}
+            problemValidation={problemValidationItems}
+            evidenceLinks={evidenceLinkRows}
             canWrite={canWriteCommercial}
           />
         ),
