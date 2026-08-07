@@ -94,6 +94,8 @@ import ResearchPanel from "./research-panel";
 import DefinitionPanel from "./definition-panel";
 import StoriesPanel from "./stories-panel";
 import TraceabilityPanel from "./traceability-panel";
+import EvaluationPanel from "./evaluation-panel";
+import CommercialFullPanel from "./commercial-full-panel";
 import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
@@ -120,6 +122,10 @@ import {
   listAcceptanceCriteria,
 } from "@/lib/user-stories/service";
 import { listEvidenceLinks } from "@/lib/evidence/service";
+import { listScenarios, listRuns } from "@/lib/evaluation/service";
+import {
+  listProposals, listProposalItems, listChangeRequests, listPricingPackages,
+} from "@/lib/commercial-full/service";
 import IncrementsPanel from "./increments-panel";
 import KnowledgeHubPanel from "./knowledge-hub-panel";
 import {
@@ -452,6 +458,8 @@ export default async function ProjectDetailPage({
     definitionPersonas, definitionFlows, definitionRequirements,
     storiesRows, acceptanceCriteriaRows,
     evidenceLinkRows,
+    evalScenarios, evalRunsRows,
+    proposalsRows, proposalItemsRows, changeRequestsRows, pricingPackagesRows,
   ] = productModeEnabled
     ? await Promise.all([
         getClientLifecycleStatus(project.id),
@@ -465,8 +473,14 @@ export default async function ProjectDetailPage({
         listStories(project.id),
         listAcceptanceCriteria(project.id),
         listEvidenceLinks(project.id),
+        listScenarios(project.id),
+        listRuns(project.id),
+        listProposals(project.id),
+        listProposalItems(project.id),
+        listChangeRequests(project.id),
+        listPricingPackages(),
       ])
-    : [null, [], [], [], [], [], [], [], [], [], []];
+    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
   // Owner only can hard-delete
   const canDeleteProject = currentUserRole === "owner";
@@ -931,6 +945,35 @@ export default async function ProjectDetailPage({
             marketResearch={marketResearchItems}
             problemValidation={problemValidationItems}
             evidenceLinks={evidenceLinkRows}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "evaluation",
+        label: "دليل التقييم",
+        content: (
+          <EvaluationPanel
+            projectId={project.id}
+            scenarios={evalScenarios}
+            runs={evalRunsRows}
+            stories={storiesRows}
+            flows={definitionFlows}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "commercial-full",
+        label: "عروض وتغيير",
+        content: (
+          <CommercialFullPanel
+            projectId={project.id}
+            proposals={proposalsRows}
+            proposalItems={proposalItemsRows}
+            changeRequests={changeRequestsRows}
+            pricingPackages={pricingPackagesRows}
+            contracts={commercialContracts}
             canWrite={canWriteCommercial}
           />
         ),
