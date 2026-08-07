@@ -41,6 +41,7 @@ import {
 import ProjectBrainEntries from "./project-brain";
 import AnalysisPanel from "./analysis-panel";
 import WorkflowNav, { type WorkflowNavItem } from "./workflow-nav";
+import { orderTabsByNexvora } from "./nexvora-tab-order";
 import WorkPanel from "./work-panel";
 import DeliveryLifecyclePanel from "./delivery-lifecycle-panel";
 import { listMilestones } from "@/lib/work/milestone-service";
@@ -996,6 +997,26 @@ export default async function ProjectDetailPage({
     { key: "activity", label: "Activity", content: <ActivityPanel entries={timeline} /> },
   ];
 
+  // NEXVORA UX Cleanup: لما product_mode مفعّل، نعيد ترتيب التبويبات في 8
+  // مراحل واضحة بدل الترتيب المُختلط (v1 + v2). المشاريع اللي مش في وضع
+  // product_mode تفضل بترتيب STAGE_REGISTRY القديم بلا لمس.
+  const orderedWorkflowItems: WorkflowNavItem[] = productModeEnabled
+    ? orderTabsByNexvora(workflowItems).map((o) => o.item)
+    : workflowItems;
+
+  // اسماء الـ phases لعرضها كـ "قفزة سريعة" فوق التبويبات (حصريًا للـ v2)
+  const nexvoraPhaseAnchors = productModeEnabled
+    ? orderTabsByNexvora(workflowItems).reduce<Array<{ phaseKey: string; phaseLabel: string; firstTabKey: string }>>(
+        (acc, o) => {
+          if (!acc.find((a) => a.phaseKey === o.phaseKey)) {
+            acc.push({ phaseKey: o.phaseKey, phaseLabel: o.phaseLabel, firstTabKey: o.item.key });
+          }
+          return acc;
+        },
+        [],
+      )
+    : [];
+
   return (
     <div>
       <nav aria-label="مسار التنقل" className="mb-3 flex items-center gap-1.5 text-xs text-[var(--v-text-muted)]">
@@ -1093,7 +1114,24 @@ export default async function ProjectDetailPage({
       </div>
       )}
 
-      <WorkflowNav items={workflowItems} stageStates={workflowStageStates} staleness={workflowStaleness} />
+      {/* NEXVORA Phase Anchors — قفزة سريعة بين المجموعات الثمانية
+          (يظهر فقط لما product_mode مفعّل، عدد التبويبات في كل phase مكتوب بجانب اسمها). */}
+      {productModeEnabled && nexvoraPhaseAnchors.length > 0 && (
+        <nav aria-label="مراحل المشروع" className="mb-3 flex flex-wrap items-center gap-1.5 rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-2 text-xs">
+          <span className="px-1 font-semibold text-[var(--v-text-muted)]">القفزة السريعة:</span>
+          {nexvoraPhaseAnchors.map((p) => (
+            <a
+              key={p.phaseKey}
+              href={`?tab=${p.firstTabKey}`}
+              className="rounded-full border border-[var(--v-border)] bg-[var(--v-bg)] px-2 py-0.5 text-[var(--v-text-secondary)] transition hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+            >
+              {p.phaseLabel}
+            </a>
+          ))}
+        </nav>
+      )}
+
+      <WorkflowNav items={orderedWorkflowItems} stageStates={workflowStageStates} staleness={workflowStaleness} />
     </div>
   );
 }
