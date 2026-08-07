@@ -96,6 +96,12 @@ import DefinitionPanel from "./definition-panel";
 import StoriesPanel from "./stories-panel";
 import TraceabilityPanel from "./traceability-panel";
 import EvaluationPanel from "./evaluation-panel";
+import ClientApprovalPanel from "./_panels/client-approval-panel";
+import HandoffPanel from "./_panels/handoff-panel";
+import PartnersPanel from "./_panels/partners-panel";
+import ChangeImpactPanel from "./_panels/change-impact-panel";
+import { listApprovals } from "@/lib/client-approval/service";
+import { listPackages as listHandoffPackages, listItems as listHandoffItems, listPartners as listHandoffPartners } from "@/lib/handoff/service";
 import CommercialFullPanel from "./commercial-full-panel";
 import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
@@ -461,6 +467,7 @@ export default async function ProjectDetailPage({
     evidenceLinkRows,
     evalScenarios, evalRunsRows,
     proposalsRows, proposalItemsRows, changeRequestsRows, pricingPackagesRows,
+    clientApprovalsRows, handoffPackagesRows, externalPartnersRows,
   ] = productModeEnabled
     ? await Promise.all([
         getClientLifecycleStatus(project.id),
@@ -480,8 +487,15 @@ export default async function ProjectDetailPage({
         listProposalItems(project.id),
         listChangeRequests(project.id),
         listPricingPackages(),
+        listApprovals(project.id),
+        listHandoffPackages(project.id),
+        listHandoffPartners(project.id),
       ])
-    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
+    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
+  const latestHandoffPackage = handoffPackagesRows.length > 0 ? handoffPackagesRows[0] : null;
+  const handoffItemsRows = latestHandoffPackage
+    ? await listHandoffItems(latestHandoffPackage.id)
+    : [];
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
   // Owner only can hard-delete
   const canDeleteProject = currentUserRole === "owner";
@@ -960,6 +974,55 @@ export default async function ProjectDetailPage({
             runs={evalRunsRows}
             stories={storiesRows}
             flows={definitionFlows}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "impact",
+        label: "أثر التغيير",
+        content: (
+          <ChangeImpactPanel
+            requirements={definitionRequirements}
+            stories={storiesRows}
+            acs={acceptanceCriteriaRows}
+            scenarios={evalScenarios}
+            evidence={evidenceLinkRows}
+          />
+        ),
+      },
+      {
+        key: "approvals",
+        label: "اعتماد العميل",
+        content: (
+          <ClientApprovalPanel
+            projectId={project.id}
+            approvals={clientApprovalsRows}
+            baseUrl={process.env.NEXT_PUBLIC_APP_URL ?? ""}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "handoff",
+        label: "حزمة التسليم",
+        content: (
+          <HandoffPanel
+            projectId={project.id}
+            packages={handoffPackagesRows}
+            items={handoffItemsRows}
+            latestPackage={latestHandoffPackage}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "partners",
+        label: "شركاء خارجيون",
+        content: (
+          <PartnersPanel
+            projectId={project.id}
+            partners={externalPartnersRows}
             canWrite={canWriteCommercial}
           />
         ),

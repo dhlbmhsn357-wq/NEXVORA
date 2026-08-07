@@ -37,7 +37,7 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "definition",
     label: "تعريف المنتج",
-    tabs: ["definition", "stories", "traceability"],
+    tabs: ["definition", "stories", "traceability", "impact"],
   },
   {
     key: "docs",
@@ -45,9 +45,14 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
     tabs: ["prd", "prototypePrompt", "prototypeReview", "evaluation"],
   },
   {
+    key: "approval",
+    label: "اعتماد العميل",
+    tabs: ["approvals"],
+  },
+  {
     key: "delivery",
     label: "تسليم العميل",
-    tabs: ["clientDelivery", "developerHandoff"],
+    tabs: ["clientDelivery", "developerHandoff", "handoff", "partners"],
   },
   {
     key: "execution",
