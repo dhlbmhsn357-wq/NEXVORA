@@ -45,3 +45,6 @@ backups/
 
 # ملف متغيّرات Railway — يحتوي أسرارًا، يُنشأ محليًا ولا يُرفع أبدًا
 railway-variables.txt
+
+# scratch: local working files (contain secrets, test data)
+scratch/

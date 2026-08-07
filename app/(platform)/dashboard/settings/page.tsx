@@ -13,7 +13,9 @@ import SettingsTabs from "./settings-tabs";
 import WhatsAppPanel from "./whatsapp-panel";
 import BrainSettingsPanel from "./brain-settings-panel";
 import AiKeysPanel from "./ai-keys-panel";
+import FeatureFlagsPanel from "./feature-flags-panel";
 import { listAiKeys } from "@/lib/ai/key-management";
+import { listFeatureFlags } from "@/lib/feature-flags";
 import { isSecretCryptoConfigured } from "@/lib/security/secret-crypto";
 import { WhatsAppService } from "@/lib/whatsapp/service";
 import { getBrainSettings } from "@/lib/brain-v2/review-service";
@@ -118,6 +120,10 @@ export default async function SettingsPage() {
   // مفاتيح الذكاء الاصطناعي (مصدر مشترك عبر البيئات) — للمسؤولين فقط.
   const aiKeys = isAdmin ? await listAiKeys() : [];
   const cryptoConfigured = isSecretCryptoConfigured();
+
+  // Feature Flags — مسؤول النظام (owner) فقط. مصدر توجيه NEXVORA المركزي.
+  const isOwner = admin.role === "owner";
+  const featureFlags = isOwner ? await listFeatureFlags() : [];
 
   const [
     { data: taskConfigs },
@@ -227,6 +233,8 @@ export default async function SettingsPage() {
               <UsersManager users={teamMembers} currentUserId={user.id} currentUserRole={currentUserRole} />
             ) : null
           }
+          showFeatureFlags={isOwner}
+          featureFlags={isOwner ? <FeatureFlagsPanel initialFlags={featureFlags} /> : null}
         />
       </div>
     </div>

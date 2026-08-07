@@ -8,15 +8,20 @@ export default function SettingsTabs({
   whatsapp,
   integrations,
   team,
+  featureFlags,
   showTeam = false,
+  showFeatureFlags = false,
 }: {
   ai: React.ReactNode;
   brain: React.ReactNode;
   whatsapp: React.ReactNode;
   integrations: React.ReactNode;
   team: React.ReactNode;
+  featureFlags: React.ReactNode;
   /** تبويب «الفريق والصلاحيات» يظهر لمسؤول النظام/المسؤول فقط. */
   showTeam?: boolean;
+  /** تبويب «Feature Flags» لمسؤول النظام فقط (owner). */
+  showFeatureFlags?: boolean;
 }) {
   return (
     <Tabs
@@ -26,6 +31,9 @@ export default function SettingsTabs({
         { key: "whatsapp", label: "واتساب", content: whatsapp },
         { key: "integrations", label: "التكاملات", content: integrations },
         ...(showTeam ? [{ key: "team", label: "الفريق والصلاحيات", content: team }] : []),
+        ...(showFeatureFlags
+          ? [{ key: "feature-flags", label: "Feature Flags", content: featureFlags }]
+          : []),
       ]}
     />
   );
