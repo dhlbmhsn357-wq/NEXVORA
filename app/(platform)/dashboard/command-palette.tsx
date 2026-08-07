@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { Search, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react";
-import { NAV_GROUPS, type NavItem } from "./nav-config";
+import { NAV_GROUPS, filterNavByFlags, type NavItem, type NavGroup } from "./nav-config";
+import { useFeatureFlag } from "@/lib/feature-flags/context";
 
 /**
  * لوحة الأوامر (⌘K / Ctrl+K) — مشغّل تنقّل احترافي بأسلوب Linear/Raycast.
@@ -19,9 +20,9 @@ interface Command {
   keywords?: string;
 }
 
-function buildCommands(): Command[] {
+function buildCommands(groups: NavGroup[]): Command[] {
   const cmds: Command[] = [];
-  for (const g of NAV_GROUPS) {
+  for (const g of groups) {
     for (const item of g.items as NavItem[]) {
       cmds.push({ label: item.label, group: g.title ?? "الرئيسية", href: item.href });
     }
@@ -64,7 +65,12 @@ export default function CommandPalette() {
     }
   }, [open]);
 
-  const commands = useMemo(() => buildCommands(), []);
+  const extendedTechnicalDelivery = useFeatureFlag("extended_technical_delivery");
+  const commands = useMemo(() => {
+    const enabledFlags = new Set<string>();
+    if (extendedTechnicalDelivery) enabledFlags.add("extended_technical_delivery");
+    return buildCommands(filterNavByFlags(NAV_GROUPS, enabledFlags));
+  }, [extendedTechnicalDelivery]);
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return commands;

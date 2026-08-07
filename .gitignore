@@ -48,3 +48,9 @@ railway-variables.txt
 
 # scratch: local working files (contain secrets, test data)
 scratch/
+
+# Local verify logs
+tsc.log
+eslint.log
+vitest.log
+

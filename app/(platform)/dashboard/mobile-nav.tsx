@@ -10,7 +10,8 @@ import Logo from "../components/logo";
 import { logoutAction } from "../login/actions";
 import { useT } from "@/lib/i18n/context";
 import LanguageSwitcher from "@/components/ui/LanguageSwitcher";
-import { NAV_GROUPS, isNavActive, filterNavByRole, type NavGroup } from "./nav-config";
+import { NAV_GROUPS, isNavActive, filterNav, type NavGroup } from "./nav-config";
+import { useFeatureFlag } from "@/lib/feature-flags/context";
 
 /**
  * التنقّل على الموبايل (أقل من lg) — إعادة تصميم كاملة (Critical Fix):
@@ -37,7 +38,13 @@ export default function MobileNav({
   const panelRef = useRef<HTMLDivElement>(null);
   const t = useT();
 
-  const groups = useMemo(() => filterNavByRole(NAV_GROUPS, role), [role]);
+  const extendedTechnicalDelivery = useFeatureFlag("extended_technical_delivery");
+  const enabledFlags = useMemo(() => {
+    const s = new Set<string>();
+    if (extendedTechnicalDelivery) s.add("extended_technical_delivery");
+    return s;
+  }, [extendedTechnicalDelivery]);
+  const groups = useMemo(() => filterNav(NAV_GROUPS, role, enabledFlags), [role, enabledFlags]);
   const navLabel = (item: NavGroup["items"][number]) => (item.labelKey ? t(item.labelKey) : item.label);
   const groupLabel = (g: NavGroup) => (g.titleKey ? t(g.titleKey) : g.title ?? "");
 

@@ -6,7 +6,8 @@ import { usePathname } from "next/navigation";
 import { PanelRightClose, PanelRightOpen, Star, Clock } from "lucide-react";
 import Logo from "../components/logo";
 import { useT } from "@/lib/i18n/context";
-import { NAV_GROUPS, NAV_ITEMS_FLAT, isNavActive, type NavItem } from "./nav-config";
+import { NAV_GROUPS, NAV_ITEMS_FLAT, isNavActive, filterNavByFlags, type NavItem } from "./nav-config";
+import { useFeatureFlag } from "@/lib/feature-flags/context";
 
 /**
  * الشريط الجانبي (UI/UX Phase 2) — تنقّل مؤسسي كامل: أقسام مجمّعة، وضع
@@ -32,6 +33,11 @@ export default function Sidebar() {
   const pathname = usePathname();
   const t = useT();
   const navLabel = (item: NavItem) => (item.labelKey ? t(item.labelKey) : item.label);
+  // Feature flags: نبني مجموعة الـ flags المفعّلة اللي المستخدم يشوفها.
+  const extendedTechnicalDelivery = useFeatureFlag("extended_technical_delivery");
+  const enabledFlags = new Set<string>();
+  if (extendedTechnicalDelivery) enabledFlags.add("extended_technical_delivery");
+  const visibleGroups = filterNavByFlags(NAV_GROUPS, enabledFlags);
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [pinned, setPinned] = useState<string[]>([]);
@@ -163,7 +169,7 @@ export default function Sidebar() {
         )}
 
         {/* المجموعات الرئيسية */}
-        {NAV_GROUPS.map((group, gi) => (
+        {visibleGroups.map((group, gi) => (
           <div key={group.title ?? `g${gi}`} className="space-y-1">
             {group.title && !collapsed && (
               <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--v-text-subtle)]">{group.titleKey ? t(group.titleKey) : group.title}</div>
