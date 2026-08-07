@@ -90,12 +90,17 @@ import ArchiveButton from "../../archive-button";
 import PromoteExperienceButton from "./promote-experience-button";
 import ActivityPanel from "./activity-panel";
 import CommercialPanel from "./commercial-panel";
+import ResearchPanel from "./research-panel";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import {
   getClientLifecycleStatus,
   listContracts,
   listPaymentSchedules,
 } from "@/lib/commercial/service";
+import {
+  listMarketResearchItems,
+  listProblemValidationItems,
+} from "@/lib/market-research/service";
 import IncrementsPanel from "./increments-panel";
 import KnowledgeHubPanel from "./knowledge-hub-panel";
 import {
@@ -420,15 +425,17 @@ export default async function ProjectDetailPage({
   // ===== Work Management (Phase 3) data =====
   const currentUserRole = (currentProfile?.role ?? "member") as UserRole;
 
-  // ===== Commercial (P4 — behind product_mode flag) =====
-  const commercialEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
-  const [commercialLifecycle, commercialContracts, commercialPayments] = commercialEnabled
+  // ===== Commercial + Research (P4 + P5 — behind product_mode flag) =====
+  const productModeEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
+  const [commercialLifecycle, commercialContracts, commercialPayments, marketResearchItems, problemValidationItems] = productModeEnabled
     ? await Promise.all([
         getClientLifecycleStatus(project.id),
         listContracts(project.id),
         listPaymentSchedules(project.id),
+        listMarketResearchItems(project.id),
+        listProblemValidationItems(project.id),
       ])
-    : [null, [], []];
+    : [null, [], [], [], []];
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
   const allUsersForWork = ((allUsersRes.data ?? []) as { id: string; full_name: string | null; email: string | null }[]).map((u) => ({ id: u.id, name: u.full_name || u.email || "مستخدم" }));
   const workMembersForBoard = workMembers.map((m) => ({ user_id: m.user_id, name: m.name }));
@@ -825,22 +832,36 @@ export default async function ProjectDetailPage({
         content: stage.id === "deliveryMilestones" ? deliveryMilestonesContent : (stageContentByKey[stage.id] ?? null),
       })),
     { key: "tasks", label: "المهام", content: tasksTabContent },
-    // تبويب "تجاري" — يظهر بس لو product_mode مفعّل (NEXVORA Core).
-    // بيكون بين "المهام" و"Activity" لأنه بتم مراجعته دوريًا خلال المشروع.
-    ...(commercialEnabled ? [{
-      key: "commercial",
-      label: "تجاري",
-      content: (
-        <CommercialPanel
-          projectId={project.id}
-          lifecycle={commercialLifecycle}
-          contracts={commercialContracts}
-          payments={commercialPayments}
-          canWrite={canWriteCommercial}
-          nowISO={new Date().toISOString()}
-        />
-      ),
-    }] : []),
+    // تبويبات NEXVORA — يظهروا بس لو product_mode مفعّل (NEXVORA Core).
+    // "البحث والتحقق" قبل "تجاري" لأنه أساس تعريف المنتج (P5 → P6+).
+    ...(productModeEnabled ? [
+      {
+        key: "research",
+        label: "البحث والتحقق",
+        content: (
+          <ResearchPanel
+            projectId={project.id}
+            marketResearch={marketResearchItems}
+            problemValidation={problemValidationItems}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "commercial",
+        label: "تجاري",
+        content: (
+          <CommercialPanel
+            projectId={project.id}
+            lifecycle={commercialLifecycle}
+            contracts={commercialContracts}
+            payments={commercialPayments}
+            canWrite={canWriteCommercial}
+            nowISO={new Date().toISOString()}
+          />
+        ),
+      },
+    ] : []),
     { key: "activity", label: "Activity", content: <ActivityPanel entries={timeline} /> },
   ];
 
