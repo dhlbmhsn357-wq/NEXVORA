@@ -91,7 +91,13 @@ import PromoteExperienceButton from "./promote-experience-button";
 import ActivityPanel from "./activity-panel";
 import CommercialPanel from "./commercial-panel";
 import ResearchPanel from "./research-panel";
+import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import {
+  READINESS_METRICS_ORDERED,
+  computeAllReadiness,
+  computeOverallReadiness,
+} from "@/lib/project-readiness";
 import {
   getClientLifecycleStatus,
   listContracts,
@@ -437,6 +443,19 @@ export default async function ProjectDetailPage({
       ])
     : [null, [], [], [], []];
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
+  // Owner only can hard-delete
+  const canDeleteProject = currentUserRole === "owner";
+
+  // ===== NEXVORA Readiness (P3 6-metric system) =====
+  // نحسب على الفور بدون snapshots — الـ workflow_v2 checklist state لسه
+  // ما اتربطش تلقائيًا، فلحد ما ده يحصل هنعرض 0% صريحة (ما نخفيش الحاجة).
+  // بمجرد ما مرحلة v2 checklist item يتحدّث → نسبها تظهر هنا فورًا.
+  const nexvoraReadinessMetrics = productModeEnabled
+    ? computeAllReadiness({})
+    : [];
+  const nexvoraOverallReadiness = productModeEnabled
+    ? computeOverallReadiness(nexvoraReadinessMetrics)
+    : 0;
   const allUsersForWork = ((allUsersRes.data ?? []) as { id: string; full_name: string | null; email: string | null }[]).map((u) => ({ id: u.id, name: u.full_name || u.email || "مستخدم" }));
   const workMembersForBoard = workMembers.map((m) => ({ user_id: m.user_id, name: m.name }));
   const milestonesSummary = workMilestones.length > 0
@@ -885,12 +904,17 @@ export default async function ProjectDetailPage({
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <ArchiveButton
-              table="projects"
-              id={project.id}
-              revalidateHref="/dashboard/projects"
-              confirmMessage="أرشفة المشروع هتخفيه من كل القوائم لكن كل بياناته (Brain, PRD, Meetings, Support...) هتفضل محفوظة في القاعدة. الأرشفة قابلة للتراجع."
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <ArchiveButton
+                table="projects"
+                id={project.id}
+                revalidateHref="/dashboard/projects"
+                confirmMessage="أرشفة المشروع هتخفيه من كل القوائم لكن كل بياناته (Brain, PRD, Meetings, Support...) هتفضل محفوظة في القاعدة. الأرشفة قابلة للتراجع."
+              />
+              {canDeleteProject && (
+                <DeleteProjectButton projectId={project.id} projectName={project.name} />
+              )}
+            </div>
             {isDirector && <PromoteExperienceButton projectId={project.id} />}
           </div>
         </div>
@@ -910,11 +934,36 @@ export default async function ProjectDetailPage({
         </div>
       </div>
 
-      {/* ملخص جاهزية موزون (Weighted Readiness) — بديل LifecycleStepper
-          القديم اللي كان بيحسب "خطوات مكتملة" بمنطق done:boolean منفصل
-          عن أي حاجة تانية في الصفحة. الأرقام دي من lib/workflow/
-          progress-engine.ts فوق نفس StageState المستخدمة في WorkflowNav
-          تحت — مصدر واحد للحقيقة. */}
+      {/* ملخص جاهزية:
+          - product_mode مفعّل → 6 مقاييس NEXVORA الجديدة (Discovery/
+            Validation/Definition/Prototype/Approval/Handoff)
+          - غير كده → 4 مقاييس Workflow v1 القديمة (backwards compat)
+          مصدر الحقيقة الوحيد: lib/project-readiness (v2) أو
+          lib/workflow/progress-engine (v1). */}
+      {productModeEnabled ? (
+        <div className="mb-4 space-y-2">
+          <div className="flex items-center justify-between px-1 text-xs text-[var(--v-text-muted)]">
+            <span>مقاييس الجاهزية (NEXVORA v2)</span>
+            <span>
+              الجاهزية العامة:{" "}
+              <b className="font-mono-plex text-[var(--v-text)]">{nexvoraOverallReadiness}%</b>
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {nexvoraReadinessMetrics.map((m) => (
+              <div
+                key={m.metric}
+                className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3"
+              >
+                <p className="text-[11px] leading-tight text-[var(--v-text-muted)]">
+                  {READINESS_METRICS_ORDERED.find((d) => d.key === m.metric)?.displayName ?? m.metric}
+                </p>
+                <p className="mt-1 font-mono-plex text-lg font-semibold text-[var(--v-text)]">{m.percentage}%</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {(
           [
@@ -930,6 +979,7 @@ export default async function ProjectDetailPage({
           </div>
         ))}
       </div>
+      )}
 
       <WorkflowNav items={workflowItems} stageStates={workflowStageStates} staleness={workflowStaleness} />
     </div>

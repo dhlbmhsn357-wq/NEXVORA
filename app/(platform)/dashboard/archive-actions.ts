@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { archiveEntity, unarchiveEntity, type ArchivableTable } from "@/lib/archive/archive-service";
-import { requireAdmin } from "@/lib/auth/rbac";
+import { requireAdmin, requireSystemAdmin } from "@/lib/auth/rbac";
+import { createServiceClient } from "@/lib/supabase/service";
+import { redirect } from "next/navigation";
 import { KnowledgeExtractionEngine } from "@/lib/organizational-intelligence/extraction-service";
 import { PromptSuggestionsEngine } from "@/lib/organizational-intelligence/prompt-suggestions-service";
 
@@ -51,6 +53,33 @@ export async function archiveItem(
     revalidatePath(revalidateHref ?? "/dashboard");
   }
   return result;
+}
+
+/**
+ * حذف نهائي (Hard delete) — Owner فقط. بيمشي حسب Cascade FKs
+ * المعرَّفة في الـ migrations (كل bagage الأولاد بيتحذف تلقائيًا:
+ * Brain, PRD, Meetings, Contracts, Payments, إلخ). لا رجوع.
+ *
+ * سبب استخدام service client: RLS policies حاليًا SELECT-only على
+ * أغلب الجداول — الحذف من خلال authenticated client بيتفشّل صامتًا.
+ * الحماية الفعلية هنا هي RBAC (requireSystemAdmin = owner فقط).
+ */
+export async function deleteProject(
+  projectId: string,
+  redirectHref?: string
+): Promise<{ ok: boolean; message?: string }> {
+  const auth = await requireSystemAdmin();
+  if (!auth.ok) return { ok: false, message: auth.message };
+
+  const svc = createServiceClient();
+  const { error } = await svc.from("projects").delete().eq("id", projectId);
+  if (error) return { ok: false, message: error.message };
+
+  // نلغّي الكاش قبل الـ redirect عشان الصفحة اللي هيوصل ليها تكون طازة.
+  revalidatePath("/dashboard/projects");
+  revalidatePath("/dashboard");
+  if (redirectHref) redirect(redirectHref);
+  return { ok: true };
 }
 
 export async function unarchiveItem(
