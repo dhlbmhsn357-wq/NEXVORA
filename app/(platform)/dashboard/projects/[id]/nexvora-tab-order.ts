@@ -6,9 +6,17 @@
  * المشكلة: قبل ده كانت التبويبات مخلوطة (v1 القديمة + v2 الجديدة) بترتيب
  * STAGE_REGISTRY فقط، فالمستخدم بيلاقي 25+ تبويبة بلا هيكل.
  *
- * الحل: تجميع لـ 8 phases واضحة، وترتيب داخل كل phase. أي تبويبة مش موجودة
- * في الـ ordering دي بتنزل في phase "أخرى" في الآخر (ما بنخفيش شيء عشان
- * نضمن ما نخسرش أي فيتشر عن طريق الخطأ).
+ * الحل: تجميع في **8 phases أساسية** واضحة، بالإضافة إلى phase تاسعة
+ * (execution — التنفيذ والجودة) بتظهر **فقط لما feature flag
+ * `extended_technical_delivery` مفعّل**. أي تبويبة مش موجودة في الـ
+ * ordering دي بتنزل في phase "أخرى" في الآخر (ما بنخفيش شيء عشان نضمن
+ * ما نخسرش أي فيتشر عن طريق الخطأ).
+ *
+ * الوضع الأساسي = 8 phases (discovery → delivery).
+ * الوضع الممتد  = 9 phases (بإضافة execution خلف الفلاغ).
+ * الـ orderTabsByNexvora/countByPhase بيسيبوا الـ execution phase في
+ * قائمتهم دايمًا (backwards compat + deep-link safety)، والفلترة تحصل
+ * في الـ UI عن طريق `getVisibleNexvoraPhases(extendedEnabled)`.
  *
  * Essential / Advanced (UX Cleanup 2)
  * ------------------------------------
@@ -31,6 +39,11 @@ export interface TabPhase {
   label: string;
   /** أزرار التبويبات داخل هذه المرحلة، بالترتيب. */
   tabs: readonly TabDef[];
+  /**
+   * لو `true`، الـ phase دي ما تظهرش في الوضع الأساسي وتحتاج feature flag
+   * `extended_technical_delivery` عشان تبان (حاليًا: execution فقط).
+   */
+  requiresExtended?: boolean;
 }
 
 /** helper موجز لتعريف تبويب "أساسي". */
@@ -95,6 +108,7 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "execution",
     label: "التنفيذ والجودة",
+    requiresExtended: true,
     tabs: [
       a("promptReview"),                    // Code Execution / Prompt Review
       a("engineeringQa"),
@@ -106,6 +120,18 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
     ],
   },
 ];
+
+/**
+ * يرجّع الـ phases الظاهرة في الـ UI بناءً على حالة الـ Extended
+ * Technical Delivery flag. الوضع الأساسي = 8 phases، الممتد = 9.
+ * ملاحظة: `orderTabsByNexvora` و`countByPhase` بيستخدموا القائمة الكاملة
+ * دايمًا (لأن الـ tab keys لسه لازم تتفاعل مع deep-links)؛ الفلترة دي
+ * للـ UI بس (phase pills + إخفاء تبويبات execution من الشريط).
+ */
+export function getVisibleNexvoraPhases(extendedEnabled: boolean): readonly TabPhase[] {
+  if (extendedEnabled) return NEXVORA_TAB_PHASES;
+  return NEXVORA_TAB_PHASES.filter((p) => !p.requiresExtended);
+}
 
 /** كل الأكواد المُصنَّفة (للاستعلام السريع). */
 const CLASSIFIED_KEYS = new Set<string>(

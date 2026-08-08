@@ -41,7 +41,7 @@ import {
 import ProjectBrainEntries from "./project-brain";
 import AnalysisPanel from "./analysis-panel";
 import WorkflowNav, { type WorkflowNavItem } from "./workflow-nav";
-import { orderTabsByNexvora, getTabCategory } from "./nexvora-tab-order";
+import { orderTabsByNexvora, getTabCategory, getVisibleNexvoraPhases, NEXVORA_TAB_PHASES } from "./nexvora-tab-order";
 import StageSelector from "./stage-selector";
 import WorkPanel from "./work-panel";
 import DeliveryLifecyclePanel from "./delivery-lifecycle-panel";
@@ -161,10 +161,15 @@ import type {
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const rawTabParam = resolvedSearchParams?.tab;
+  const currentTabParam = Array.isArray(rawTabParam) ? rawTabParam[0] : rawTabParam;
   const supabase = await createClient();
 
   const { data: project, error: projectError } = await supabase
@@ -462,6 +467,11 @@ export default async function ProjectDetailPage({
   // ===== Commercial + Research (P4 + P5 — behind product_mode flag) =====
   // القرار الأساسي per-project (workflow_version)، مع productModeEnabled كصمّام أمان عام.
   const productModeEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
+  // Extended Technical Delivery flag — بيتحكم في إظهار phase الـ execution
+  // (التنفيذ والجودة) وتبويباتها في الوضع الأساسي بيبقى مخفي، والوضع
+  // الممتد بيكشفها. deep-link على تبويب execution بيسمح بعرض التبويب نفسه
+  // (backwards compat) لكن الـ phase pill يفضل مخفي.
+  const extendedEnabled = user ? await isFeatureEnabled("extended_technical_delivery", user.id) : false;
   // project.workflow_version قد يكون undefined لو الـ typegen ما تحدّثش بعد الـ 0096.
   const workflowV2Enabled = selectWorkflowUiVersion({
     workflow_version: (project as unknown as { workflow_version?: "v1" | "v2" | null }).workflow_version ?? null,
@@ -1068,19 +1078,41 @@ export default async function ProjectDetailPage({
   ];
 
   // NEXVORA UX Cleanup: لما product_mode مفعّل، نعيد ترتيب التبويبات في 8
-  // مراحل واضحة بدل الترتيب المُختلط (v1 + v2). المشاريع اللي مش في وضع
-  // product_mode تفضل بترتيب STAGE_REGISTRY القديم بلا لمس.
+  // مراحل أساسية (+ phase التنفيذ التاسعة خلف Extended flag) بدل الترتيب
+  // المُختلط (v1 + v2). المشاريع اللي مش في وضع product_mode تفضل بترتيب
+  // STAGE_REGISTRY القديم بلا لمس.
   // NEXVORA UX Cleanup 2: كل تبويبة بياخد category (essential/advanced) من
   // خريطة nexvora-tab-order. WorkflowNav بيخفي "advanced" خلف زر «إظهار
   // المتقدمة» — أي مفتاح مش موجود في الخريطة بيعتبر essential (fallback آمن).
+  // Extended Technical Delivery: تبويبات phase الـ execution مخفية بلا الفلاغ
+  // حتى لو المستخدم فعّل "إظهار المتقدمة" (لأنها مش مجرد "متقدم" بل قسم
+  // Extended كامل). استثناء واحد: deep-link مباشر على تبويب execution يعرضه
+  // (backwards compat) لكن الـ phase pill يظل مخفي على أي حال.
+  const visibleNexvoraPhases = getVisibleNexvoraPhases(extendedEnabled);
+  const visibleNexvoraPhaseKeys = new Set(visibleNexvoraPhases.map((p) => p.key));
+  const executionTabKeys = new Set<string>(
+    NEXVORA_TAB_PHASES
+      .filter((p) => p.requiresExtended)
+      .flatMap((p) => p.tabs.map((t) => t.key)),
+  );
+  const deepLinkAllowsExecution =
+    !extendedEnabled && !!currentTabParam && executionTabKeys.has(currentTabParam);
+  const executionAllowed = extendedEnabled || deepLinkAllowsExecution;
+  const nexvoraFilteredWorkflowItems = workflowV2Enabled && !executionAllowed
+    ? workflowItems.filter((i) => !executionTabKeys.has(i.key))
+    : workflowItems;
+
   const orderedWorkflowItems: WorkflowNavItem[] = workflowV2Enabled
-    ? orderTabsByNexvora(workflowItems).map((o) => ({ ...o.item, category: o.category }))
+    ? orderTabsByNexvora(nexvoraFilteredWorkflowItems).map((o) => ({ ...o.item, category: o.category }))
     : workflowItems.map((i) => ({ ...i, category: getTabCategory(i.key) }));
 
-  // اسماء الـ phases لعرضها كـ "قفزة سريعة" فوق التبويبات (حصريًا للـ v2)
+  // اسماء الـ phases لعرضها كـ "قفزة سريعة" فوق التبويبات (حصريًا للـ v2).
+  // الـ pills تحترم extendedEnabled فقط — لو الفلاغ متعطّل، phase التنفيذ
+  // ما تبانش كـ pill حتى لو المستخدم فتح تبويب منها بالـ deep-link.
   const nexvoraPhaseAnchors = workflowV2Enabled
-    ? orderTabsByNexvora(workflowItems).reduce<Array<{ phaseKey: string; phaseLabel: string; firstTabKey: string }>>(
+    ? orderTabsByNexvora(nexvoraFilteredWorkflowItems).reduce<Array<{ phaseKey: string; phaseLabel: string; firstTabKey: string }>>(
         (acc, o) => {
+          if (!visibleNexvoraPhaseKeys.has(o.phaseKey)) return acc;
           if (!acc.find((a) => a.phaseKey === o.phaseKey)) {
             acc.push({ phaseKey: o.phaseKey, phaseLabel: o.phaseLabel, firstTabKey: o.item.key });
           }
