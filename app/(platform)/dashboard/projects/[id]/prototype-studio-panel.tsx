@@ -17,6 +17,9 @@ import { toast } from "@/components/ui/Toaster";
 import { downloadMarkdown, copyToClipboard } from "@/lib/prototype-studio/export";
 import {
   saveStudioConfigAction, generateContextPackAction,
+  importBuildBriefAction, approveBuildBriefAction,
+  generateCodexBuildPackAction, downloadCodexPackZipAction,
+  listStudioArtifactsAction,
 } from "./prototype-studio-actions";
 import {
   DEFAULT_DESIGN_DIRECTION,
@@ -42,6 +45,9 @@ interface Props {
   projectName: string;
   initialConfig: PrototypeStudioConfigRow;
   latestContextPack: PrototypeStudioArtifactRow | null;
+  latestApprovedBrief: PrototypeStudioArtifactRow | null;
+  latestBriefDraft: PrototypeStudioArtifactRow | null;
+  latestCodexPack: PrototypeStudioArtifactRow | null;
 }
 
 export default function PrototypeStudioPanel(props: Props) {
@@ -121,26 +127,30 @@ export default function PrototypeStudioPanel(props: Props) {
       {step === "scope" && <ScopeForm cfg={cfg} updateCfg={updateCfg} onSave={save} pending={pending} />}
       {step === "design" && <DesignForm cfg={cfg} updateCfg={updateCfg} onSave={save} pending={pending} />}
       {step === "discuss" && (
-        <ContextPackViewer
-          projectName={props.projectName}
-          pack={pack} setPack={setPack} missing={missing}
-          onGenerate={generatePack} pending={pending}
-        />
+        <>
+          <ContextPackViewer
+            projectName={props.projectName}
+            pack={pack} setPack={setPack} missing={missing}
+            onGenerate={generatePack} pending={pending}
+          />
+          <BuildBriefSection
+            projectId={props.projectId}
+            initialApproved={props.latestApprovedBrief}
+            initialDraft={props.latestBriefDraft}
+          />
+        </>
       )}
       {step === "build" && (
-        <Placeholder text="خطوة «بناء Codex» ستُفعّل في Phase B — بعد اعتماد Build Brief من ChatGPT." />
+        <CodexBuildSection
+          projectId={props.projectId}
+          approvedBrief={props.latestApprovedBrief}
+          initialPack={props.latestCodexPack}
+        />
       )}
     </div>
   );
 }
 
-function Placeholder({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-[var(--v-border)] bg-[var(--v-surface)] p-8 text-center text-sm text-[var(--v-text-secondary)]">
-      {text}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Config Form (Step 1)
@@ -469,5 +479,228 @@ function ReferencesEditor({ refs, onChange }: {
         </ul>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Build Brief Section (Phase B - inside Discuss step)
+// ---------------------------------------------------------------------------
+function BuildBriefSection({
+  projectId,
+  initialApproved,
+  initialDraft,
+}: {
+  projectId: string;
+  initialApproved: PrototypeStudioArtifactRow | null;
+  initialDraft: PrototypeStudioArtifactRow | null;
+}) {
+  const router = useRouter();
+  const [draft, setDraft] = useState("");
+  const [approved, setApproved] = useState(initialApproved);
+  const [lastImported, setLastImported] = useState<PrototypeStudioArtifactRow | null>(initialDraft);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [pending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [versions, setVersions] = useState<PrototypeStudioArtifactRow[]>([]);
+
+  async function loadVersions() {
+    const res = await listStudioArtifactsAction(projectId, "build_brief");
+    if (res.ok && res.data) setVersions(res.data);
+  }
+
+  function importBrief() {
+    if (!draft.trim()) { toast.error("الصق محتوى الـ Brief أولًا"); return; }
+    startTransition(async () => {
+      const res = await importBuildBriefAction(projectId, draft, "chatgpt");
+      if (res.ok && res.data) {
+        setWarnings(res.data.parse.warnings);
+        toast.success(`تم استيراد نسخة v${res.data.version}`);
+        setDraft("");
+        setLastImported({
+          id: res.data.artifactId, projectId, artifactType: "build_brief",
+          version: res.data.version, status: "draft", contentMd: "",
+          metadata: { pinned_prd_version: null, pinned_brain_version: null,
+            pinned_config_updated_at: null, chatgpt_session_ref: null, source_details: null },
+          source: "chatgpt", createdBy: null, createdAt: new Date().toISOString(),
+          approvedBy: null, approvedAt: null, notes: "",
+        });
+        await loadVersions();
+        router.refresh();
+      } else if (!res.ok) toast.error(res.message);
+    });
+  }
+
+  function doApprove() {
+    if (!lastImported) return;
+    startTransition(async () => {
+      const res = await approveBuildBriefAction(projectId, lastImported.id);
+      if (res.ok && res.data) {
+        setApproved(res.data);
+        setConfirmOpen(false);
+        toast.success("تم الاعتماد");
+        await loadVersions();
+        router.refresh();
+      } else if (!res.ok) toast.error(res.message);
+    });
+  }
+
+  return (
+    <section className="rounded-xl border border-[var(--v-border)] bg-[var(--v-surface)] p-4 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold">Build Brief (من ChatGPT)</h3>
+        {approved && <Badge>معتمد v{approved.version}</Badge>}
+      </div>
+      <p className="text-xs text-[var(--v-text-secondary)]">
+        بعد نقاش ChatGPT وتوليده لـ Build Brief كامل، الصقه هنا. لا يتم أي استدعاء API - الاستيراد يدوي.
+      </p>
+
+      <Textarea rows={10} value={draft} onChange={(e) => setDraft(e.target.value)}
+        placeholder="الصق Build Brief من ChatGPT هنا (Markdown مُهيكل بأقسام Objective / Scope / Flows / Screens ...)" />
+
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="secondary" onClick={importBrief} disabled={pending}>
+          استيراد كمسودّة
+        </Button>
+        <Button size="sm" variant="ghost" onClick={loadVersions} disabled={pending}>
+          تحديث القائمة
+        </Button>
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs">
+          <div className="font-bold mb-1">تحذيرات (لن تمنع الحفظ):</div>
+          <ul className="list-disc pr-4">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+        </div>
+      )}
+
+      {lastImported && !approved && (
+        <div className="rounded-lg border border-[var(--v-border)] p-3 text-xs">
+          <div>آخر نسخة مستوردة: v{lastImported.version} · {lastImported.status}</div>
+          <div className="mt-2">
+            <Button size="sm" variant="primary" onClick={() => setConfirmOpen(true)} disabled={pending}>
+              اعتماد هذه النسخة
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {versions.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer">النسخ ({versions.length})</summary>
+          <ul className="mt-2 flex flex-col gap-1">
+            {versions.map((v) => (
+              <li key={v.id} className="flex justify-between rounded bg-[var(--v-surface-2)] px-2 py-1">
+                <span>v{v.version} · {v.status} · {new Date(v.createdAt).toLocaleString("ar-EG")}</span>
+                {v.status === "approved" && <span className="text-green-500">معتمد</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {confirmOpen && lastImported && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog">
+          <div className="rounded-xl bg-[var(--v-surface)] p-6 max-w-md">
+            <h4 className="font-bold mb-2">تأكيد الاعتماد</h4>
+            <p className="text-sm mb-4">
+              هذا اعتماد بشري صريح لنسخة v{lastImported.version} من Build Brief. أي نسخة معتمدة سابقة ستُعلَّم كـ superseded.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="ghost" onClick={() => setConfirmOpen(false)}>إلغاء</Button>
+              <Button size="sm" variant="primary" onClick={doApprove} disabled={pending}>اعتماد</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Codex Build Section (Step 5)
+// ---------------------------------------------------------------------------
+function CodexBuildSection({
+  projectId,
+  approvedBrief,
+  initialPack,
+}: {
+  projectId: string;
+  approvedBrief: PrototypeStudioArtifactRow | null;
+  initialPack: PrototypeStudioArtifactRow | null;
+}) {
+  const router = useRouter();
+  const [pack, setPack] = useState<PrototypeStudioArtifactRow | null>(initialPack);
+  const [preview, setPreview] = useState(initialPack?.contentMd ?? "");
+  const [pending, startTransition] = useTransition();
+
+  if (!approvedBrief) {
+    return (
+      <section className="rounded-xl border border-dashed border-[var(--v-border)] p-8 text-center text-sm text-[var(--v-text-secondary)]">
+        يجب اعتماد Build Brief أولًا (خطوة 4) قبل توليد Codex Build Pack.
+      </section>
+    );
+  }
+
+  function doGenerate() {
+    startTransition(async () => {
+      const res = await generateCodexBuildPackAction(projectId);
+      if (res.ok && res.data) {
+        setPreview(res.data.markdown);
+        setPack({
+          id: res.data.artifactId, projectId, artifactType: "codex_build_pack",
+          version: res.data.version, status: "active", contentMd: res.data.markdown,
+          metadata: { pinned_prd_version: null, pinned_brain_version: null,
+            pinned_config_updated_at: null, chatgpt_session_ref: null, source_details: null },
+          source: "system", createdBy: null, createdAt: new Date().toISOString(),
+          approvedBy: null, approvedAt: null, notes: "",
+        });
+        toast.success(`تم توليد Codex Pack v${res.data.version}`);
+        router.refresh();
+      } else if (!res.ok) toast.error(res.message);
+    });
+  }
+
+  function doDownloadZip() {
+    startTransition(async () => {
+      const res = await downloadCodexPackZipAction(projectId);
+      if (!res.ok || !res.data) { toast.error(res.ok ? "لا يوجد ملف" : res.message); return; }
+      const link = document.createElement("a");
+      link.href = `data:application/zip;base64,${res.data.base64}`;
+      link.download = res.data.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("جاري التحميل");
+    });
+  }
+
+  return (
+    <section className="rounded-xl border border-[var(--v-border)] bg-[var(--v-surface)] p-4 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold">Codex Build Pack</h3>
+        {pack && <Badge>v{pack.version}</Badge>}
+      </div>
+      <p className="text-xs text-[var(--v-text-secondary)]">
+        تجميع محلّي: Context Pack + Approved Build Brief + Engineering Constitution + Codex Starter - بدون أي API.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="primary" onClick={doGenerate} disabled={pending}>توليد Codex Build Pack</Button>
+        <Button size="sm" variant="secondary" onClick={doDownloadZip} disabled={pending || !preview}>تحميل Zip</Button>
+        <Button size="sm" variant="secondary" onClick={async () => {
+          if (!preview) return;
+          const ok = await copyToClipboard(preview);
+          if (ok) toast.success("تم النسخ"); else toast.error("تعذّر النسخ");
+        }} disabled={!preview}>نسخ Codex Prompt</Button>
+        <a href="https://chatgpt.com/codex" target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg bg-[var(--v-primary)] px-4 py-2 text-sm font-bold text-white">
+          فتح Codex (رفع يدوي)
+        </a>
+      </div>
+      {preview && (
+        <pre className="max-h-[400px] overflow-auto rounded-lg border border-[var(--v-border)] bg-[var(--v-surface-2)] p-3 text-xs whitespace-pre-wrap">
+          {preview}
+        </pre>
+      )}
+    </section>
   );
 }

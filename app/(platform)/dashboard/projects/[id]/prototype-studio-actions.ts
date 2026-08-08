@@ -9,11 +9,13 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
 import { saveConfig, type SaveConfigPatch } from "@/lib/prototype-studio/config-service";
 import {
-  createArtifact, listArtifacts,
+  createArtifact, listArtifacts, approve as approveArtifact, getLatest as getLatestArtifact,
 } from "@/lib/prototype-studio/artifact-service";
 import { buildContextPackMarkdown } from "@/lib/prototype-studio/context-pack-builder";
+import { parseBuildBrief, type BuildBriefParseResult } from "@/lib/prototype-studio/build-brief-parser";
+import { buildCodexPack, buildCodexPackZipBase64 } from "@/lib/prototype-studio/codex-pack-builder";
 import type {
-  ArtifactType, PrototypeStudioArtifactRow,
+  ArtifactSource, ArtifactType, PrototypeStudioArtifactRow,
 } from "@/lib/prototype-studio/types";
 
 type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; message: string };
@@ -73,6 +75,103 @@ export async function generateContextPackAction(
     return { ok: true, data: { artifactId: row.id, version: row.version, missing: built.missing } };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "فشل توليد Context Pack." };
+  }
+}
+
+export interface ImportBriefResult {
+  artifactId: string;
+  version: number;
+  parse: BuildBriefParseResult;
+}
+
+export async function importBuildBriefAction(
+  projectId: string,
+  content: string,
+  source: ArtifactSource = "chatgpt",
+  notes = "",
+): Promise<ActionResult<ImportBriefResult>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const trimmed = content.trim();
+  if (trimmed.length < 30) return { ok: false, message: "المحتوى قصير جدًا للاعتماد." };
+  const parse = parseBuildBrief(trimmed);
+  try {
+    const row = await createArtifact(
+      projectId, "build_brief", trimmed,
+      {
+        pinned_prd_version: null,
+        pinned_brain_version: null,
+        pinned_config_updated_at: null,
+        chatgpt_session_ref: null,
+        source_details: `imported (${source}); missing=${parse.missingSections.join(",") || "none"}`,
+      },
+      source, g.userId, notes, "draft",
+    );
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { artifactId: row.id, version: row.version, parse } };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الاستيراد." };
+  }
+}
+
+export async function approveBuildBriefAction(
+  projectId: string,
+  artifactId: string,
+): Promise<ActionResult<PrototypeStudioArtifactRow>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    const existing = await getLatestArtifact(projectId, "build_brief");
+    if (!existing) return { ok: false, message: "لا يوجد Build Brief للاعتماد." };
+    const row = await approveArtifact(artifactId, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: row };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الاعتماد." };
+  }
+}
+
+export interface GenerateCodexPackResult {
+  artifactId: string;
+  version: number;
+  markdown: string;
+}
+
+export async function generateCodexBuildPackAction(
+  projectId: string,
+): Promise<ActionResult<GenerateCodexPackResult>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    const pack = await buildCodexPack(projectId);
+    const row = await createArtifact(
+      projectId, "codex_build_pack", pack.markdown,
+      {
+        pinned_prd_version: null,
+        pinned_brain_version: null,
+        pinned_config_updated_at: null,
+        chatgpt_session_ref: null,
+        source_details: `assembled from brief v${pack.approvedBriefVersion} + context pack v${pack.contextPackVersion}`,
+      },
+      "system", g.userId, "", "active",
+    );
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { artifactId: row.id, version: row.version, markdown: pack.markdown } };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل التوليد." };
+  }
+}
+
+export async function downloadCodexPackZipAction(
+  projectId: string,
+): Promise<ActionResult<{ base64: string; filename: string }>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    const zip = await buildCodexPackZipBase64(projectId);
+    return { ok: true, data: zip };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل تجهيز الملف." };
   }
 }
 

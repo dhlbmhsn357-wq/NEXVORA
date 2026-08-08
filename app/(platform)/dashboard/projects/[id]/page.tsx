@@ -496,12 +496,21 @@ export default async function ProjectDetailPage({
   // القرار الأساسي per-project (workflow_version)، مع productModeEnabled كصمّام أمان عام.
   const productModeEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
   const prototypeStudioEnabled = user ? await isFeatureEnabled("prototype_studio", user.id) : false;
-  const [studioConfig, studioLatestContextPack] = prototypeStudioEnabled
+  const [
+    studioConfig,
+    studioLatestContextPack,
+    studioLatestApprovedBrief,
+    studioLatestBriefDraft,
+    studioLatestCodexPack,
+  ] = prototypeStudioEnabled
     ? await Promise.all([
         getStudioConfig(project.id),
         getLatestStudioArtifact(project.id, "context_pack"),
+        getLatestStudioArtifact(project.id, "build_brief", ["approved"]),
+        getLatestStudioArtifact(project.id, "build_brief", ["draft", "active"]),
+        getLatestStudioArtifact(project.id, "codex_build_pack"),
       ])
-    : [null, null];
+    : [null, null, null, null, null];
   // Extended Technical Delivery flag — تم حسابه مبكرًا (فوق) لأنه يتحكم في
   // security redirect. لو الفلاغ off وتم طلب ?tab=<execution-key>، الطلب
   // تم رفضه بالفعل قبل الوصول لهنا. لا توجد backwards-compat للـ deep-link.
@@ -819,6 +828,9 @@ export default async function ProjectDetailPage({
           projectName={project.name}
           initialConfig={studioConfig}
           latestContextPack={studioLatestContextPack}
+          latestApprovedBrief={studioLatestApprovedBrief}
+          latestBriefDraft={studioLatestBriefDraft}
+          latestCodexPack={studioLatestCodexPack}
         />
       ) : (
         <div className="rounded-xl border border-dashed border-[var(--v-border)] p-8 text-center text-sm text-[var(--v-text-secondary)]">
