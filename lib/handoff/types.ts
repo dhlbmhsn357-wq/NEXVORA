@@ -13,8 +13,16 @@ export const HANDOFF_ITEM_STATUS_LABELS: Record<HandoffItemStatus, string> = {
 };
 
 /**
- * Registry — 7 إلزامية + 18 اختياري = 25 عنصر.
+ * Registry — 7 إلزامية (product-focused) + بقية القائمة اختيارية.
  * item_key ثابت (snake_case) والـ label قابل للتغيير محليًا/عبر i18n.
+ *
+ * تحديث المراجعة (0106):
+ *   الإلزاميات الجديدة تركّز على المنتج بدل الوثائق التسليمية:
+ *     problem_brief · scope_mvp · user_stories · acceptance_criteria
+ *     · prototype_link (Prototype) · prd_final (PRD) · product_evaluation_guide
+ *   العناصر القديمة الإلزامية (brain_snapshot, presentation_final,
+ *   developer_handoff, final_contract, sign_off_letter) بقيت في السجل
+ *   كاختيارية — لا تُحذف حفاظًا على بيانات الحزم القديمة.
  */
 export interface HandoffItemDef {
   key: string;
@@ -25,17 +33,21 @@ export interface HandoffItemDef {
 }
 
 export const HANDOFF_ITEM_REGISTRY: readonly HandoffItemDef[] = [
-  // 7 إلزامية
-  { key: "prd_final",           label: "PRD نهائي معتمَد",              category: "docs",   isMandatory: true,  description: "النسخة المعتمدة من PRD مع رابط الوثيقة" },
-  { key: "brain_snapshot",      label: "Brain snapshot",                category: "docs",   isMandatory: true,  description: "نسخة مجمَّدة من الـ Project Brain" },
-  { key: "presentation_final",  label: "عرض العميل النهائي",           category: "docs",   isMandatory: true,  description: "شرائح العرض النهائي المُقدَّمة" },
-  { key: "acceptance_criteria", label: "معايير القبول (AC)",           category: "docs",   isMandatory: true,  description: "كل الـ AC المعتمدة" },
-  { key: "developer_handoff",   label: "Developer Handoff",             category: "code",   isMandatory: true,  description: "وثيقة تسليم المطور" },
-  { key: "final_contract",      label: "العقد الموقّع",                 category: "compliance", isMandatory: true, description: "نسخة موقّعة من العقد" },
-  { key: "sign_off_letter",     label: "خطاب استلام رسمي",             category: "handover", isMandatory: true, description: "خطاب استلام موقّع من العميل" },
+  // 7 إلزامية (product-focused)
+  { key: "problem_brief",            label: "موجز المشكلة",                  category: "docs",   isMandatory: true,  description: "ملخّص المشكلة اللي بيحلّها المنتج + مصادرها" },
+  { key: "scope_mvp",                label: "النطاق و MVP",                   category: "docs",   isMandatory: true,  description: "حدود النطاق ومعالم MVP المعتمدة" },
+  { key: "user_stories",             label: "قصص المستخدم",                  category: "docs",   isMandatory: true,  description: "قائمة القصص المعتمدة" },
+  { key: "acceptance_criteria",      label: "معايير القبول (AC)",            category: "docs",   isMandatory: true,  description: "كل الـ AC المعتمدة" },
+  { key: "prototype_link",           label: "النموذج الأولي (Prototype)",     category: "code",   isMandatory: true,  description: "رابط تفاعلي لـ Figma/Prototype" },
+  { key: "prd_final",                label: "PRD نهائي معتمَد",              category: "docs",   isMandatory: true,  description: "النسخة المعتمدة من PRD مع رابط الوثيقة" },
+  { key: "product_evaluation_guide", label: "دليل تقييم المنتج",              category: "docs",   isMandatory: true,  description: "سيناريوهات ومؤشّرات تقييم المنتج قبل التسليم" },
 
-  // 18 اختياري
-  { key: "prototype_link",      label: "رابط النموذج (Prototype)",      category: "code",   isMandatory: false, description: "رابط تفاعلي لـ Figma/Prototype" },
+  // اختياريات — الإلزاميات القديمة بقيت هنا مع isMandatory=false (بدون حذف)
+  { key: "brain_snapshot",      label: "Brain snapshot",                category: "docs",       isMandatory: false, description: "نسخة مجمَّدة من الـ Project Brain" },
+  { key: "presentation_final",  label: "عرض العميل النهائي",           category: "docs",       isMandatory: false, description: "شرائح العرض النهائي المُقدَّمة" },
+  { key: "developer_handoff",   label: "Developer Handoff",             category: "code",       isMandatory: false, description: "وثيقة تسليم المطور" },
+  { key: "final_contract",      label: "العقد الموقّع",                 category: "compliance", isMandatory: false, description: "نسخة موقّعة من العقد" },
+  { key: "sign_off_letter",     label: "خطاب استلام رسمي",             category: "handover",   isMandatory: false, description: "خطاب استلام موقّع من العميل" },
   { key: "source_repo",         label: "مستودع المصدر (Git)",           category: "code",   isMandatory: false, description: "رابط GitHub/GitLab" },
   { key: "deployment_urls",     label: "روابط النشر",                   category: "ops",    isMandatory: false, description: "staging + production" },
   { key: "env_config_template", label: "قالب متغيرات البيئة",           category: "ops",    isMandatory: false, description: ".env.example" },
@@ -91,6 +103,10 @@ export interface HandoffItemRow {
 }
 
 // --------- Partners ---------
+/**
+ * @deprecated `editor` — لا صلاحيات فعّالة له. القيمة موجودة فقط لتوافق
+ * البيانات القديمة وسكيمة القاعدة. الشركاء الجدد يجب أن يكونوا `viewer` فقط.
+ */
 export type PartnerRole = "viewer" | "editor";
 export const PARTNER_ROLES: readonly PartnerRole[] = ["viewer", "editor"] as const;
 export const PARTNER_ROLE_LABELS: Record<PartnerRole, string> = { viewer: "قارئ", editor: "محرّر" };

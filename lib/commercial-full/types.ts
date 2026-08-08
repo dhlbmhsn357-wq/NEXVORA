@@ -74,6 +74,30 @@ export interface ProposalItemRow {
 // ---------------------------------------------------------------------------
 // Change Requests
 // ---------------------------------------------------------------------------
+/**
+ * Change Request Lifecycle (0106):
+ *   draft         → submitted, cancelled
+ *   submitted     → under_review, cancelled, rejected
+ *   under_review  → approved, rejected, cancelled
+ *   approved      → implemented, cancelled
+ *   rejected      → (terminal — أعِد الإنشاء كـ draft جديد)
+ *   cancelled     → (terminal)
+ *   implemented   → (terminal)
+ */
+const CR_LEGAL_TRANSITIONS: Record<string, readonly string[]> = {
+  draft: ["submitted", "cancelled"],
+  submitted: ["under_review", "cancelled", "rejected"],
+  under_review: ["approved", "rejected", "cancelled"],
+  approved: ["implemented", "cancelled"],
+  rejected: [],
+  cancelled: [],
+  implemented: [],
+};
+export function isLegalCrTransition(from: string, to: string): boolean {
+  if (from === to) return true; // نفس الحالة — لا تغيير فعلي
+  return (CR_LEGAL_TRANSITIONS[from] ?? []).includes(to);
+}
+
 export type ChangeRequestStatus =
   | "draft" | "submitted" | "under_review" | "approved" | "rejected" | "cancelled" | "implemented";
 export const CHANGE_REQUEST_STATUSES: readonly ChangeRequestStatus[] = [

@@ -34,6 +34,7 @@ export interface EvaluationSummary {
 
 const EMPTY_CATEGORY = (): Record<EvalCategory, number> => ({
   functional: 0, usability: 0, performance: 0, security: 0, accessibility: 0, other: 0,
+  empty_states: 0, error_states: 0, mobile_rtl: 0, ux_clarity: 0, user_outcomes: 0,
 });
 const EMPTY_SEVERITY = (): Record<EvalSeverity, number> => ({
   low: 0, medium: 0, high: 0, critical: 0,

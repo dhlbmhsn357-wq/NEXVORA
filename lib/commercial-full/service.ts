@@ -1,6 +1,12 @@
 /**
  * NEXVORA Commercial Full — Data Access (P10)
  * Proposals + Pricing Packages + Change Requests
+ *
+ * Change Request semantics (0106):
+ *   Change Request is a RECORD-ONLY entity.
+ *   Approving a CR does NOT auto-update linked scope/proposal/contract.
+ *   The PM manually updates downstream artifacts based on the approved CR.
+ *   If Client Approval is required, PM must create a client_approval record separately.
  */
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
@@ -10,6 +16,7 @@ import type {
   ProposalRow, ProposalItemRow, ProposalStatus,
   ChangeRequestRow, ChangeRequestStatus,
 } from "./types";
+import { isLegalCrTransition } from "./types";
 import { computeLineTotal, computeProposalTotals } from "./derive";
 
 // ---------------------------------------------------------------------------
@@ -321,6 +328,16 @@ export async function updateChangeRequest(id: string, patch: Partial<CrInput> & 
   decidedAt?: string | null; decidedBy?: string | null;
 }): Promise<ChangeRequestRow> {
   const svc = createServiceClient();
+  // 0106: منع الانتقالات غير الشرعية بين حالات CR (state machine).
+  if (patch.status !== undefined) {
+    const { data: current, error: curErr } = await svc.from("change_requests")
+      .select("status").eq("id", id).single();
+    if (curErr) throw curErr;
+    const from = (current?.status as ChangeRequestStatus | undefined) ?? "draft";
+    if (!isLegalCrTransition(from, patch.status)) {
+      throw new Error(`انتقال حالة CR غير مسموح: ${from} → ${patch.status}`);
+    }
+  }
   const db: Record<string, unknown> = {};
   if (patch.code !== undefined) db.code = patch.code;
   if (patch.title !== undefined) db.title = patch.title;

@@ -33,10 +33,14 @@ export async function createPartnerAction(projectId: string, raw: {
   if (!name) return { ok: false, message: "الاسم مطلوب." };
   if (!email) return { ok: false, message: "البريد الإلكتروني مطلوب." };
   if (raw.role && !isRole(raw.role)) return { ok: false, message: "دور غير معروف." };
+  // 0106: `editor` مهجور — نجبر viewer للشركاء الجدد بغضّ النظر عن الإدخال.
+  if (raw.role === "editor") {
+    console.warn("[partner-actions] editor role requested — forcing viewer (deprecated).");
+  }
   const input: PartnerInput = {
     name, email,
     organization: raw.organization?.trim() ?? "",
-    role: (raw.role as PartnerRole | undefined) ?? "viewer",
+    role: "viewer",
     expiresInDays: raw.expiresInDays ?? null,
     notes: raw.notes ?? "",
   };

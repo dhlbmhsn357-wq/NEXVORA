@@ -173,6 +173,7 @@ export interface ClassificationSummary {
 
 const EMPTY_CLASS_MAP = (): Record<InformationClassification, number> => ({
   unclassified: 0, legacy: 0, needs_review: 0, verified: 0,
+  fact: 0, inference: 0, assumption: 0, hypothesis: 0, decision: 0,
 });
 
 export function summarizeClassifications(

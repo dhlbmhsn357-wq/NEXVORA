@@ -14,10 +14,12 @@ import Select from "@/components/ui/Select";
 import EmptyState from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toaster";
 import {
-  APPROVAL_TARGET_TYPES, APPROVAL_TARGET_LABELS,
+  APPROVAL_TARGET_LABELS,
   APPROVAL_STATUS_LABELS, APPROVAL_DECISION_LABELS,
   type ClientApprovalRow, type ApprovalTargetType, type ApprovalStatus,
 } from "@/lib/client-approval/types";
+// brain intentionally excluded from UI — reserved for future brain-summary feature
+const CREATE_APPROVAL_TARGET_TYPES: readonly ApprovalTargetType[] = ["prd", "presentation", "proposal"] as const;
 import { effectiveStatus, summarizeApprovals } from "@/lib/client-approval/derive";
 import {
   createApprovalAction, revokeApprovalAction,
@@ -169,7 +171,7 @@ function NewApprovalDialog({ open, onClose, onSave }: {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="نوع الهدف">
             <Select value={targetType} onChange={(e) => setTargetType(e.target.value as ApprovalTargetType)}>
-              {APPROVAL_TARGET_TYPES.map((t) => <option key={t} value={t}>{APPROVAL_TARGET_LABELS[t]}</option>)}
+              {CREATE_APPROVAL_TARGET_TYPES.map((t) => <option key={t} value={t}>{APPROVAL_TARGET_LABELS[t]}</option>)}
             </Select>
           </Field>
           <Field label="ينتهي بعد (أيام)">

@@ -2,7 +2,7 @@
  * NEXVORA Workflow v1 → v2 Adapter (Read-Only)
  * ============================================
  *
- * الغرض: عرض المشاريع القديمة (اللي مبنيّة على الـ 24 stage القديم) في
+ * الغرض: عرض المشاريع القديمة (اللي مبنيّة على الـ 25 stage v1 legacy) في
  * واجهة NEXVORA v2 (7 مراحل) **بدون كتابة أي شيء في جداول v1 ولا تحويل
  * تاريخها**. مجرد ترجمة عرض.
  *
@@ -12,6 +12,17 @@
  * `null` — يعني ما بتظهرش في Workflow v2 للمشاريع الجديدة، لكن للمشاريع
  * القديمة اللي عندها تاريخ فيها، الـ UI بيعرضها تحت قسم منفصل موسّم
  * "Extended Technical Delivery — Legacy".
+ *
+ * ------------------------------------------------------------------------
+ * NEXVORA فيه ثلاث طبقات مراحل مستقلّة (orthogonal):
+ *   1. project.stage (9 حالات lifecycle): lead → intake → ... → support
+ *      — الحالة الإدارية لعلاقة المشروع.
+ *   2. Workflow v1 (25 stage legacy): pipeline قديم.
+ *      — يُستخدم عند projects.workflow_version = 'v1'.
+ *   3. Workflow v2 (7 مراحل NEXVORA): pipeline product-focused جديد.
+ *      — يُستخدم عند projects.workflow_version = 'v2'.
+ * الطبقات مستقلّة — مشروع ممكن يكون في v2 stage 3 بينما project.stage = 'prototype'.
+ * ------------------------------------------------------------------------
  */
 
 import type { WorkflowV2StageKey } from "./types";
@@ -132,7 +143,7 @@ export type ProjectWorkflowVersion = "v1" | "v2";
  *
  * القاعدة:
  *   • workflow_version = 'v2'  → ارسم v2 مباشرة (المشروع الجديد).
- *   • workflow_version = 'v1'  → ارسم v1 (الـ 24 stage) — بدون تغيير.
+ *   • workflow_version = 'v1'  → ارسم v1 (الـ 25 stage legacy) — بدون تغيير.
  *
  * الـ Adapter مش هنا (mapV1ToV2 فوق). الـ UI بيقرر بناءً على الرجّع ده.
  */

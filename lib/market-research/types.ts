@@ -45,6 +45,10 @@ export interface MarketResearchItem {
   sourceNotes: string;
   confidence: number;    // 0..100 — درجة الثقة في هذه المعلومة
   tags: string[];
+  /** طبيعة المعلومة (0106): fact/inference/assumption/hypothesis/decision + القيم القديمة. */
+  informationClass: InformationClassification;
+  /** مستوى السرّية (0106): public/internal/confidential. */
+  confidentiality: Confidentiality;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
@@ -93,6 +97,10 @@ export interface ProblemValidationItem {
   supportingNotes: string;
   strength: number;          // 0..100 — قوة الدليل
   tags: string[];
+  /** طبيعة المعلومة (0106). */
+  informationClass: InformationClassification;
+  /** مستوى السرّية (0106). */
+  confidentiality: Confidentiality;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
@@ -101,21 +109,44 @@ export interface ProblemValidationItem {
 // ---------------------------------------------------------------------------
 // Information Classification
 // ---------------------------------------------------------------------------
+/**
+ * تحديث 0106: تم توسيع الاتحاد ليشمل طبيعة المعلومة (fact/inference/...)
+ * بالإضافة إلى قيم الجودة القديمة. القيم القديمة تبقى صالحة للتوافق الخلفي.
+ */
 export type InformationClassification =
   | "unclassified"   // لسه ما اتصنّفتش (افتراضي)
   | "legacy"         // من مشروع أقدم — لازم مراجعة
   | "needs_review"   // فيها شك، محتاجة تحقّق
-  | "verified";      // تم التحقق منها
+  | "verified"       // تم التحقق منها
+  // طبيعة المعلومة (0106)
+  | "fact"
+  | "inference"
+  | "assumption"
+  | "hypothesis"
+  | "decision";
 
 export const INFORMATION_CLASSIFICATIONS: readonly InformationClassification[] = [
   "unclassified", "legacy", "needs_review", "verified",
+  "fact", "inference", "assumption", "hypothesis", "decision",
 ] as const;
 
 export const CLASSIFICATION_LABELS: Record<InformationClassification, string> = {
-  unclassified: "غير مصنّف",
+  unclassified: "غير مصنَّف",
   legacy: "قديم",
   needs_review: "يحتاج مراجعة",
-  verified: "مُتحقَّق منه",
+  verified: "موثَّق",
+  fact: "حقيقة",
+  inference: "استنتاج",
+  assumption: "افتراض",
+  hypothesis: "فرضية",
+  decision: "قرار",
+};
+
+/** مستوى السرّية (منفصل عن طبيعة المعلومة). */
+export type Confidentiality = "public" | "internal" | "confidential";
+export const CONFIDENTIALITY_LEVELS: readonly Confidentiality[] = ["public", "internal", "confidential"] as const;
+export const CONFIDENTIALITY_LABELS: Record<Confidentiality, string> = {
+  public: "عام", internal: "داخلي", confidential: "سرّي",
 };
 
 export interface InformationClassificationMark {

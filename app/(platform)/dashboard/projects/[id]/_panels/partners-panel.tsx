@@ -14,10 +14,12 @@ import Select from "@/components/ui/Select";
 import EmptyState from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toaster";
 import {
-  PARTNER_ROLES, PARTNER_ROLE_LABELS,
+  PARTNER_ROLE_LABELS,
   PARTNER_STATUS_LABELS,
   type ExternalPartnerRow, type PartnerRole, type PartnerStatus,
 } from "@/lib/handoff/types";
+// 0106: `editor` deprecated — لا يظهر في القائمة الجديدة (يبقى صالحًا للسكيمة).
+const NEW_PARTNER_ROLES: readonly PartnerRole[] = ["viewer"] as const;
 import { summarizePartners, isPartnerActive } from "@/lib/handoff/derive";
 import { createPartnerAction, updatePartnerStatusAction, revokePartnerAction } from "../partner-actions";
 
@@ -77,6 +79,7 @@ export default function PartnersPanel({ projectId, partners, canWrite }: Partner
                       <p className="font-medium text-[var(--v-text)]">{p.name}</p>
                       {p.organization && <span className="text-xs text-[var(--v-text-secondary)]">· {p.organization}</span>}
                       <Badge tone="neutral">{PARTNER_ROLE_LABELS[p.role]}</Badge>
+                      {p.role === "editor" && <Badge tone="warning">قديم</Badge>}
                       <Badge tone={STATUS_TONE[p.status]}>{PARTNER_STATUS_LABELS[p.status]}</Badge>
                       {active && <Badge tone="success">نشط الآن</Badge>}
                     </div>
@@ -168,7 +171,7 @@ function NewPartnerDialog({ open, onClose, onSave }: {
           <Field label="المنظمة"><Input value={organization} onChange={(e) => setOrganization(e.target.value)} /></Field>
           <Field label="الدور">
             <Select value={role} onChange={(e) => setRole(e.target.value as PartnerRole)}>
-              {PARTNER_ROLES.map((r) => <option key={r} value={r}>{PARTNER_ROLE_LABELS[r]}</option>)}
+              {NEW_PARTNER_ROLES.map((r) => <option key={r} value={r}>{PARTNER_ROLE_LABELS[r]}</option>)}
             </Select>
           </Field>
           <Field label="ينتهي بعد (أيام)">

@@ -1,5 +1,11 @@
 /** NEXVORA Client Approval Portal — Types (P11) */
 
+/**
+ * أنواع أهداف اعتماد العميل.
+ * ملاحظة (0106): `brain` = ملخّص Brain المعتمَد (Brain Summary)، وليس وثيقة Brain
+ * الداخلية. هو محجوز لميزة مستقبلية ولا يُعرض في UI إنشاء الاعتمادات الحالي
+ * (اُنظر client-approval-panel.tsx). القيمة تبقى صالحة في السكيمة للتوافق.
+ */
 export type ApprovalTargetType = "prd" | "presentation" | "proposal" | "brain";
 export const APPROVAL_TARGET_TYPES: readonly ApprovalTargetType[] = ["prd", "presentation", "proposal", "brain"] as const;
 export const APPROVAL_TARGET_LABELS: Record<ApprovalTargetType, string> = {

@@ -18,7 +18,9 @@ function mr(over: Partial<MarketResearchItem>): MarketResearchItem {
   return {
     id: "m", projectId: "prj", itemType: "other", title: "x",
     summary: "", details: {}, sourceUrl: null, sourceNotes: "",
-    confidence: 50, tags: [], createdAt: NOW, updatedAt: NOW, createdBy: null,
+    confidence: 50, tags: [],
+    informationClass: "unclassified", confidentiality: "internal",
+    createdAt: NOW, updatedAt: NOW, createdBy: null,
     ...over,
   };
 }
@@ -27,7 +29,9 @@ function pv(over: Partial<ProblemValidationItem>): ProblemValidationItem {
     id: "p", projectId: "prj", evidenceType: "user_interview", title: "x",
     painPoint: "بطء الاعتماد", quote: "", sourcePerson: "", sourceRole: "",
     sourceDate: null, supportingUrl: null, supportingNotes: "",
-    strength: 60, tags: [], createdAt: NOW, updatedAt: NOW, createdBy: null,
+    strength: 60, tags: [],
+    informationClass: "unclassified", confidentiality: "internal",
+    createdAt: NOW, updatedAt: NOW, createdBy: null,
     ...over,
   };
 }

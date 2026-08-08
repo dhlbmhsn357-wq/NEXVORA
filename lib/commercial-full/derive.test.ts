@@ -5,6 +5,7 @@ import {
   summarizeProposals, summarizeChangeRequests,
 } from "./derive";
 import type { ProposalRow, ChangeRequestRow } from "./types";
+import { isLegalCrTransition } from "./types";
 
 const NOW = "2026-08-07T10:00:00.000Z";
 
@@ -115,5 +116,43 @@ describe("summarizeChangeRequests", () => {
     expect(s.totalApprovedImpactCost).toBe(1500);
     expect(s.totalApprovedImpactDays).toBe(8);
     expect(s.pending).toBe(1); // draft
+  });
+});
+
+describe("isLegalCrTransition", () => {
+  it("draft → submitted/cancelled مسموح، غيرها ممنوع", () => {
+    expect(isLegalCrTransition("draft", "submitted")).toBe(true);
+    expect(isLegalCrTransition("draft", "cancelled")).toBe(true);
+    expect(isLegalCrTransition("draft", "approved")).toBe(false);
+    expect(isLegalCrTransition("draft", "implemented")).toBe(false);
+    expect(isLegalCrTransition("draft", "under_review")).toBe(false);
+  });
+  it("submitted → under_review/cancelled/rejected", () => {
+    expect(isLegalCrTransition("submitted", "under_review")).toBe(true);
+    expect(isLegalCrTransition("submitted", "cancelled")).toBe(true);
+    expect(isLegalCrTransition("submitted", "rejected")).toBe(true);
+    expect(isLegalCrTransition("submitted", "approved")).toBe(false);
+    expect(isLegalCrTransition("submitted", "implemented")).toBe(false);
+  });
+  it("under_review → approved/rejected/cancelled", () => {
+    expect(isLegalCrTransition("under_review", "approved")).toBe(true);
+    expect(isLegalCrTransition("under_review", "rejected")).toBe(true);
+    expect(isLegalCrTransition("under_review", "cancelled")).toBe(true);
+    expect(isLegalCrTransition("under_review", "implemented")).toBe(false);
+  });
+  it("approved → implemented/cancelled فقط", () => {
+    expect(isLegalCrTransition("approved", "implemented")).toBe(true);
+    expect(isLegalCrTransition("approved", "cancelled")).toBe(true);
+    expect(isLegalCrTransition("approved", "rejected")).toBe(false);
+    expect(isLegalCrTransition("approved", "draft")).toBe(false);
+  });
+  it("الحالات النهائية لا انتقال منها", () => {
+    expect(isLegalCrTransition("rejected", "draft")).toBe(false);
+    expect(isLegalCrTransition("cancelled", "draft")).toBe(false);
+    expect(isLegalCrTransition("implemented", "approved")).toBe(false);
+  });
+  it("نفس الحالة = مسموح (لا تغيير فعلي)", () => {
+    expect(isLegalCrTransition("draft", "draft")).toBe(true);
+    expect(isLegalCrTransition("approved", "approved")).toBe(true);
   });
 });

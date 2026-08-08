@@ -16,7 +16,7 @@ import Select from "@/components/ui/Select";
 import EmptyState from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toaster";
 import {
-  EVAL_CATEGORIES, EVAL_CATEGORY_LABELS,
+  NEW_EVAL_CATEGORIES, EVAL_CATEGORY_LABELS,
   EVAL_SEVERITIES, EVAL_SEVERITY_LABELS,
   EVAL_RUN_RESULTS, EVAL_RUN_RESULT_LABELS,
   type EvaluationScenarioRow, type EvaluationRunRow,
@@ -236,7 +236,7 @@ function ScenarioDialog({
   const [code, setCode] = useState(item?.code ?? "");
   const [title, setTitle] = useState(item?.title ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
-  const [category, setCategory] = useState<EvalCategory>(item?.category ?? "functional");
+  const [category, setCategory] = useState<EvalCategory>(item?.category ?? "usability");
   const [severity, setSeverity] = useState<EvalSeverity>(item?.severity ?? "medium");
   const [preconditions, setPreconditions] = useState(item?.preconditions ?? "");
   const [expectedResult, setExpectedResult] = useState(item?.expectedResult ?? "");
@@ -257,7 +257,7 @@ function ScenarioDialog({
           <Field label="الكود"><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="EVAL-001" /></Field>
           <Field label="الفئة">
             <Select value={category} onChange={(e) => setCategory(e.target.value as EvalCategory)}>
-              {EVAL_CATEGORIES.map((c) => <option key={c} value={c}>{EVAL_CATEGORY_LABELS[c]}</option>)}
+              {NEW_EVAL_CATEGORIES.map((c) => <option key={c} value={c}>{EVAL_CATEGORY_LABELS[c]}</option>)}
             </Select>
           </Field>
           <Field label="العنوان *" span={2}><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="اختبار اعتماد طلب الشراء" /></Field>

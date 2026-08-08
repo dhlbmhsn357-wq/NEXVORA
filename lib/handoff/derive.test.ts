@@ -92,9 +92,17 @@ describe("Partners", () => {
 });
 
 describe("Registry integrity", () => {
-  it("25 عنصر بالضبط (7 إلزامي + 18 اختياري)", () => {
-    expect(HANDOFF_ITEM_REGISTRY.length).toBe(25);
+  it("7 إلزامية product-focused + بقية اختيارية", () => {
+    // 7 mandatory + 22 optional = 29 total (0106 review fixes)
+    expect(HANDOFF_ITEM_REGISTRY.length).toBe(29);
     expect(MANDATORY_HANDOFF_KEYS.length).toBe(7);
+    // نتأكّد أن المفاتيح الإلزامية الجديدة موجودة
+    for (const k of [
+      "problem_brief","scope_mvp","user_stories","acceptance_criteria",
+      "prototype_link","prd_final","product_evaluation_guide",
+    ]) {
+      expect(MANDATORY_HANDOFF_KEYS).toContain(k);
+    }
   });
   it("كل item_key فريد", () => {
     const keys = HANDOFF_ITEM_REGISTRY.map((i) => i.key);

@@ -11,6 +11,7 @@ import type {
   MarketResearchItem, MarketResearchItemType,
   ProblemValidationItem, EvidenceType,
   InformationClassificationMark, InformationClassification,
+  Confidentiality,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -21,6 +22,8 @@ type DbMr = {
   title: string; summary: string; details: Record<string, unknown>;
   source_url: string | null; source_notes: string;
   confidence: number; tags: string[];
+  information_class?: InformationClassification | null;
+  confidentiality?: Confidentiality | null;
   created_at: string; updated_at: string; created_by: string | null;
 };
 function mapMr(r: DbMr): MarketResearchItem {
@@ -29,6 +32,8 @@ function mapMr(r: DbMr): MarketResearchItem {
     title: r.title, summary: r.summary, details: r.details ?? {},
     sourceUrl: r.source_url, sourceNotes: r.source_notes,
     confidence: r.confidence, tags: r.tags ?? [],
+    informationClass: (r.information_class ?? "unclassified") as InformationClassification,
+    confidentiality: (r.confidentiality ?? "internal") as Confidentiality,
     createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
   };
 }
@@ -39,6 +44,8 @@ type DbPv = {
   source_person: string; source_role: string; source_date: string | null;
   supporting_url: string | null; supporting_notes: string;
   strength: number; tags: string[];
+  information_class?: InformationClassification | null;
+  confidentiality?: Confidentiality | null;
   created_at: string; updated_at: string; created_by: string | null;
 };
 function mapPv(r: DbPv): ProblemValidationItem {
@@ -48,6 +55,8 @@ function mapPv(r: DbPv): ProblemValidationItem {
     sourcePerson: r.source_person, sourceRole: r.source_role, sourceDate: r.source_date,
     supportingUrl: r.supporting_url, supportingNotes: r.supporting_notes,
     strength: r.strength, tags: r.tags ?? [],
+    informationClass: (r.information_class ?? "unclassified") as InformationClassification,
+    confidentiality: (r.confidentiality ?? "internal") as Confidentiality,
     createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
   };
 }
@@ -90,6 +99,8 @@ export interface MarketResearchInput {
   sourceNotes?: string;
   confidence?: number;
   tags?: string[];
+  informationClass?: InformationClassification;
+  confidentiality?: Confidentiality;
 }
 
 export async function createMarketResearchItem(
@@ -108,6 +119,8 @@ export async function createMarketResearchItem(
       source_notes: input.sourceNotes ?? "",
       confidence: input.confidence ?? 50,
       tags: input.tags ?? [],
+      information_class: input.informationClass ?? "unclassified",
+      confidentiality: input.confidentiality ?? "internal",
       created_by: createdBy,
     })
     .select("*").single();
@@ -128,6 +141,8 @@ export async function updateMarketResearchItem(
   if (patch.sourceNotes !== undefined) dbPatch.source_notes = patch.sourceNotes;
   if (patch.confidence !== undefined) dbPatch.confidence = patch.confidence;
   if (patch.tags !== undefined) dbPatch.tags = patch.tags;
+  if (patch.informationClass !== undefined) dbPatch.information_class = patch.informationClass;
+  if (patch.confidentiality !== undefined) dbPatch.confidentiality = patch.confidentiality;
   const { data, error } = await svc
     .from("market_research_items").update(dbPatch).eq("id", id).select("*").single();
   if (error) throw error;
@@ -166,6 +181,8 @@ export interface ProblemValidationInput {
   supportingNotes?: string;
   strength?: number;
   tags?: string[];
+  informationClass?: InformationClassification;
+  confidentiality?: Confidentiality;
 }
 
 export async function createProblemValidationItem(
@@ -187,6 +204,8 @@ export async function createProblemValidationItem(
       supporting_notes: input.supportingNotes ?? "",
       strength: input.strength ?? 50,
       tags: input.tags ?? [],
+      information_class: input.informationClass ?? "unclassified",
+      confidentiality: input.confidentiality ?? "internal",
       created_by: createdBy,
     })
     .select("*").single();
@@ -210,6 +229,8 @@ export async function updateProblemValidationItem(
   if (patch.supportingNotes !== undefined) dbPatch.supporting_notes = patch.supportingNotes;
   if (patch.strength !== undefined) dbPatch.strength = patch.strength;
   if (patch.tags !== undefined) dbPatch.tags = patch.tags;
+  if (patch.informationClass !== undefined) dbPatch.information_class = patch.informationClass;
+  if (patch.confidentiality !== undefined) dbPatch.confidentiality = patch.confidentiality;
   const { data, error } = await svc
     .from("problem_validation_items").update(dbPatch).eq("id", id).select("*").single();
   if (error) throw error;

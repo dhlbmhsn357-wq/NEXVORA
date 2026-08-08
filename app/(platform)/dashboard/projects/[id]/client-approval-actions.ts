@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { requireRole } from "@/lib/auth/rbac";
 import {
   createApproval, revokeApproval, recordDecision, logAudit, getApprovalByToken,
@@ -87,7 +88,11 @@ export async function logApprovalViewedAction(token: string, meta: Record<string
   try {
     const row = await getApprovalByToken(token);
     if (!row) return { ok: false, message: "لا يوجد رابط." };
-    await logAudit(row.id, row.projectId, "viewed", meta, row.clientName || "client");
+    // 0106: نلتقط IP + UA من الطلب لتتبّع أحداث المشاهدة.
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
+    const ua = h.get("user-agent") || null;
+    await logAudit(row.id, row.projectId, "viewed", { ...meta, ip, ua }, row.clientName || "client");
     return { ok: true };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التسجيل." }; }
 }

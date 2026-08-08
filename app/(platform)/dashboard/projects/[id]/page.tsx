@@ -106,6 +106,7 @@ import { listPackages as listHandoffPackages, listItems as listHandoffItems, lis
 import CommercialFullPanel from "./commercial-full-panel";
 import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
+import { selectWorkflowUiVersion } from "@/lib/workflow-v2/adapter";
 import {
   READINESS_METRICS_ORDERED,
   computeAllReadiness,
@@ -169,7 +170,7 @@ export default async function ProjectDetailPage({
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select(
-      "id, name, project_type, stage, ai_analysis, project_code, widget_key, archived_at, stage_changed_at, owner_id, lead_id, discovery_template_id, staging_url, production_url, clients(company_name)"
+      "id, name, project_type, stage, ai_analysis, project_code, widget_key, archived_at, stage_changed_at, owner_id, lead_id, discovery_template_id, staging_url, production_url, workflow_version, clients(company_name)"
     )
     .eq("id", id)
     .single();
@@ -459,7 +460,12 @@ export default async function ProjectDetailPage({
   const currentUserRole = (currentProfile?.role ?? "member") as UserRole;
 
   // ===== Commercial + Research (P4 + P5 — behind product_mode flag) =====
+  // القرار الأساسي per-project (workflow_version)، مع productModeEnabled كصمّام أمان عام.
   const productModeEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
+  // project.workflow_version قد يكون undefined لو الـ typegen ما تحدّثش بعد الـ 0096.
+  const workflowV2Enabled = selectWorkflowUiVersion({
+    workflow_version: (project as unknown as { workflow_version?: "v1" | "v2" | null }).workflow_version ?? null,
+  }) === "v2" && productModeEnabled;
   const [
     commercialLifecycle, commercialContracts, commercialPayments,
     marketResearchItems, problemValidationItems,
@@ -505,10 +511,10 @@ export default async function ProjectDetailPage({
   // نحسب على الفور بدون snapshots — الـ workflow_v2 checklist state لسه
   // ما اتربطش تلقائيًا، فلحد ما ده يحصل هنعرض 0% صريحة (ما نخفيش الحاجة).
   // بمجرد ما مرحلة v2 checklist item يتحدّث → نسبها تظهر هنا فورًا.
-  const nexvoraReadinessMetrics = productModeEnabled
+  const nexvoraReadinessMetrics = workflowV2Enabled
     ? computeAllReadiness({})
     : [];
-  const nexvoraOverallReadiness = productModeEnabled
+  const nexvoraOverallReadiness = workflowV2Enabled
     ? computeOverallReadiness(nexvoraReadinessMetrics)
     : 0;
   const allUsersForWork = ((allUsersRes.data ?? []) as { id: string; full_name: string | null; email: string | null }[]).map((u) => ({ id: u.id, name: u.full_name || u.email || "مستخدم" }));
@@ -908,7 +914,7 @@ export default async function ProjectDetailPage({
     { key: "tasks", label: "المهام", content: tasksTabContent },
     // تبويبات NEXVORA — يظهروا بس لو product_mode مفعّل (NEXVORA Core).
     // "البحث والتحقق" قبل "تجاري" لأنه أساس تعريف المنتج (P5 → P6+).
-    ...(productModeEnabled ? [
+    ...(workflowV2Enabled ? [
       {
         key: "research",
         label: "البحث والتحقق",
@@ -1067,12 +1073,12 @@ export default async function ProjectDetailPage({
   // NEXVORA UX Cleanup 2: كل تبويبة بياخد category (essential/advanced) من
   // خريطة nexvora-tab-order. WorkflowNav بيخفي "advanced" خلف زر «إظهار
   // المتقدمة» — أي مفتاح مش موجود في الخريطة بيعتبر essential (fallback آمن).
-  const orderedWorkflowItems: WorkflowNavItem[] = productModeEnabled
+  const orderedWorkflowItems: WorkflowNavItem[] = workflowV2Enabled
     ? orderTabsByNexvora(workflowItems).map((o) => ({ ...o.item, category: o.category }))
     : workflowItems.map((i) => ({ ...i, category: getTabCategory(i.key) }));
 
   // اسماء الـ phases لعرضها كـ "قفزة سريعة" فوق التبويبات (حصريًا للـ v2)
-  const nexvoraPhaseAnchors = productModeEnabled
+  const nexvoraPhaseAnchors = workflowV2Enabled
     ? orderTabsByNexvora(workflowItems).reduce<Array<{ phaseKey: string; phaseLabel: string; firstTabKey: string }>>(
         (acc, o) => {
           if (!acc.find((a) => a.phaseKey === o.phaseKey)) {
@@ -1145,7 +1151,7 @@ export default async function ProjectDetailPage({
           - غير كده → 4 مقاييس Workflow v1 القديمة (backwards compat)
           مصدر الحقيقة الوحيد: lib/project-readiness (v2) أو
           lib/workflow/progress-engine (v1). */}
-      {productModeEnabled ? (
+      {workflowV2Enabled ? (
         <div className="mb-4 space-y-2">
           <div className="flex items-center justify-between px-1 text-xs text-[var(--v-text-muted)]">
             <span>مقاييس الجاهزية (NEXVORA v2)</span>
@@ -1188,7 +1194,7 @@ export default async function ProjectDetailPage({
 
       {/* NEXVORA Phase Anchors — قفزة سريعة بين المجموعات الثمانية
           (يظهر فقط لما product_mode مفعّل، عدد التبويبات في كل phase مكتوب بجانب اسمها). */}
-      {productModeEnabled && nexvoraPhaseAnchors.length > 0 && (
+      {workflowV2Enabled && nexvoraPhaseAnchors.length > 0 && (
         <nav aria-label="مراحل المشروع" className="mb-3 flex flex-wrap items-center gap-1.5 rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-2 text-xs">
           <span className="px-1 font-semibold text-[var(--v-text-muted)]">القفزة السريعة:</span>
           {nexvoraPhaseAnchors.map((p) => (

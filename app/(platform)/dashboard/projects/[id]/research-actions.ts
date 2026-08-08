@@ -23,9 +23,11 @@ import {
   MARKET_RESEARCH_ITEM_TYPES,
   EVIDENCE_TYPES,
   INFORMATION_CLASSIFICATIONS,
+  CONFIDENTIALITY_LEVELS,
   type MarketResearchItemType,
   type EvidenceType,
   type InformationClassification,
+  type Confidentiality,
 } from "@/lib/market-research/types";
 
 type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; message: string };
@@ -47,6 +49,9 @@ function isValidEvidence(x: string): x is EvidenceType {
 function isValidClassification(x: string): x is InformationClassification {
   return (INFORMATION_CLASSIFICATIONS as readonly string[]).includes(x);
 }
+function isValidConfidentiality(x: string): x is Confidentiality {
+  return (CONFIDENTIALITY_LEVELS as readonly string[]).includes(x);
+}
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
@@ -59,6 +64,7 @@ export async function createMarketResearchAction(
   raw: {
     itemType: string; title: string; summary?: string; sourceUrl?: string;
     sourceNotes?: string; confidence?: number | string; tags?: string;
+    informationClass?: string; confidentiality?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const g = await guard();
@@ -77,6 +83,8 @@ export async function createMarketResearchAction(
     sourceNotes: raw.sourceNotes ?? "",
     confidence: clamp(Math.round(conf), 0, 100),
     tags: parseTags(raw.tags),
+    informationClass: raw.informationClass && isValidClassification(raw.informationClass) ? raw.informationClass : undefined,
+    confidentiality: raw.confidentiality && isValidConfidentiality(raw.confidentiality) ? raw.confidentiality : "internal",
   };
   try {
     const row = await createMarketResearchItem(projectId, input, g.userId);
@@ -90,7 +98,7 @@ export async function createMarketResearchAction(
 export async function updateMarketResearchAction(
   projectId: string,
   id: string,
-  patch: Partial<{ itemType: string; title: string; summary: string; sourceUrl: string; sourceNotes: string; confidence: number | string; tags: string; }>
+  patch: Partial<{ itemType: string; title: string; summary: string; sourceUrl: string; sourceNotes: string; confidence: number | string; tags: string; informationClass: string; confidentiality: string; }>
 ): Promise<ActionResult> {
   const g = await guard();
   if (!g.ok) return g;
@@ -112,6 +120,14 @@ export async function updateMarketResearchAction(
     clean.confidence = clamp(Math.round(n), 0, 100);
   }
   if (patch.tags !== undefined) clean.tags = parseTags(patch.tags);
+  if (patch.informationClass !== undefined) {
+    if (!isValidClassification(patch.informationClass)) return { ok: false, message: "تصنيف المعلومة غير معروف." };
+    clean.informationClass = patch.informationClass;
+  }
+  if (patch.confidentiality !== undefined) {
+    if (!isValidConfidentiality(patch.confidentiality)) return { ok: false, message: "مستوى السرّية غير معروف." };
+    clean.confidentiality = patch.confidentiality;
+  }
   try {
     await updateMarketResearchItem(id, clean);
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -142,6 +158,7 @@ export async function createProblemValidationAction(
     evidenceType: string; title: string; painPoint: string;
     quote?: string; sourcePerson?: string; sourceRole?: string; sourceDate?: string;
     supportingUrl?: string; supportingNotes?: string; strength?: number | string; tags?: string;
+    informationClass?: string; confidentiality?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const g = await guard();
@@ -166,6 +183,8 @@ export async function createProblemValidationAction(
     supportingNotes: raw.supportingNotes ?? "",
     strength: clamp(Math.round(st), 0, 100),
     tags: parseTags(raw.tags),
+    informationClass: raw.informationClass && isValidClassification(raw.informationClass) ? raw.informationClass : undefined,
+    confidentiality: raw.confidentiality && isValidConfidentiality(raw.confidentiality) ? raw.confidentiality : "internal",
   };
   try {
     const row = await createProblemValidationItem(projectId, input, g.userId);
@@ -179,7 +198,7 @@ export async function createProblemValidationAction(
 export async function updateProblemValidationAction(
   projectId: string,
   id: string,
-  patch: Partial<{ evidenceType: string; title: string; painPoint: string; quote: string; sourcePerson: string; sourceRole: string; sourceDate: string; supportingUrl: string; supportingNotes: string; strength: number | string; tags: string; }>
+  patch: Partial<{ evidenceType: string; title: string; painPoint: string; quote: string; sourcePerson: string; sourceRole: string; sourceDate: string; supportingUrl: string; supportingNotes: string; strength: number | string; tags: string; informationClass: string; confidentiality: string; }>
 ): Promise<ActionResult> {
   const g = await guard();
   if (!g.ok) return g;
@@ -208,6 +227,14 @@ export async function updateProblemValidationAction(
     clean.strength = clamp(Math.round(n), 0, 100);
   }
   if (patch.tags !== undefined) clean.tags = parseTags(patch.tags);
+  if (patch.informationClass !== undefined) {
+    if (!isValidClassification(patch.informationClass)) return { ok: false, message: "تصنيف المعلومة غير معروف." };
+    clean.informationClass = patch.informationClass;
+  }
+  if (patch.confidentiality !== undefined) {
+    if (!isValidConfidentiality(patch.confidentiality)) return { ok: false, message: "مستوى السرّية غير معروف." };
+    clean.confidentiality = patch.confidentiality;
+  }
   try {
     await updateProblemValidationItem(id, clean);
     revalidatePath(`/dashboard/projects/${projectId}`);

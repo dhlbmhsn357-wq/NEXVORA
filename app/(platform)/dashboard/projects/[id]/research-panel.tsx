@@ -23,6 +23,7 @@ import { toast } from "@/components/ui/Toaster";
 import {
   MARKET_RESEARCH_ITEM_TYPES, MARKET_RESEARCH_TYPE_LABELS,
   EVIDENCE_TYPES, EVIDENCE_TYPE_LABELS,
+  CLASSIFICATION_LABELS, CONFIDENTIALITY_LABELS,
   type MarketResearchItem, type MarketResearchItemType,
   type ProblemValidationItem, type EvidenceType,
 } from "@/lib/market-research/types";
@@ -130,6 +131,8 @@ export default function ResearchPanel(props: ResearchPanelProps) {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-[var(--v-text)]">{m.title}</p>
                     <Badge tone={MR_TYPE_TONE[m.itemType]}>{MARKET_RESEARCH_TYPE_LABELS[m.itemType]}</Badge>
+                    <Badge tone="neutral">{CLASSIFICATION_LABELS[m.informationClass]}</Badge>
+                    <Badge tone={m.confidentiality === "confidential" ? "danger" : m.confidentiality === "public" ? "success" : "info"}>{CONFIDENTIALITY_LABELS[m.confidentiality]}</Badge>
                     <span className="text-[11px] text-[var(--v-text-subtle)]">ثقة: {m.confidence}%</span>
                   </div>
                   {m.summary && <p className="mt-1 text-xs text-[var(--v-text-secondary)]">{m.summary}</p>}
@@ -175,6 +178,8 @@ export default function ResearchPanel(props: ResearchPanelProps) {
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-[var(--v-text)]">{p.title}</p>
                       <Badge tone={EV_TYPE_TONE[p.evidenceType]}>{EVIDENCE_TYPE_LABELS[p.evidenceType]}</Badge>
+                      <Badge tone="neutral">{CLASSIFICATION_LABELS[p.informationClass]}</Badge>
+                      <Badge tone={p.confidentiality === "confidential" ? "danger" : p.confidentiality === "public" ? "success" : "info"}>{CONFIDENTIALITY_LABELS[p.confidentiality]}</Badge>
                       <Badge tone={QUALITY_TONE[q]}>قوّة {p.strength}%</Badge>
                     </div>
                     <p className="mt-1 text-sm text-[var(--v-text-secondary)]">

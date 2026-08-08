@@ -9,6 +9,7 @@
  *  - عند الفتح، يُسجَّل حدث 'viewed' في الـ audit log.
  *  - القرار يمرّ بـ server action تتحقق من الحالة الفعّالة قبل الحفظ.
  */
+import { headers } from "next/headers";
 import { getApprovalByToken, logAudit } from "@/lib/client-approval/service";
 import {
   APPROVAL_TARGET_LABELS, APPROVAL_DECISION_LABELS,
@@ -39,7 +40,13 @@ export default async function ApprovePage({
   const eff = effectiveStatus(approval, now);
 
   // نسجّل مشاهدة (best-effort — لا نفشل الصفحة لو الـ audit فشل)
-  try { await logAudit(approval.id, approval.projectId, "viewed", {}, approval.clientName || "client"); } catch { /* ignore */ }
+  // 0106: نلتقط IP + UA للـ audit trail.
+  try {
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
+    const ua = h.get("user-agent") || null;
+    await logAudit(approval.id, approval.projectId, "viewed", { ip, ua }, approval.clientName || "client");
+  } catch { /* ignore */ }
 
   return (
     <main className="mx-auto max-w-2xl p-6">
