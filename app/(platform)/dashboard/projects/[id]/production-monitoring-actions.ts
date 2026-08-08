@@ -7,10 +7,13 @@ import { ProductionMonitoringEngine } from "@/lib/production-monitoring/generati
 import { requireManageIncidents, requireRunCheck, requireViewMonitoring } from "@/lib/production-monitoring/permissions";
 import { generateFixPromptsForIncident } from "@/lib/production-monitoring/fix-prompt-service";
 import { runReviewVerdict } from "@/lib/production-monitoring/review-service";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunCheckActionResult = { status: "started" } | { status: "already_running" } | { status: "error"; message: string };
 
-export async function updateProjectProductionUrl(projectId: string, productionUrl: string): Promise<{ ok: boolean; message?: string }> {
+export async function updateProjectProductionUrl(projectId: string, productionUrl: string): Promise<{
+  ok: boolean; message?: string }> {
+  await requireExtendedTechnical();
   const auth = await requireRunCheck();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 
@@ -23,6 +26,7 @@ export async function updateProjectProductionUrl(projectId: string, productionUr
 }
 
 export async function runMonitoringCheckNow(projectId: string): Promise<RunCheckActionResult> {
+  await requireExtendedTechnical();
   const auth = await requireRunCheck();
   if (!auth.ok) return { status: "error", message: auth.message ?? "غير مسموح." };
 
@@ -45,6 +49,7 @@ export async function runMonitoringCheckNow(projectId: string): Promise<RunCheck
 }
 
 export async function acknowledgeMonitoringIncident(projectId: string, incidentId: string): Promise<void> {
+  await requireExtendedTechnical();
   const auth = await requireManageIncidents();
   if (!auth.ok) return;
   await ProductionMonitoringEngine.acknowledgeIncident(incidentId, auth.userId);
@@ -52,6 +57,7 @@ export async function acknowledgeMonitoringIncident(projectId: string, incidentI
 }
 
 export async function resolveMonitoringIncident(projectId: string, incidentId: string): Promise<void> {
+  await requireExtendedTechnical();
   const auth = await requireManageIncidents();
   if (!auth.ok) return;
   await ProductionMonitoringEngine.resolveIncident(incidentId, auth.userId);
@@ -59,6 +65,7 @@ export async function resolveMonitoringIncident(projectId: string, incidentId: s
 }
 
 export async function getProductionMonitoringState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewMonitoring();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
   const state = await ProductionMonitoringEngine.getState(projectId);
@@ -69,6 +76,7 @@ export type GenerateFixPromptsActionResult = { status: "started" } | { status: "
 
 /** Claude Architect — توليد Prompts إصلاح مقسّمة حسب المحور لحادثة واحدة (Phase 6). */
 export async function generateFixPromptsAction(projectId: string, incidentId: string): Promise<GenerateFixPromptsActionResult> {
+  await requireExtendedTechnical();
   const auth = await requireManageIncidents();
   if (!auth.ok) return { status: "error", message: auth.message ?? "غير مسموح." };
 
@@ -88,6 +96,7 @@ export type RunReviewVerdictActionResult = { status: "started" } | { status: "er
 
 /** "هل الإصلاح نجح فعلًا؟" — تحقّق AI + درجة إجمالية محسوبة بالكود (Phase 6). */
 export async function runReviewVerdictAction(projectId: string): Promise<RunReviewVerdictActionResult> {
+  await requireExtendedTechnical();
   const auth = await requireManageIncidents();
   if (!auth.ok) return { status: "error", message: auth.message ?? "غير مسموح." };
 
@@ -106,7 +115,9 @@ export async function runReviewVerdictAction(projectId: string): Promise<RunRevi
 export async function promoteSupportTicketToIncidentAction(
   projectId: string,
   supportRequestId: string
-): Promise<{ ok: boolean; message?: string }> {
+): Promise<{
+  ok: boolean; message?: string }> {
+  await requireExtendedTechnical();
   const auth = await requireManageIncidents();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 

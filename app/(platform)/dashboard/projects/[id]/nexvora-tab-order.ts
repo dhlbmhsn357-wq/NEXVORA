@@ -14,9 +14,11 @@
  *
  * الوضع الأساسي = 8 phases (discovery → delivery).
  * الوضع الممتد  = 9 phases (بإضافة execution خلف الفلاغ).
- * الـ orderTabsByNexvora/countByPhase بيسيبوا الـ execution phase في
- * قائمتهم دايمًا (backwards compat + deep-link safety)، والفلترة تحصل
- * في الـ UI عن طريق `getVisibleNexvoraPhases(extendedEnabled)`.
+ *
+ * Security note: Extended tabs محجوبة تمامًا لما الفلاغ off — server-side
+ * redirect في page.tsx يرفض ?tab=<execution-key> ويعيد التوجيه للـ overview،
+ * وكل server action مرتبط محمي بـ `requireExtendedTechnical()`. الفلترة في
+ * الـ UI مجرد طبقة تجميلية فوق الحماية الحقيقية على الخادم.
  *
  * Essential / Advanced (UX Cleanup 2)
  * ------------------------------------
@@ -131,6 +133,22 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
 export function getVisibleNexvoraPhases(extendedEnabled: boolean): readonly TabPhase[] {
   if (extendedEnabled) return NEXVORA_TAB_PHASES;
   return NEXVORA_TAB_PHASES.filter((p) => !p.requiresExtended);
+}
+
+/**
+ * مجموعة مفاتيح كل تبويبات phase الـ Execution (Extended Technical Delivery).
+ * مصدر واحد للحقيقة — أي مستهلك (guard في page.tsx، server action، اختبار)
+ * يستدعي الـ `isExtendedTechnicalTabKey` بدل ما يعيد كتابة نفس الشرط.
+ */
+export const EXTENDED_TAB_KEYS: ReadonlySet<string> = new Set<string>(
+  NEXVORA_TAB_PHASES.filter((p) => p.requiresExtended).flatMap((p) =>
+    p.tabs.map((t) => t.key),
+  ),
+);
+
+/** يرجّع true لو الـ key ينتمي لأي تبويبة Extended Technical Delivery. */
+export function isExtendedTechnicalTabKey(key: string): boolean {
+  return EXTENDED_TAB_KEYS.has(key);
 }
 
 /** كل الأكواد المُصنَّفة (للاستعلام السريع). */

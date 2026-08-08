@@ -6,6 +6,7 @@ import { PerformanceReviewEngine } from "@/lib/performance-review/generation-ser
 import { comparePhaseAuditFindings } from "@/lib/phase-audit-compare";
 import { requireRetryStage, requireStartReview, requireViewQAReports } from "@/lib/engineering-qa/permissions";
 import type { PerformanceReviewCategoryKey } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunPerformanceCategoryResult = { status: "started" } | { status: "already_generating" };
 
@@ -15,6 +16,7 @@ export async function runPerformanceReviewCategory(
   categoryKey: PerformanceReviewCategoryKey,
   isRetry: boolean
 ): Promise<RunPerformanceCategoryResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -40,6 +42,7 @@ export async function runPerformanceReviewCategory(
 }
 
 export async function getPerformanceReviewState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
   const state = await PerformanceReviewEngine.getState(projectId);
@@ -47,6 +50,7 @@ export async function getPerformanceReviewState(projectId: string) {
 }
 
 export async function comparePerformanceReviewVersions(oldReviewId: string, newReviewId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
 

@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 
 // كل Server Actions المستدعاة من مكوّنات هذه الصفحة (إعادة تحليل
@@ -41,7 +41,7 @@ import {
 import ProjectBrainEntries from "./project-brain";
 import AnalysisPanel from "./analysis-panel";
 import WorkflowNav, { type WorkflowNavItem } from "./workflow-nav";
-import { orderTabsByNexvora, getTabCategory, getVisibleNexvoraPhases, NEXVORA_TAB_PHASES } from "./nexvora-tab-order";
+import { orderTabsByNexvora, getTabCategory, getVisibleNexvoraPhases, isExtendedTechnicalTabKey, EXTENDED_TAB_KEYS } from "./nexvora-tab-order";
 import StageSelector from "./stage-selector";
 import WorkPanel from "./work-panel";
 import DeliveryLifecyclePanel from "./delivery-lifecycle-panel";
@@ -205,6 +205,24 @@ export default async function ProjectDetailPage({
   const { data: owner } = project.owner_id
     ? await supabase.from("profiles").select("full_name, email").eq("id", project.owner_id).maybeSingle()
     : { data: null };
+
+  // Extended Technical Delivery — Security Gate (server-side)
+  // ==========================================================
+  // نحسب الفلاغ هنا (قبل أي data fetch لتبويبات execution) عشان نقدر:
+  //   1) نرفض deep-link `?tab=<execution-key>` بإعادة توجيه لـ overview
+  //   2) نمنع الـ N+1 fetches لبيانات تبويبات محجوبة
+  // ملاحظة: الفلترة من الـ UI مش كافية — لو المستخدم زوّر الرابط لازم
+  // نرفضه على الخادم فورًا قبل ما نلمس أي جدول execution.
+  const extendedEnabledEarly = user
+    ? await isFeatureEnabled("extended_technical_delivery", user.id)
+    : false;
+  if (
+    !extendedEnabledEarly &&
+    !!currentTabParam &&
+    isExtendedTechnicalTabKey(currentTabParam)
+  ) {
+    redirect(`/dashboard/projects/${id}?tab=overview`);
+  }
 
   const [
     { data: discoveryForm },
@@ -467,11 +485,10 @@ export default async function ProjectDetailPage({
   // ===== Commercial + Research (P4 + P5 — behind product_mode flag) =====
   // القرار الأساسي per-project (workflow_version)، مع productModeEnabled كصمّام أمان عام.
   const productModeEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
-  // Extended Technical Delivery flag — بيتحكم في إظهار phase الـ execution
-  // (التنفيذ والجودة) وتبويباتها في الوضع الأساسي بيبقى مخفي، والوضع
-  // الممتد بيكشفها. deep-link على تبويب execution بيسمح بعرض التبويب نفسه
-  // (backwards compat) لكن الـ phase pill يفضل مخفي.
-  const extendedEnabled = user ? await isFeatureEnabled("extended_technical_delivery", user.id) : false;
+  // Extended Technical Delivery flag — تم حسابه مبكرًا (فوق) لأنه يتحكم في
+  // security redirect. لو الفلاغ off وتم طلب ?tab=<execution-key>، الطلب
+  // تم رفضه بالفعل قبل الوصول لهنا. لا توجد backwards-compat للـ deep-link.
+  const extendedEnabled = extendedEnabledEarly;
   // project.workflow_version قد يكون undefined لو الـ typegen ما تحدّثش بعد الـ 0096.
   const workflowV2Enabled = selectWorkflowUiVersion({
     workflow_version: (project as unknown as { workflow_version?: "v1" | "v2" | null }).workflow_version ?? null,
@@ -1090,16 +1107,11 @@ export default async function ProjectDetailPage({
   // (backwards compat) لكن الـ phase pill يظل مخفي على أي حال.
   const visibleNexvoraPhases = getVisibleNexvoraPhases(extendedEnabled);
   const visibleNexvoraPhaseKeys = new Set(visibleNexvoraPhases.map((p) => p.key));
-  const executionTabKeys = new Set<string>(
-    NEXVORA_TAB_PHASES
-      .filter((p) => p.requiresExtended)
-      .flatMap((p) => p.tabs.map((t) => t.key)),
-  );
-  const deepLinkAllowsExecution =
-    !extendedEnabled && !!currentTabParam && executionTabKeys.has(currentTabParam);
-  const executionAllowed = extendedEnabled || deepLinkAllowsExecution;
-  const nexvoraFilteredWorkflowItems = workflowV2Enabled && !executionAllowed
-    ? workflowItems.filter((i) => !executionTabKeys.has(i.key))
+  // Security: تبويبات execution محجوبة تمامًا لما الفلاغ off. لا استثناء
+  // deep-link هنا — الـ redirect فوق تكفّل بالحماية على مستوى الرابط،
+  // وهنا نضمن الحجب على مستوى الـ Navigation بحيث ما يظهرش أي زر ولا Pill.
+  const nexvoraFilteredWorkflowItems = workflowV2Enabled && !extendedEnabled
+    ? workflowItems.filter((i) => !EXTENDED_TAB_KEYS.has(i.key))
     : workflowItems;
 
   const orderedWorkflowItems: WorkflowNavItem[] = workflowV2Enabled

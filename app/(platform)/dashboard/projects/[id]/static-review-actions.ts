@@ -6,6 +6,7 @@ import { StaticReviewEngine } from "@/lib/static-review/generation-service";
 import { compareStaticReviews, type StaticReviewComparison } from "@/lib/static-review/compare-reviews";
 import { requireRetryStage, requireStartReview, requireViewQAReports } from "@/lib/engineering-qa/permissions";
 import type { StaticReviewCategoryKey } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunCategoryResult = { status: "started" } | { status: "already_generating" };
 
@@ -21,6 +22,7 @@ export async function runStaticReviewCategory(
   categoryKey: StaticReviewCategoryKey,
   isRetry: boolean
 ): Promise<RunCategoryResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -46,6 +48,7 @@ export async function runStaticReviewCategory(
 }
 
 export async function getStaticReviewState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) {
     return { ok: false as const, message: auth.message ?? "غير مسموح." };
@@ -60,6 +63,7 @@ export type CompareReviewsResult =
 
 /** يقارن مراجعتين (Versioning) — Issues Added/Fixed/Remaining + فرق الدرجة. */
 export async function compareStaticReviewVersions(oldReviewId: string, newReviewId: string): Promise<CompareReviewsResult> {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 

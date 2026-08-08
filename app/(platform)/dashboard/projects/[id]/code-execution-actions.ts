@@ -5,12 +5,14 @@ import { after } from "next/server";
 import { AICodeExecutionEngine, type StartPlanResult } from "@/lib/claude-exec/execution-engine";
 import { requireStartExecution, requireViewExecution } from "@/lib/claude-exec/permissions";
 import type { AccessibilityScan, ExecutionPlan, ExecutionTask, QaFixLoop, ReleaseCandidate } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export async function startCodeExecutionAction(
   projectId: string,
   repoUrl: string,
   repoBranch: string
 ): Promise<StartPlanResult> {
+  await requireExtendedTechnical();
   const auth = await requireStartExecution();
   if (!auth.ok) return { status: "error", message: auth.message ?? "غير مسموح." };
 
@@ -32,7 +34,9 @@ export async function startCodeExecutionAction(
   return result;
 }
 
-export async function startExecutionRunAction(projectId: string, planId: string): Promise<{ ok: boolean; message?: string }> {
+export async function startExecutionRunAction(projectId: string, planId: string): Promise<{
+  ok: boolean; message?: string }> {
+  await requireExtendedTechnical();
   const auth = await requireStartExecution();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 
@@ -54,7 +58,9 @@ export async function startExecutionRunAction(projectId: string, planId: string)
   return { ok: true };
 }
 
-export async function pollNextExecutionTaskAction(projectId: string, planId: string): Promise<{ ok: boolean }> {
+export async function pollNextExecutionTaskAction(projectId: string, planId: string): Promise<{
+  ok: boolean }> {
+  await requireExtendedTechnical();
   const auth = await requireStartExecution();
   if (!auth.ok) return { ok: false };
 
@@ -79,7 +85,9 @@ export interface CodeExecutionState {
   releaseCandidate: ReleaseCandidate | null;
 }
 
-export async function getCodeExecutionState(projectId: string): Promise<{ ok: true; state: CodeExecutionState } | { ok: false; message: string }> {
+export async function getCodeExecutionState(projectId: string): Promise<{
+  ok: true; state: CodeExecutionState } | { ok: false; message: string }> {
+  await requireExtendedTechnical();
   const auth = await requireViewExecution();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 

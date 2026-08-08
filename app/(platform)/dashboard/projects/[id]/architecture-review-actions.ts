@@ -6,6 +6,7 @@ import { ArchitectureReviewEngine } from "@/lib/architecture-review/generation-s
 import { comparePhaseAuditFindings } from "@/lib/phase-audit-compare";
 import { requireRetryStage, requireStartReview, requireViewQAReports } from "@/lib/engineering-qa/permissions";
 import type { ArchitectureReviewCategoryKey } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunArchitectureCategoryResult = { status: "started" } | { status: "already_generating" };
 
@@ -15,6 +16,7 @@ export async function runArchitectureReviewCategory(
   categoryKey: ArchitectureReviewCategoryKey,
   isRetry: boolean
 ): Promise<RunArchitectureCategoryResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -40,6 +42,7 @@ export async function runArchitectureReviewCategory(
 }
 
 export async function getArchitectureReviewState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
   const state = await ArchitectureReviewEngine.getState(projectId);
@@ -47,6 +50,7 @@ export async function getArchitectureReviewState(projectId: string) {
 }
 
 export async function compareArchitectureReviewVersions(oldReviewId: string, newReviewId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
 

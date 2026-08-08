@@ -6,6 +6,7 @@ import { CodeQualityReviewEngine } from "@/lib/code-quality-review/generation-se
 import { comparePhaseAuditFindings } from "@/lib/phase-audit-compare";
 import { requireRetryStage, requireStartReview, requireViewQAReports } from "@/lib/engineering-qa/permissions";
 import type { CodeQualityReviewCategoryKey } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunCodeQualityCategoryResult = { status: "started" } | { status: "already_generating" };
 
@@ -15,6 +16,7 @@ export async function runCodeQualityReviewCategory(
   categoryKey: CodeQualityReviewCategoryKey,
   isRetry: boolean
 ): Promise<RunCodeQualityCategoryResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -40,6 +42,7 @@ export async function runCodeQualityReviewCategory(
 }
 
 export async function getCodeQualityReviewState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
   const state = await CodeQualityReviewEngine.getState(projectId);
@@ -47,6 +50,7 @@ export async function getCodeQualityReviewState(projectId: string) {
 }
 
 export async function compareCodeQualityReviewVersions(oldReviewId: string, newReviewId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
 

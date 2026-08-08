@@ -6,6 +6,7 @@ import { DatabaseReviewEngine } from "@/lib/database-review/generation-service";
 import { comparePhaseAuditFindings } from "@/lib/phase-audit-compare";
 import { requireRetryStage, requireStartReview, requireViewQAReports } from "@/lib/engineering-qa/permissions";
 import type { DatabaseReviewCategoryKey } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunDatabaseCategoryResult = { status: "started" } | { status: "already_generating" };
 
@@ -15,6 +16,7 @@ export async function runDatabaseReviewCategory(
   categoryKey: DatabaseReviewCategoryKey,
   isRetry: boolean
 ): Promise<RunDatabaseCategoryResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -40,6 +42,7 @@ export async function runDatabaseReviewCategory(
 }
 
 export async function getDatabaseReviewState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
   const state = await DatabaseReviewEngine.getState(projectId);
@@ -47,6 +50,7 @@ export async function getDatabaseReviewState(projectId: string) {
 }
 
 export async function compareDatabaseReviewVersions(oldReviewId: string, newReviewId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
 

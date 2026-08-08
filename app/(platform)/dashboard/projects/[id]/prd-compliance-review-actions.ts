@@ -6,6 +6,7 @@ import { PrdComplianceReviewEngine } from "@/lib/prd-compliance-review/generatio
 import { comparePhaseAuditFindings } from "@/lib/phase-audit-compare";
 import { requireRetryStage, requireStartReview, requireViewQAReports } from "@/lib/engineering-qa/permissions";
 import type { PrdComplianceReviewCategoryKey } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunPrdComplianceCategoryResult = { status: "started" } | { status: "already_generating" };
 
@@ -15,6 +16,7 @@ export async function runPrdComplianceReviewCategory(
   categoryKey: PrdComplianceReviewCategoryKey,
   isRetry: boolean
 ): Promise<RunPrdComplianceCategoryResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -40,6 +42,7 @@ export async function runPrdComplianceReviewCategory(
 }
 
 export async function getPrdComplianceReviewState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
   const state = await PrdComplianceReviewEngine.getState(projectId);
@@ -47,6 +50,7 @@ export async function getPrdComplianceReviewState(projectId: string) {
 }
 
 export async function comparePrdComplianceReviewVersions(oldReviewId: string, newReviewId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
 

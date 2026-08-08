@@ -16,6 +16,7 @@ import type {
   EngineeringReviewStage,
   EngineeringStageResult,
 } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type StartStageResult = { status: "started" } | { status: "already_running" };
 
@@ -25,6 +26,7 @@ export async function createAndStartEngineeringReview(
   repoUrl: string,
   repoRef: string
 ): Promise<CreateReviewResult> {
+  await requireExtendedTechnical();
   const auth = await requireStartReview();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 
@@ -60,6 +62,7 @@ export async function supersedeAndStartEngineeringReview(
   repoUrl: string,
   repoRef: string
 ): Promise<CreateReviewResult> {
+  await requireExtendedTechnical();
   const auth = await requireStartReview();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 
@@ -101,6 +104,7 @@ export async function runEngineeringQAStage(
   stageKey: string,
   isRetry: boolean
 ): Promise<StartStageResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -125,7 +129,9 @@ export async function runEngineeringQAStage(
   return { status: "started" };
 }
 
-export async function cancelEngineeringReview(projectId: string, reviewId: string): Promise<{ ok: boolean; message?: string }> {
+export async function cancelEngineeringReview(projectId: string, reviewId: string): Promise<{
+  ok: boolean; message?: string }> {
+  await requireExtendedTechnical();
   const auth = await requireCancelReview();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 
@@ -144,6 +150,7 @@ export async function getEngineeringQAState(projectId: string): Promise<{
   certificate: EngineeringCertificate | null;
   events: EngineeringReviewEvent[];
 }> {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) {
     return {

@@ -7,11 +7,14 @@ import { ProductionValidationEngine } from "@/lib/production-validation/generati
 import { getValidationScreenshotUrl } from "@/lib/storage/validation-screenshots";
 import { requireManageQA, requireRetryStage, requireStartReview, requireViewQAReports } from "@/lib/engineering-qa/permissions";
 import type { ValidationCategoryKey } from "@/lib/types/database";
+import { requireExtendedTechnical } from "@/lib/feature-flags/guards";
 
 export type RunTaskResult = { status: "started" } | { status: "already_generating" };
 
 /** تحديث رابط Staging/Preview للمشروع — لازم قبل أي جلسة Production Validation. Manage QA فقط (نفس مستوى صلاحيات الإعدادات الحساسة). */
-export async function updateProjectStagingUrl(projectId: string, stagingUrl: string): Promise<{ ok: boolean; message?: string }> {
+export async function updateProjectStagingUrl(projectId: string, stagingUrl: string): Promise<{
+  ok: boolean; message?: string }> {
+  await requireExtendedTechnical();
   const auth = await requireManageQA();
   if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح." };
 
@@ -24,6 +27,7 @@ export async function updateProjectStagingUrl(projectId: string, stagingUrl: str
 }
 
 export async function runValidationJourney(projectId: string, sessionId: string, journeyKey: string, isRetry: boolean): Promise<RunTaskResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -49,6 +53,7 @@ export async function runValidationJourney(projectId: string, sessionId: string,
 }
 
 export async function runValidationCategory(projectId: string, sessionId: string, categoryKey: ValidationCategoryKey, isRetry: boolean): Promise<RunTaskResult> {
+  await requireExtendedTechnical();
   const auth = isRetry ? await requireRetryStage() : await requireStartReview();
   if (!auth.ok) {
     revalidatePath(`/dashboard/projects/${projectId}`);
@@ -74,6 +79,7 @@ export async function runValidationCategory(projectId: string, sessionId: string
 }
 
 export async function getProductionValidationState(projectId: string) {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return { ok: false as const, message: auth.message ?? "غير مسموح." };
   const state = await ProductionValidationEngine.getState(projectId);
@@ -81,6 +87,7 @@ export async function getProductionValidationState(projectId: string) {
 }
 
 export async function getValidationScreenshotSignedUrl(path: string): Promise<string | null> {
+  await requireExtendedTechnical();
   const auth = await requireViewQAReports();
   if (!auth.ok) return null;
   const supabase = await createClient();
