@@ -60,6 +60,9 @@ import MeetingsPanel from "./meetings-panel";
 import BrainPanel from "./brain-panel";
 import PRDPanel from "./prd-panel";
 import PrototypePromptPanel from "./prototype-prompt-panel";
+import PrototypeStudioPanel from "./prototype-studio-panel";
+import { getConfig as getStudioConfig } from "@/lib/prototype-studio/config-service";
+import { getLatest as getLatestStudioArtifact } from "@/lib/prototype-studio/artifact-service";
 import CodeExecutionPanel from "./code-execution-panel";
 import { AICodeExecutionEngine } from "@/lib/claude-exec/execution-engine";
 import ReviewPanel from "./review-panel";
@@ -492,6 +495,13 @@ export default async function ProjectDetailPage({
   // ===== Commercial + Research (P4 + P5 — behind product_mode flag) =====
   // القرار الأساسي per-project (workflow_version)، مع productModeEnabled كصمّام أمان عام.
   const productModeEnabled = user ? await isFeatureEnabled("product_mode", user.id) : false;
+  const prototypeStudioEnabled = user ? await isFeatureEnabled("prototype_studio", user.id) : false;
+  const [studioConfig, studioLatestContextPack] = prototypeStudioEnabled
+    ? await Promise.all([
+        getStudioConfig(project.id),
+        getLatestStudioArtifact(project.id, "context_pack"),
+      ])
+    : [null, null];
   // Extended Technical Delivery flag — تم حسابه مبكرًا (فوق) لأنه يتحكم في
   // security redirect. لو الفلاغ off وتم طلب ?tab=<execution-key>، الطلب
   // تم رفضه بالفعل قبل الوصول لهنا. لا توجد backwards-compat للـ deep-link.
@@ -801,6 +811,20 @@ export default async function ProjectDetailPage({
           sections={prdIncrementSections}
         />
       </div>
+    ),
+    prototypeStudio: (
+      prototypeStudioEnabled && studioConfig ? (
+        <PrototypeStudioPanel
+          projectId={project.id}
+          projectName={project.name}
+          initialConfig={studioConfig}
+          latestContextPack={studioLatestContextPack}
+        />
+      ) : (
+        <div className="rounded-xl border border-dashed border-[var(--v-border)] p-8 text-center text-sm text-[var(--v-text-secondary)]">
+          Prototype Studio معطّل بفلاغ الميزة. فعّله من إعدادات النظام.
+        </div>
+      )
     ),
     prototypePrompt: (
       <PrototypePromptPanel

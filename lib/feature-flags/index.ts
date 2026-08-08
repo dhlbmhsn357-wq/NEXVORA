@@ -28,6 +28,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 export const KNOWN_FLAGS = [
   "product_mode",
   "extended_technical_delivery",
+  "prototype_studio",
 ] as const;
 
 export type KnownFlagName = (typeof KNOWN_FLAGS)[number];

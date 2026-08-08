@@ -21,6 +21,7 @@ export type WorkflowStageKey =
   | "smartRecommendations"
   | "brainReview"
   | "prd"
+  | "prototypeStudio"
   | "prototypePrompt"
   | "prototypeReview"
   | "promptReview"
