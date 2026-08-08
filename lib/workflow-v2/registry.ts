@@ -139,11 +139,13 @@ export const WORKFLOW_V2_CHECKLISTS: Record<WorkflowV2StageKey, WorkflowV2Checkl
     { stageKey: "product_definition", itemKey: "open_questions",                 displayName: "أسئلة مفتوحة (اختياري)",                   description: "", order: 9, isMandatory: false },
   ],
   prototype_and_review: [
-    { stageKey: "prototype_and_review", itemKey: "prototype_plan",                  displayName: "خطة توليد الـ Prototype",                    description: "", order: 1, isMandatory: true  },
-    { stageKey: "prototype_and_review", itemKey: "prototype_prompts_generated",     displayName: "توليد Prompts للـ Prototype (V2 Pipeline)",  description: "", order: 2, isMandatory: true  },
-    { stageKey: "prototype_and_review", itemKey: "prototype_link_available",        displayName: "رابط Prototype جاهز للمراجعة",              description: "", order: 3, isMandatory: true  },
-    { stageKey: "prototype_and_review", itemKey: "product_review_completed",        displayName: "إنجاز Product Review",                       description: "", order: 4, isMandatory: true  },
-    { stageKey: "prototype_and_review", itemKey: "iterations_resolved",             displayName: "معالجة تعليقات المراجعة",                   description: "", order: 5, isMandatory: false },
+    { stageKey: "prototype_and_review", itemKey: "studio_config_ready",             displayName: "تجهيز Studio config",                        description: "إعداد نوع/هدف/منصّة/فيدلتي + Personas + Flows في Prototype Studio", order: 1, isMandatory: true  },
+    { stageKey: "prototype_and_review", itemKey: "context_pack_ready",              displayName: "توليد Context Pack",                         description: "تجميع deterministic لسياق المشروع من مصادر NEXVORA (بدون AI)", order: 2, isMandatory: true  },
+    { stageKey: "prototype_and_review", itemKey: "build_brief_approved",            displayName: "اعتماد Build Brief من ChatGPT",              description: "استيراد ونقل الـ brief من ChatGPT ثم اعتماده بشريًا", order: 3, isMandatory: true  },
+    { stageKey: "prototype_and_review", itemKey: "codex_pack_ready",                displayName: "تجهيز Codex Build Pack",                     description: "حزمة النقل النهائية لـ Codex (Constitution + Context + Brief + Starter)", order: 4, isMandatory: true  },
+    { stageKey: "prototype_and_review", itemKey: "prototype_link_available",        displayName: "رابط Prototype جاهز للمراجعة",              description: "", order: 5, isMandatory: true  },
+    { stageKey: "prototype_and_review", itemKey: "product_review_completed",        displayName: "إنجاز Product Review",                       description: "", order: 6, isMandatory: true  },
+    { stageKey: "prototype_and_review", itemKey: "iterations_resolved",             displayName: "معالجة تعليقات المراجعة",                   description: "", order: 7, isMandatory: false },
   ],
   client_approval: [
     { stageKey: "client_approval", itemKey: "client_presentation_ready",  displayName: "عرض العميل جاهز (PPTX + Portal)",                description: "", order: 1, isMandatory: true  },

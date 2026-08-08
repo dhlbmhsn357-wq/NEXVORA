@@ -338,3 +338,24 @@ textarea:focus-visible,
   animation: v-highlight-pulse 2.5s ease-in-out;
   border-radius: var(--v-radius-md);
 }
+
+/* Prototype Studio — print stylesheet for Context Pack + Build Brief
+   (يستخدم PrintButton الافتراضي — نفس نمط prd-print). */
+@media print {
+  .prototype-studio-context {
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    background: white !important;
+    color: black !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre-wrap;
+    padding: 0 !important;
+  }
+  .prototype-studio-brief {
+    max-height: none !important;
+    overflow: visible !important;
+    color: black !important;
+    background: white !important;
+  }
+}
