@@ -70,6 +70,19 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
     tabs: [e("prd"), e("prototypePrompt"), e("prototypeReview"), e("evaluation")],
   },
   {
+    key: "ops",
+    label: "التجاري والإدارة",
+    tabs: [
+      e("commercial"),                      // تجاري (essential — core deliverable)
+      e("commercial-full"),                 // عروض وتغيير (essential — core deliverable)
+      e("deliveryMilestones"),
+      e("tasks"),
+      a("support"),                         // طلبات الدعم
+      a("organizationalIntelligence"),      // الذكاء التنظيمي (advanced — مرجع)
+      a("activity"),                        // Activity — سجل عابر
+    ],
+  },
+  {
     key: "approval",
     label: "اعتماد العميل",
     tabs: [e("approvals")],
@@ -90,19 +103,6 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
       a("productionMonitoring"),
       a("productionMonitoringPrompt"),      // Prompt Studio على المونيتورينج
       a("productionMonitoringReview"),
-    ],
-  },
-  {
-    key: "ops",
-    label: "التجاري والإدارة",
-    tabs: [
-      a("commercial-full"),                 // عروض وتغيير
-      a("commercial"),                      // تجاري
-      e("deliveryMilestones"),
-      e("tasks"),
-      a("support"),                         // طلبات الدعم
-      a("organizationalIntelligence"),      // الذكاء التنظيمي
-      a("activity"),                        // Activity — سجل عابر
     ],
   },
 ];
