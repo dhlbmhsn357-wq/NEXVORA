@@ -9,83 +9,121 @@
  * الحل: تجميع لـ 8 phases واضحة، وترتيب داخل كل phase. أي تبويبة مش موجودة
  * في الـ ordering دي بتنزل في phase "أخرى" في الآخر (ما بنخفيش شيء عشان
  * نضمن ما نخسرش أي فيتشر عن طريق الخطأ).
+ *
+ * Essential / Advanced (UX Cleanup 2)
+ * ------------------------------------
+ * كل تبويبة عندها `category`:
+ *   - "essential": بتظهر افتراضيًا (دورة حياة المنتج الأساسية).
+ *   - "advanced": مخفية خلف زر «إظهار المتقدمة» (عمليات + legacy +
+ *     أدوات متقدّمة). لو ?tab=<advanced-key> في الـ URL بيظهر تلقائيًا
+ *     بغض النظر عن الـ toggle (deep-link يفوق الـ preference).
  */
+
+export type TabCategory = "essential" | "advanced";
+
+export interface TabDef {
+  key: string;
+  category: TabCategory;
+}
 
 export interface TabPhase {
   key: string;
   label: string;
   /** أزرار التبويبات داخل هذه المرحلة، بالترتيب. */
-  tabs: readonly string[];
+  tabs: readonly TabDef[];
 }
+
+/** helper موجز لتعريف تبويب "أساسي". */
+const e = (key: string): TabDef => ({ key, category: "essential" });
+/** helper موجز لتعريف تبويب "متقدّم". */
+const a = (key: string): TabDef => ({ key, category: "advanced" });
 
 export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "discovery",
     label: "الاكتشاف",
-    tabs: ["overview", "discovery", "analysis", "research"],
+    tabs: [e("overview"), e("discovery"), e("analysis"), e("research")],
   },
   {
     key: "meetings",
     label: "الاجتماعات",
-    tabs: ["meetingPreparation", "meetingPresentation", "meetings"],
+    tabs: [e("meetingPreparation"), e("meetingPresentation"), e("meetings")],
   },
   {
     key: "knowledge",
     label: "المعرفة والدماغ",
-    tabs: ["projectBrain", "knowledgeHub", "brainReview", "smartRecommendations"],
+    tabs: [
+      e("projectBrain"),
+      a("knowledgeHub"),           // مركز المعرفة (advanced)
+      e("brainReview"),
+      a("smartRecommendations"),   // ذكاء توصيات — أداة متقدّمة
+    ],
   },
   {
     key: "definition",
     label: "تعريف المنتج",
-    tabs: ["definition", "stories", "traceability", "impact"],
+    tabs: [e("definition"), e("stories"), e("traceability"), e("impact")],
   },
   {
     key: "docs",
     label: "المستندات والنموذج",
-    tabs: ["prd", "prototypePrompt", "prototypeReview", "evaluation"],
+    tabs: [e("prd"), e("prototypePrompt"), e("prototypeReview"), e("evaluation")],
   },
   {
     key: "approval",
     label: "اعتماد العميل",
-    tabs: ["approvals"],
+    tabs: [e("approvals")],
   },
   {
     key: "delivery",
     label: "تسليم العميل",
-    tabs: ["clientDelivery", "developerHandoff", "handoff", "partners"],
+    tabs: [e("clientDelivery"), e("developerHandoff"), e("handoff"), e("partners")],
   },
   {
     key: "execution",
     label: "التنفيذ والجودة",
     tabs: [
-      "promptReview",           // Code Execution
-      "engineeringQa",
-      "engineeringQaReview",
-      "fixPrompt",
-      "productionMonitoring",
-      "productionMonitoringPrompt",
-      "productionMonitoringReview",
+      a("promptReview"),                    // Code Execution / Prompt Review
+      a("engineeringQa"),
+      a("engineeringQaReview"),
+      a("fixPrompt"),
+      a("productionMonitoring"),
+      a("productionMonitoringPrompt"),      // Prompt Studio على المونيتورينج
+      a("productionMonitoringReview"),
     ],
   },
   {
     key: "ops",
     label: "التجاري والإدارة",
     tabs: [
-      "commercial-full",   // Proposals + Change Requests
-      "commercial",        // Client Lifecycle + Contracts + Payments
-      "deliveryMilestones",
-      "tasks",
-      "support",
-      "organizationalIntelligence",
-      "activity",
+      a("commercial-full"),                 // عروض وتغيير
+      a("commercial"),                      // تجاري
+      e("deliveryMilestones"),
+      e("tasks"),
+      a("support"),                         // طلبات الدعم
+      a("organizationalIntelligence"),      // الذكاء التنظيمي
+      a("activity"),                        // Activity — سجل عابر
     ],
   },
 ];
 
 /** كل الأكواد المُصنَّفة (للاستعلام السريع). */
 const CLASSIFIED_KEYS = new Set<string>(
-  NEXVORA_TAB_PHASES.flatMap((p) => p.tabs),
+  NEXVORA_TAB_PHASES.flatMap((p) => p.tabs.map((t) => t.key)),
 );
+
+/** خريطة سريعة key → category (للـ WorkflowNav وأي مستهلك خارجي). */
+export const TAB_CATEGORY: Readonly<Record<string, TabCategory>> = Object.freeze(
+  NEXVORA_TAB_PHASES.reduce<Record<string, TabCategory>>((acc, phase) => {
+    for (const tab of phase.tabs) acc[tab.key] = tab.category;
+    return acc;
+  }, {}),
+);
+
+/** الفئة الافتراضية لأي تبويبة غير مُصنَّفة (fallback أخرى) = essential. */
+export function getTabCategory(key: string): TabCategory {
+  return TAB_CATEGORY[key] ?? "essential";
+}
 
 /** مرحلة "أخرى" الافتراضية — أي تبويبة غير مُصنَّفة تنزل هنا. */
 const FALLBACK_PHASE_KEY = "other";
@@ -93,12 +131,13 @@ const FALLBACK_PHASE_LABEL = "أخرى";
 
 /**
  * ترتب مصفوفة تبويبات (بأي ترتيب) حسب NEXVORA order.
- * ترجّع {phaseKey, phaseLabel, item} لكل تبويبة بالترتيب المطلوب،
+ * ترجّع {phaseKey, phaseLabel, category, item} لكل تبويبة بالترتيب المطلوب،
  * والـ UI يستخدم phaseKey لعرض separator بين المجموعات.
  */
 export interface OrderedTab<T> {
   phaseKey: string;
   phaseLabel: string;
+  category: TabCategory;
   item: T;
 }
 
@@ -111,11 +150,11 @@ export function orderTabsByNexvora<T extends { key: string }>(
 
   // 1) المُصنَّف حسب الترتيب الرسمي
   for (const phase of NEXVORA_TAB_PHASES) {
-    for (const tabKey of phase.tabs) {
-      const item = byKey.get(tabKey);
+    for (const tab of phase.tabs) {
+      const item = byKey.get(tab.key);
       if (item) {
-        out.push({ phaseKey: phase.key, phaseLabel: phase.label, item });
-        seen.add(tabKey);
+        out.push({ phaseKey: phase.key, phaseLabel: phase.label, category: tab.category, item });
+        seen.add(tab.key);
       }
     }
   }
@@ -123,7 +162,12 @@ export function orderTabsByNexvora<T extends { key: string }>(
   // 2) غير المُصنَّف → phase "أخرى" (يبقى مرئي حتى لو مش في الخريطة)
   for (const item of items) {
     if (!seen.has(item.key) && !CLASSIFIED_KEYS.has(item.key)) {
-      out.push({ phaseKey: FALLBACK_PHASE_KEY, phaseLabel: FALLBACK_PHASE_LABEL, item });
+      out.push({
+        phaseKey: FALLBACK_PHASE_KEY,
+        phaseLabel: FALLBACK_PHASE_LABEL,
+        category: "essential",
+        item,
+      });
     }
   }
   return out;
@@ -136,7 +180,7 @@ export function countByPhase<T extends { key: string }>(items: readonly T[]): Ma
   const counts = new Map<string, number>();
   const byKey = new Map(items.map((i) => [i.key, true]));
   for (const phase of NEXVORA_TAB_PHASES) {
-    const c = phase.tabs.filter((k) => byKey.get(k)).length;
+    const c = phase.tabs.filter((t) => byKey.get(t.key)).length;
     if (c > 0) counts.set(phase.key, c);
   }
   // fallback count

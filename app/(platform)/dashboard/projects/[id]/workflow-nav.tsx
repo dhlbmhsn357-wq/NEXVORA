@@ -1,22 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, AlertCircle, MoreHorizontal } from "lucide-react";
 import { useScrollEdges } from "@/lib/hooks/useScrollEdges";
 import type { StageState, WorkflowStageKey, WorkflowStatus } from "@/lib/workflow/types";
 import type { StalenessResult } from "@/lib/workflow/dependency-graph";
+import type { TabCategory } from "./nexvora-tab-order";
 
 /**
  * key بنوع string مش WorkflowStageKey عمدًا — بيسمح بتثبيت تبويب زي
  * "Activity" في آخر الشريط برّه نطاق الـ 22 مرحلة الرسمية (سجل نشاط
  * عابر لكل المراحل، مش مرحلة في حد ذاتها) من غير ما نضطر نوسّع نوع
  * WorkflowStageKey بمفتاح مالوش تعريف Stage حقيقي في الـ Registry.
+ *
+ * `category` اختياري — لو مش موجود بيتعامل معاه كـ "essential" (توافق
+ * كامل مع أي استدعاء قديم). لما بتتحدد فعليًا (من page.tsx بعد
+ * orderTabsByNexvora) بنستخدمها لإخفاء التبويبات المتقدّمة خلف toggle.
  */
 export interface WorkflowNavItem {
   key: string;
   label: string;
   content: ReactNode;
+  category?: TabCategory;
 }
 
 const STATUS_DOT_CLASS: Record<WorkflowStatus, string> = {
@@ -31,6 +37,8 @@ const STATUS_DOT_CLASS: Record<WorkflowStatus, string> = {
   archived: "bg-[var(--v-text-muted)]",
 };
 
+const STORAGE_KEY_PREFIX = "nexvora:tabs:showAdvanced:";
+
 /**
  * تنقّل الـ Workflow الجديد — بديل project-tabs.tsx (Array حرفي) +
  * LifecycleStepper (خطوات منفصلة بمنطق done منفصل) بنظام واحد موحّد.
@@ -41,15 +49,22 @@ const STATUS_DOT_CLASS: Record<WorkflowStatus, string> = {
  * adapters). لا يوجد أي زر "سهم" للكشف عن مراحل مخفية — السحب
  * الطبيعي (لمس/عجلة/فأرة/لوحة مفاتيح) كافي بمفرده لكشف كل المراحل؛
  * تلميحات التدرّج اللوني في الحواف تبقى إشارة بصرية سلبية فقط.
+ *
+ * Essential/Advanced: التبويبات المُصنَّفة "advanced" مخفية افتراضيًا
+ * خلف زر «⋯ إظهار المتقدمة (N)». الاختيار محفوظ في localStorage لكل
+ * مشروع (projectId prop). لو ?tab=<advanced-key> في الـ URL بيظهر
+ * تلقائيًا (deep-link يفوق الـ toggle).
  */
 export default function WorkflowNav({
   items,
   stageStates,
   staleness,
+  projectId,
 }: {
   items: WorkflowNavItem[];
   stageStates: Partial<Record<WorkflowStageKey, StageState>>;
   staleness: Record<WorkflowStageKey, StalenessResult>;
+  projectId?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -57,9 +72,51 @@ export default function WorkflowNav({
   const tabParam = searchParams.get("tab");
   const initialActive = items.some((i) => i.key === tabParam) ? (tabParam as string) : items[0]?.key;
   const [active, setActive] = useState(initialActive);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const { containerRef, startRef, endRef, hiddenStart, hiddenEnd } = useScrollEdges<HTMLDivElement, HTMLDivElement>();
   const buttonRefs = useRef<Partial<Record<string, HTMLButtonElement | null>>>({});
   const dragState = useRef<{ dragging: boolean; startX: number; startScrollLeft: number; moved: boolean } | null>(null);
+
+  const storageKey = projectId ? `${STORAGE_KEY_PREFIX}${projectId}` : null;
+
+  // قراءة تفضيل «إظهار المتقدمة» من localStorage عند التحميل الأول.
+  useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (raw === "1") setShowAdvanced(true);
+    } catch {
+      // localStorage ممكن يبقى مقفول (privacy mode / SSR quirk) — نتجاهل.
+    }
+  }, [storageKey]);
+
+  const advancedCount = useMemo(
+    () => items.filter((i) => i.category === "advanced").length,
+    [items],
+  );
+  const activeIsAdvanced = useMemo(
+    () => items.find((i) => i.key === active)?.category === "advanced",
+    [items, active],
+  );
+
+  // التبويبات الظاهرة فعليًا في الشريط:
+  // - الأساسية دائمًا
+  // - المتقدمة لو (showAdvanced) أو (النشط دلوقتي متقدّم — deep-link)
+  const visibleItems = useMemo(() => {
+    const revealAdvanced = showAdvanced || activeIsAdvanced;
+    return items.filter((i) => i.category !== "advanced" || revealAdvanced);
+  }, [items, showAdvanced, activeIsAdvanced]);
+
+  function persistShowAdvanced(next: boolean) {
+    setShowAdvanced(next);
+    if (!storageKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(storageKey, next ? "1" : "0");
+    } catch {
+      // نتجاهل — التفضيل مش حرج.
+    }
+  }
 
   useEffect(() => {
     if (tabParam && items.some((i) => i.key === tabParam) && tabParam !== active) {
@@ -123,15 +180,15 @@ export default function WorkflowNav({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    const currentIndex = items.findIndex((i) => i.key === active);
+    const currentIndex = visibleItems.findIndex((i) => i.key === active);
     let nextIndex: number | null = null;
-    if (e.key === "ArrowRight") nextIndex = Math.min(items.length - 1, currentIndex + 1);
+    if (e.key === "ArrowRight") nextIndex = Math.min(visibleItems.length - 1, currentIndex + 1);
     else if (e.key === "ArrowLeft") nextIndex = Math.max(0, currentIndex - 1);
     else if (e.key === "Home") nextIndex = 0;
-    else if (e.key === "End") nextIndex = items.length - 1;
-    if (nextIndex === null) return;
+    else if (e.key === "End") nextIndex = visibleItems.length - 1;
+    if (nextIndex === null || nextIndex < 0) return;
     e.preventDefault();
-    const nextKey = items[nextIndex].key;
+    const nextKey = visibleItems[nextIndex].key;
     select(nextKey);
     buttonRefs.current[nextKey]?.focus();
   }
@@ -166,7 +223,7 @@ export default function WorkflowNav({
             className="scrollbar-hide flex cursor-grab gap-1 overflow-x-auto border-b border-[var(--v-border)] active:cursor-grabbing"
           >
             <div ref={startRef} className="w-px shrink-0 self-stretch" aria-hidden="true" />
-            {items.map((item) => {
+            {visibleItems.map((item) => {
               const key = item.key as WorkflowStageKey;
               const state = stageStates[key];
               const isStale = staleness[key]?.stale;
@@ -193,6 +250,18 @@ export default function WorkflowNav({
                 </button>
               );
             })}
+            {advancedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => persistShowAdvanced(!showAdvanced)}
+                aria-pressed={showAdvanced}
+                className="ms-auto flex shrink-0 items-center gap-1.5 rounded-t-[var(--v-radius-sm)] px-3 py-2 text-sm font-medium whitespace-nowrap text-[var(--v-text-muted)] transition hover:bg-[var(--v-surface)] hover:text-[var(--v-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--v-primary)]"
+                title={showAdvanced ? "إخفاء التبويبات المتقدّمة" : "إظهار التبويبات المتقدّمة"}
+              >
+                <MoreHorizontal size={14} aria-hidden="true" />
+                <span>{showAdvanced ? `إخفاء المتقدمة (${advancedCount})` : `إظهار المتقدمة (${advancedCount})`}</span>
+              </button>
+            )}
             <div ref={endRef} className="w-px shrink-0 self-stretch" aria-hidden="true" />
           </div>
         </div>

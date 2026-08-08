@@ -41,7 +41,8 @@ import {
 import ProjectBrainEntries from "./project-brain";
 import AnalysisPanel from "./analysis-panel";
 import WorkflowNav, { type WorkflowNavItem } from "./workflow-nav";
-import { orderTabsByNexvora } from "./nexvora-tab-order";
+import { orderTabsByNexvora, getTabCategory } from "./nexvora-tab-order";
+import StageSelector from "./stage-selector";
 import WorkPanel from "./work-panel";
 import DeliveryLifecyclePanel from "./delivery-lifecycle-panel";
 import { listMilestones } from "@/lib/work/milestone-service";
@@ -1063,9 +1064,12 @@ export default async function ProjectDetailPage({
   // NEXVORA UX Cleanup: لما product_mode مفعّل، نعيد ترتيب التبويبات في 8
   // مراحل واضحة بدل الترتيب المُختلط (v1 + v2). المشاريع اللي مش في وضع
   // product_mode تفضل بترتيب STAGE_REGISTRY القديم بلا لمس.
+  // NEXVORA UX Cleanup 2: كل تبويبة بياخد category (essential/advanced) من
+  // خريطة nexvora-tab-order. WorkflowNav بيخفي "advanced" خلف زر «إظهار
+  // المتقدمة» — أي مفتاح مش موجود في الخريطة بيعتبر essential (fallback آمن).
   const orderedWorkflowItems: WorkflowNavItem[] = productModeEnabled
-    ? orderTabsByNexvora(workflowItems).map((o) => o.item)
-    : workflowItems;
+    ? orderTabsByNexvora(workflowItems).map((o) => ({ ...o.item, category: o.category }))
+    : workflowItems.map((i) => ({ ...i, category: getTabCategory(i.key) }));
 
   // اسماء الـ phases لعرضها كـ "قفزة سريعة" فوق التبويبات (حصريًا للـ v2)
   const nexvoraPhaseAnchors = productModeEnabled
@@ -1115,8 +1119,13 @@ export default async function ProjectDetailPage({
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-[var(--v-border)] pt-3 text-xs text-[var(--v-text-muted)]">
-          <span>
-            المرحلة: <b className="font-mono-plex font-semibold text-[var(--v-text)]">{stageLabels[project.stage] || project.stage}</b>
+          <span className="inline-flex items-center gap-1.5">
+            <span>المرحلة:</span>
+            {canWriteCommercial ? (
+              <StageSelector currentStage={project.stage} projectId={project.id} />
+            ) : (
+              <b className="font-mono-plex font-semibold text-[var(--v-text)]">{stageLabels[project.stage] || project.stage}</b>
+            )}
           </span>
           <span>
             المسؤول: <b className="font-mono-plex font-semibold text-[var(--v-text)]">{owner?.full_name || owner?.email || "—"}</b>
@@ -1194,7 +1203,7 @@ export default async function ProjectDetailPage({
         </nav>
       )}
 
-      <WorkflowNav items={orderedWorkflowItems} stageStates={workflowStageStates} staleness={workflowStaleness} />
+      <WorkflowNav items={orderedWorkflowItems} stageStates={workflowStageStates} staleness={workflowStaleness} projectId={project.id} />
     </div>
   );
 }
