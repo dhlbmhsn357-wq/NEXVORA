@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { deriveHandoffReadiness, effectivePackageStatus, isPartnerActive, summarizePartners } from "./derive";
+import {
+  deriveHandoffReadiness, effectivePackageStatus, isPartnerActive, summarizePartners,
+  summarizeQuestions, latestDelivery,
+} from "./derive";
 import { HANDOFF_ITEM_REGISTRY, MANDATORY_HANDOFF_KEYS } from "./types";
-import type { HandoffItemRow, ExternalPartnerRow } from "./types";
+import type {
+  HandoffItemRow, ExternalPartnerRow, HandoffQuestionRow, HandoffDeliveryRow,
+} from "./types";
 
 const NOW = "2026-08-08T10:00:00.000Z";
 function item(key: string, status: HandoffItemRow["status"] = "completed"): HandoffItemRow {
@@ -88,6 +93,53 @@ describe("Partners", () => {
     expect(s.suspended).toBe(1);
     expect(s.revoked).toBe(1);
     expect(s.expired).toBe(1);
+  });
+});
+
+function question(over: Partial<HandoffQuestionRow> = {}): HandoffQuestionRow {
+  return {
+    id: "q", projectId: "p", packageId: "pk", partnerId: null,
+    question: "؟", answer: "",
+    status: "open", priority: "medium",
+    askedBy: null, assignedTo: null, answeredBy: null,
+    askedAt: NOW, answeredAt: null, closedAt: null,
+    createdAt: NOW, updatedAt: NOW,
+    ...over,
+  };
+}
+function delivery(over: Partial<HandoffDeliveryRow> = {}): HandoffDeliveryRow {
+  return {
+    id: "d", projectId: "p", packageId: "pk", partnerId: null,
+    partnerName: "شريك", receiptStatus: "pending",
+    sentAt: null, sentBy: null, receivedAt: null,
+    acceptedAt: null, rejectedAt: null, statusUpdatedBy: null, notes: "",
+    createdAt: NOW, updatedAt: NOW,
+    ...over,
+  };
+}
+
+describe("Handoff Questions/Deliveries (0107)", () => {
+  it("summarizeQuestions يعد كل الحالات", () => {
+    const s = summarizeQuestions([
+      question({ status: "open" }),
+      question({ status: "answered" }),
+      question({ status: "needs_clarification" }),
+      question({ status: "closed" }),
+      question({ status: "open" }),
+    ]);
+    expect(s.total).toBe(5);
+    expect(s.open).toBe(2);
+    expect(s.answered).toBe(1);
+    expect(s.needsClarification).toBe(1);
+    expect(s.closed).toBe(1);
+  });
+
+  it("latestDelivery يرجّع الأحدث زمنيًا", () => {
+    expect(latestDelivery([])).toBeNull();
+    const d1 = delivery({ id: "d1", updatedAt: "2026-08-01T00:00:00Z" });
+    const d2 = delivery({ id: "d2", updatedAt: "2026-08-08T00:00:00Z" });
+    const d3 = delivery({ id: "d3", updatedAt: "2026-08-05T00:00:00Z" });
+    expect(latestDelivery([d1, d2, d3])?.id).toBe("d2");
   });
 });
 

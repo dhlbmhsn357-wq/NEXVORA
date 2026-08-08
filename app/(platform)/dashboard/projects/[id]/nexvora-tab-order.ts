@@ -57,7 +57,7 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "discovery",
     label: "الاكتشاف",
-    tabs: [e("discovery"), e("overview"), e("analysis"), e("research")],
+    tabs: [e("discovery"), e("overview"), e("stageOwners"), e("analysis"), e("research")],
   },
   {
     key: "meetings",
@@ -77,7 +77,7 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "definition",
     label: "تعريف المنتج",
-    tabs: [e("definition"), e("stories"), e("traceability"), e("impact")],
+    tabs: [e("definition"), e("stories"), e("traceability"), e("impact"), e("decisions")],
   },
   {
     key: "docs",

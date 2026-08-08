@@ -9,16 +9,18 @@
 export type EvidenceSourceType =
   | "requirement"
   | "user_story"
-  | "acceptance_criterion";
+  | "acceptance_criterion"
+  | "product_decision_item";
 
 export const EVIDENCE_SOURCE_TYPES: readonly EvidenceSourceType[] = [
-  "requirement", "user_story", "acceptance_criterion",
+  "requirement", "user_story", "acceptance_criterion", "product_decision_item",
 ] as const;
 
 export const EVIDENCE_SOURCE_LABELS: Record<EvidenceSourceType, string> = {
   requirement: "متطلب",
   user_story: "قصة",
   acceptance_criterion: "معيار قبول",
+  product_decision_item: "قرار/مخاطرة/افتراض",
 };
 
 // أنواع الدليل (المصدر الذي يُستند إليه)

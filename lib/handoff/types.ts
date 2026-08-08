@@ -117,6 +117,75 @@ export const PARTNER_STATUS_LABELS: Record<PartnerStatus, string> = {
   invited: "مدعوّ", active: "نشط", suspended: "موقوف", revoked: "ملغى", expired: "منتهي",
 };
 
+// --------- Handoff Questions (0107) ---------
+export type HandoffQuestionStatus = "open" | "answered" | "needs_clarification" | "closed";
+export const HANDOFF_QUESTION_STATUSES: readonly HandoffQuestionStatus[] = [
+  "open", "answered", "needs_clarification", "closed",
+] as const;
+export const HANDOFF_QUESTION_STATUS_LABELS: Record<HandoffQuestionStatus, string> = {
+  open: "مفتوح", answered: "مُجاب", needs_clarification: "يحتاج توضيحًا", closed: "مغلق",
+};
+
+export type HandoffQuestionPriority = "low" | "medium" | "high" | "critical";
+export const HANDOFF_QUESTION_PRIORITIES: readonly HandoffQuestionPriority[] = [
+  "low", "medium", "high", "critical",
+] as const;
+export const HANDOFF_QUESTION_PRIORITY_LABELS: Record<HandoffQuestionPriority, string> = {
+  low: "منخفض", medium: "متوسّط", high: "عالٍ", critical: "حرج",
+};
+
+export interface HandoffQuestionRow {
+  id: string;
+  projectId: string;
+  packageId: string;
+  partnerId: string | null;
+  question: string;
+  answer: string;
+  status: HandoffQuestionStatus;
+  priority: HandoffQuestionPriority;
+  askedBy: string | null;
+  assignedTo: string | null;
+  answeredBy: string | null;
+  askedAt: string;
+  answeredAt: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --------- Handoff Deliveries (0107) ---------
+export type HandoffDeliveryStatus =
+  | "pending" | "sent" | "received" | "accepted" | "rejected" | "needs_clarification";
+export const HANDOFF_DELIVERY_STATUSES: readonly HandoffDeliveryStatus[] = [
+  "pending", "sent", "received", "accepted", "rejected", "needs_clarification",
+] as const;
+export const HANDOFF_DELIVERY_STATUS_LABELS: Record<HandoffDeliveryStatus, string> = {
+  pending: "قيد الانتظار",
+  sent: "أُرسل",
+  received: "استُلم",
+  accepted: "مقبول",
+  rejected: "مرفوض",
+  needs_clarification: "يحتاج توضيحًا",
+};
+
+export interface HandoffDeliveryRow {
+  id: string;
+  projectId: string;
+  packageId: string;
+  partnerId: string | null;
+  partnerName: string;
+  receiptStatus: HandoffDeliveryStatus;
+  sentAt: string | null;
+  sentBy: string | null;
+  receivedAt: string | null;
+  acceptedAt: string | null;
+  rejectedAt: string | null;
+  statusUpdatedBy: string | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ExternalPartnerRow {
   id: string;
   projectId: string;

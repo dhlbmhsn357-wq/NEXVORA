@@ -4,12 +4,19 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
 import {
   createPackage, upsertItem, finalizePackage,
-  type HandoffItemPatch,
+  createQuestion, answerQuestion, updateQuestionStatus, getQuestion,
+  createDelivery, updateDeliveryStatus,
+  type HandoffItemPatch, type CreateQuestionInput, type CreateDeliveryInput,
 } from "@/lib/handoff/service";
 import {
   HANDOFF_ITEM_STATUSES, HANDOFF_ITEM_REGISTRY,
+  HANDOFF_QUESTION_STATUSES, HANDOFF_QUESTION_PRIORITIES,
+  HANDOFF_DELIVERY_STATUSES, HANDOFF_DELIVERY_STATUS_LABELS,
   type HandoffItemStatus,
+  type HandoffQuestionStatus, type HandoffQuestionPriority,
+  type HandoffDeliveryStatus,
 } from "@/lib/handoff/types";
+import { NotificationService } from "@/lib/notifications/service";
 
 type Result<T = void> = { ok: true; data?: T } | { ok: false; message: string };
 const WRITE_ROLES = ["owner", "admin", "supervisor"] as const;
@@ -63,4 +70,127 @@ export async function finalizePackageAction(projectId: string, packageId: string
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التسليم." }; }
+}
+
+// ============================================================================
+// Handoff Questions (0107)
+// ============================================================================
+const isQStatus = (x: string): x is HandoffQuestionStatus =>
+  (HANDOFF_QUESTION_STATUSES as readonly string[]).includes(x);
+const isQPriority = (x: string): x is HandoffQuestionPriority =>
+  (HANDOFF_QUESTION_PRIORITIES as readonly string[]).includes(x);
+const isDStatus = (x: string): x is HandoffDeliveryStatus =>
+  (HANDOFF_DELIVERY_STATUSES as readonly string[]).includes(x);
+
+export async function createQuestionAction(
+  projectId: string, packageId: string,
+  raw: { question: string; partnerId?: string | null; priority?: string; assignedTo?: string | null },
+): Promise<Result<{ id: string }>> {
+  const g = await guard(); if (!g.ok) return g;
+  const question = raw.question?.trim();
+  if (!question) return { ok: false, message: "نص السؤال مطلوب." };
+  const input: CreateQuestionInput = {
+    projectId, packageId, question,
+    partnerId: raw.partnerId || null,
+    priority: raw.priority && isQPriority(raw.priority) ? raw.priority : "medium",
+    assignedTo: raw.assignedTo || null,
+  };
+  try {
+    const row = await createQuestion(input, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل الإنشاء." }; }
+}
+
+export async function answerQuestionAction(
+  projectId: string, id: string, answer: string,
+): Promise<Result> {
+  const g = await guard(); if (!g.ok) return g;
+  const a = answer?.trim();
+  if (!a) return { ok: false, message: "الإجابة فارغة." };
+  try {
+    const before = await getQuestion(id);
+    const row = await answerQuestion(id, a, g.userId);
+    if (before?.askedBy && before.askedBy !== g.userId) {
+      await NotificationService.emit({
+        dedupeKey: `hq:${id}:answered`,
+        type: "handoff_question_answered",
+        title: "تمت الإجابة على سؤال",
+        message: row.question.slice(0, 120),
+        targetUrl: `/dashboard/projects/${projectId}?tab=handoff`,
+        projectId,
+        targetModule: "handoff_questions",
+        targetRecordId: id,
+      });
+    }
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل الإرسال." }; }
+}
+
+export async function updateQuestionStatusAction(
+  projectId: string, id: string, status: string,
+): Promise<Result> {
+  const g = await guard(); if (!g.ok) return g;
+  if (!isQStatus(status)) return { ok: false, message: "حالة غير معروفة." };
+  try {
+    await updateQuestionStatus(id, status);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." }; }
+}
+
+// ============================================================================
+// Handoff Deliveries (0107)
+// ============================================================================
+export async function createDeliveryAction(
+  projectId: string, packageId: string,
+  raw: { partnerId?: string | null; partnerName?: string; receiptStatus?: string; notes?: string },
+): Promise<Result<{ id: string }>> {
+  const g = await guard(); if (!g.ok) return g;
+  const status = raw.receiptStatus && isDStatus(raw.receiptStatus) ? raw.receiptStatus : "pending";
+  const input: CreateDeliveryInput = {
+    projectId, packageId,
+    partnerId: raw.partnerId || null,
+    partnerName: raw.partnerName?.trim() ?? "",
+    receiptStatus: status,
+    notes: raw.notes ?? "",
+  };
+  try {
+    const row = await createDelivery(input, g.userId);
+    await NotificationService.emit({
+      dedupeKey: `hd:${row.id}:status`,
+      type: "handoff_delivery_status_changed",
+      title: "تحديث تسليم حزمة",
+      message: `الحالة: ${HANDOFF_DELIVERY_STATUS_LABELS[status]}`,
+      targetUrl: `/dashboard/projects/${projectId}?tab=handoff`,
+      projectId,
+      targetModule: "handoff_deliveries",
+      targetRecordId: row.id,
+    });
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل الإنشاء." }; }
+}
+
+export async function updateDeliveryStatusAction(
+  projectId: string, id: string, status: string,
+): Promise<Result> {
+  const g = await guard(); if (!g.ok) return g;
+  if (!isDStatus(status)) return { ok: false, message: "حالة غير معروفة." };
+  try {
+    await updateDeliveryStatus(id, status, g.userId);
+    await NotificationService.emit({
+      dedupeKey: `hd:${id}:status`,
+      type: "handoff_delivery_status_changed",
+      title: "تحديث تسليم حزمة",
+      message: `الحالة الآن: ${HANDOFF_DELIVERY_STATUS_LABELS[status]}`,
+      targetUrl: `/dashboard/projects/${projectId}?tab=handoff`,
+      projectId,
+      targetModule: "handoff_deliveries",
+      targetRecordId: id,
+    });
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." }; }
 }

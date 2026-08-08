@@ -17,10 +17,19 @@ import { toast } from "@/components/ui/Toaster";
 import {
   HANDOFF_ITEM_REGISTRY, HANDOFF_ITEM_STATUSES, HANDOFF_ITEM_STATUS_LABELS,
   HANDOFF_PACKAGE_STATUS_LABELS,
+  HANDOFF_QUESTION_STATUSES, HANDOFF_QUESTION_STATUS_LABELS,
+  HANDOFF_DELIVERY_STATUSES, HANDOFF_DELIVERY_STATUS_LABELS,
   type HandoffPackageRow, type HandoffItemRow, type HandoffItemStatus, type HandoffItemDef,
+  type HandoffQuestionRow,
+  type HandoffDeliveryRow, type HandoffDeliveryStatus,
+  type ExternalPartnerRow,
 } from "@/lib/handoff/types";
-import { deriveHandoffReadiness, effectivePackageStatus } from "@/lib/handoff/derive";
-import { createPackageAction, updateItemAction, finalizePackageAction } from "../handoff-actions";
+import { deriveHandoffReadiness, effectivePackageStatus, summarizeQuestions } from "@/lib/handoff/derive";
+import {
+  createPackageAction, updateItemAction, finalizePackageAction,
+  createQuestionAction, answerQuestionAction, updateQuestionStatusAction,
+  createDeliveryAction, updateDeliveryStatusAction,
+} from "../handoff-actions";
 
 export interface HandoffPanelProps {
   projectId: string;
@@ -28,16 +37,25 @@ export interface HandoffPanelProps {
   items: HandoffItemRow[];   // items للحزمة الأخيرة فقط
   latestPackage: HandoffPackageRow | null;
   canWrite: boolean;
+  questions?: HandoffQuestionRow[];
+  deliveries?: HandoffDeliveryRow[];
+  partners?: ExternalPartnerRow[];
 }
+
+type SubTab = "items" | "questions" | "deliveries";
 
 const CATEGORY_LABELS: Record<HandoffItemDef["category"], string> = {
   docs: "وثائق", code: "كود", ops: "تشغيل", handover: "تسليم", compliance: "امتثال",
 };
 
-export default function HandoffPanel({ projectId, packages, items, latestPackage, canWrite }: HandoffPanelProps) {
+export default function HandoffPanel({
+  projectId, packages, items, latestPackage, canWrite,
+  questions = [], deliveries = [], partners = [],
+}: HandoffPanelProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<HandoffItemDef | null>(null);
+  const [subtab, setSubtab] = useState<SubTab>("items");
 
   const readiness = useMemo(() => deriveHandoffReadiness(items), [items]);
   const effStatus = latestPackage ? effectivePackageStatus(latestPackage.status, readiness) : "draft";
@@ -104,15 +122,47 @@ export default function HandoffPanel({ projectId, packages, items, latestPackage
         )}
       </Card>
 
-      <Card>
-        <Header title={`العناصر الإلزامية (${mandatoryDefs.length})`} />
-        <ItemsList defs={mandatoryDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} />
-      </Card>
+      {/* Subtabs (0107) */}
+      <div className="flex flex-wrap gap-1 border-b border-[var(--v-border)]">
+        <SubtabButton active={subtab === "items"} onClick={() => setSubtab("items")}>عناصر التسليم</SubtabButton>
+        <SubtabButton active={subtab === "questions"} onClick={() => setSubtab("questions")}>أسئلة الشريك ({questions.length})</SubtabButton>
+        <SubtabButton active={subtab === "deliveries"} onClick={() => setSubtab("deliveries")}>سجل التسليم ({deliveries.length})</SubtabButton>
+      </div>
 
-      <Card>
-        <Header title={`العناصر الاختيارية (${optionalDefs.length})`} />
-        <ItemsList defs={optionalDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} />
-      </Card>
+      {subtab === "items" && (
+        <>
+          <Card>
+            <Header title={`العناصر الإلزامية (${mandatoryDefs.length})`} />
+            <ItemsList defs={mandatoryDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} />
+          </Card>
+          <Card>
+            <Header title={`العناصر الاختيارية (${optionalDefs.length})`} />
+            <ItemsList defs={optionalDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} />
+          </Card>
+        </>
+      )}
+
+      {subtab === "questions" && (
+        <QuestionsSection
+          projectId={projectId}
+          packageId={latestPackage.id}
+          questions={questions}
+          partners={partners}
+          canWrite={canWrite}
+          runFn={run}
+        />
+      )}
+
+      {subtab === "deliveries" && (
+        <DeliveriesSection
+          projectId={projectId}
+          packageId={latestPackage.id}
+          deliveries={deliveries}
+          partners={partners}
+          canWrite={canWrite}
+          runFn={run}
+        />
+      )}
 
       {packages.length > 1 && (
         <Card>
@@ -232,6 +282,261 @@ function ItemDialog({ open, onClose, def, current, onSave }: {
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>إلغاء</Button>
           <Button variant="primary" onClick={() => onSave({ status, contentUrl, contentText, notes })}>حفظ</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ============================================================================
+// Subtab helpers (0107)
+// ============================================================================
+function SubtabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-2 text-sm ${active ? "border-b-2 border-[var(--v-primary)] font-semibold text-[var(--v-primary)]" : "text-[var(--v-text-secondary)] hover:text-[var(--v-text)]"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+type RunFn = (
+  fn: () => Promise<{ ok: true } | { ok: false; message: string }>,
+  okMsg: string,
+) => void;
+
+function QuestionsSection({
+  projectId, packageId, questions, partners, canWrite, runFn,
+}: {
+  projectId: string; packageId: string;
+  questions: HandoffQuestionRow[]; partners: ExternalPartnerRow[];
+  canWrite: boolean; runFn: RunFn;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [answering, setAnswering] = useState<HandoffQuestionRow | null>(null);
+  const summary = useMemo(() => summarizeQuestions(questions), [questions]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Tile label="مفتوح" value={`${summary.open}`} tone="warning" />
+        <Tile label="مُجاب" value={`${summary.answered}`} tone="info" />
+        <Tile label="يحتاج توضيح" value={`${summary.needsClarification}`} tone="warning" />
+        <Tile label="مغلق" value={`${summary.closed}`} tone="success" />
+      </div>
+      <Card>
+        <Header title="أسئلة الشريك" action={canWrite ? (
+          <Button size="sm" variant="primary" onClick={() => setCreating(true)}>سؤال جديد</Button>
+        ) : null} />
+        {questions.length === 0 ? (
+          <EmptyState title="لا أسئلة" description="ابدأ بتسجيل أول سؤال من شريك التسليم." />
+        ) : (
+          <ul className="divide-y divide-[var(--v-border)]">
+            {questions.map((q) => {
+              const p = partners.find((x) => x.id === q.partnerId);
+              return (
+                <li key={q.id} className="py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="flex-1 text-sm font-medium text-[var(--v-text)]">{q.question}</p>
+                    <Badge tone={q.status === "closed" ? "success" : q.status === "answered" ? "info" : "warning"}>
+                      {HANDOFF_QUESTION_STATUS_LABELS[q.status]}
+                    </Badge>
+                  </div>
+                  {p && <p className="text-[11px] text-[var(--v-text-subtle)]">شريك: {p.name}</p>}
+                  {q.answer && (
+                    <p className="mt-1 rounded-[var(--v-radius-sm)] bg-[var(--v-bg)] p-2 text-xs text-[var(--v-text-secondary)]">
+                      الإجابة: {q.answer}
+                    </p>
+                  )}
+                  {canWrite && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => setAnswering(q)}>إجابة</Button>
+                      {HANDOFF_QUESTION_STATUSES.filter((s) => s !== q.status).map((s) => (
+                        <Button key={s} size="sm" variant="ghost"
+                          onClick={() => runFn(() => updateQuestionStatusAction(projectId, q.id, s), "تم التحديث")}
+                        >
+                          {HANDOFF_QUESTION_STATUS_LABELS[s]}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+      <NewQuestionDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        partners={partners}
+        onSave={(input) => {
+          runFn(() => createQuestionAction(projectId, packageId, input).then((r) => r.ok ? { ok: true } : r), "تم الإنشاء");
+          setCreating(false);
+        }}
+      />
+      <AnswerQuestionDialog
+        open={answering !== null}
+        onClose={() => setAnswering(null)}
+        question={answering}
+        onSave={(answer) => {
+          if (!answering) return;
+          runFn(() => answerQuestionAction(projectId, answering.id, answer), "تم إرسال الإجابة");
+          setAnswering(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function NewQuestionDialog({ open, onClose, partners, onSave }: {
+  open: boolean; onClose: () => void;
+  partners: ExternalPartnerRow[];
+  onSave: (input: { question: string; partnerId: string | null }) => void;
+}) {
+  const [question, setQuestion] = useState("");
+  const [partnerId, setPartnerId] = useState("");
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-lg">
+      <div className="space-y-4 p-6">
+        <h2 className="text-lg font-semibold text-[var(--v-text)]">سؤال جديد</h2>
+        <Field label="السؤال *" span={2}><Textarea rows={3} value={question} onChange={(e) => setQuestion(e.target.value)} /></Field>
+        <Field label="الشريك">
+          <Select value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+            <option value="">— بلا —</option>
+            {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button variant="primary" onClick={() => onSave({ question, partnerId: partnerId || null })}>إرسال</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AnswerQuestionDialog({ open, onClose, question, onSave }: {
+  open: boolean; onClose: () => void;
+  question: HandoffQuestionRow | null;
+  onSave: (answer: string) => void;
+}) {
+  const [answer, setAnswer] = useState(question?.answer ?? "");
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-lg">
+      <div className="space-y-4 p-6">
+        <h2 className="text-lg font-semibold text-[var(--v-text)]">إجابة السؤال</h2>
+        {question && <p className="text-sm text-[var(--v-text-secondary)]">{question.question}</p>}
+        <Field label="الإجابة" span={2}><Textarea rows={4} value={answer} onChange={(e) => setAnswer(e.target.value)} /></Field>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button variant="primary" onClick={() => onSave(answer)}>إرسال</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function DeliveriesSection({
+  projectId, packageId, deliveries, partners, canWrite, runFn,
+}: {
+  projectId: string; packageId: string;
+  deliveries: HandoffDeliveryRow[]; partners: ExternalPartnerRow[];
+  canWrite: boolean; runFn: RunFn;
+}) {
+  const [creating, setCreating] = useState(false);
+  return (
+    <div className="space-y-4">
+      <Card>
+        <Header title="سجل التسليم" action={canWrite ? (
+          <Button size="sm" variant="primary" onClick={() => setCreating(true)}>تسجيل تسليم</Button>
+        ) : null} />
+        {deliveries.length === 0 ? (
+          <EmptyState title="لا تسليمات" description="ابدأ بتسجيل أول عملية تسليم أو استلام." />
+        ) : (
+          <ul className="divide-y divide-[var(--v-border)]">
+            {deliveries.map((d) => (
+              <li key={d.id} className="py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="flex-1 text-sm font-medium text-[var(--v-text)]">
+                    {d.partnerName || partners.find((p) => p.id === d.partnerId)?.name || "شريك"}
+                  </p>
+                  <Badge tone={d.receiptStatus === "accepted" ? "success" : d.receiptStatus === "rejected" ? "danger" : "info"}>
+                    {HANDOFF_DELIVERY_STATUS_LABELS[d.receiptStatus]}
+                  </Badge>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-[var(--v-text-muted)]">
+                  {d.sentAt && <span>أُرسل: {new Date(d.sentAt).toLocaleString("ar-EG")}</span>}
+                  {d.receivedAt && <span>استُلم: {new Date(d.receivedAt).toLocaleString("ar-EG")}</span>}
+                  {d.acceptedAt && <span>قُبل: {new Date(d.acceptedAt).toLocaleString("ar-EG")}</span>}
+                  {d.rejectedAt && <span className="text-[var(--v-red)]">رُفض: {new Date(d.rejectedAt).toLocaleString("ar-EG")}</span>}
+                </div>
+                {d.notes && <p className="mt-1 text-xs text-[var(--v-text-secondary)]">{d.notes}</p>}
+                {canWrite && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {HANDOFF_DELIVERY_STATUSES.filter((s) => s !== d.receiptStatus).map((s) => (
+                      <Button key={s} size="sm" variant="ghost"
+                        onClick={() => runFn(() => updateDeliveryStatusAction(projectId, d.id, s), "تم التحديث")}
+                      >
+                        {HANDOFF_DELIVERY_STATUS_LABELS[s]}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+      <NewDeliveryDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        partners={partners}
+        onSave={(input) => {
+          runFn(() => createDeliveryAction(projectId, packageId, input).then((r) => r.ok ? { ok: true } : r), "تم الإنشاء");
+          setCreating(false);
+        }}
+      />
+    </div>
+  );
+}
+
+function NewDeliveryDialog({ open, onClose, partners, onSave }: {
+  open: boolean; onClose: () => void;
+  partners: ExternalPartnerRow[];
+  onSave: (input: {
+    partnerId: string | null; partnerName: string; receiptStatus: HandoffDeliveryStatus; notes: string;
+  }) => void;
+}) {
+  const [partnerId, setPartnerId] = useState("");
+  const [partnerName, setPartnerName] = useState("");
+  const [receiptStatus, setReceiptStatus] = useState<HandoffDeliveryStatus>("sent");
+  const [notes, setNotes] = useState("");
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-lg">
+      <div className="space-y-4 p-6">
+        <h2 className="text-lg font-semibold text-[var(--v-text)]">تسجيل تسليم جديد</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="الشريك (اختياري)">
+            <Select value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+              <option value="">— بلا —</option>
+              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="اسم الشريك (لو بلا صفّية)"><Input value={partnerName} onChange={(e) => setPartnerName(e.target.value)} /></Field>
+          <Field label="الحالة">
+            <Select value={receiptStatus} onChange={(e) => setReceiptStatus(e.target.value as HandoffDeliveryStatus)}>
+              {HANDOFF_DELIVERY_STATUSES.map((s) => <option key={s} value={s}>{HANDOFF_DELIVERY_STATUS_LABELS[s]}</option>)}
+            </Select>
+          </Field>
+          <Field label="ملاحظات" span={2}><Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button variant="primary" onClick={() => onSave({ partnerId: partnerId || null, partnerName, receiptStatus, notes })}>حفظ</Button>
         </div>
       </div>
     </Modal>

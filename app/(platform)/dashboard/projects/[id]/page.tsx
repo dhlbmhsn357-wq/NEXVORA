@@ -101,6 +101,13 @@ import ClientApprovalPanel from "./_panels/client-approval-panel";
 import HandoffPanel from "./_panels/handoff-panel";
 import PartnersPanel from "./_panels/partners-panel";
 import ChangeImpactPanel from "./_panels/change-impact-panel";
+import DecisionsPanel from "./_panels/decisions-panel";
+import StageOwnersPanel from "./_panels/stage-owners-panel";
+import { listItems as listDecisionItems } from "@/lib/product-decisions/service";
+import { listAssignments as listStageAssignments } from "@/lib/stage-assignments/service";
+import { listQuestions as listHandoffQuestions, listDeliveries as listHandoffDeliveries } from "@/lib/handoff/service";
+import { countCriticalOpenRisks } from "@/lib/product-decisions/derive";
+import { summarizeAssignments as summarizeStageAssignments } from "@/lib/stage-assignments/derive";
 import { listApprovals } from "@/lib/client-approval/service";
 import { listPackages as listHandoffPackages, listItems as listHandoffItems, listPartners as listHandoffPartners } from "@/lib/handoff/service";
 import CommercialFullPanel from "./commercial-full-panel";
@@ -502,6 +509,7 @@ export default async function ProjectDetailPage({
     evalScenarios, evalRunsRows,
     proposalsRows, proposalItemsRows, changeRequestsRows, pricingPackagesRows,
     clientApprovalsRows, handoffPackagesRows, externalPartnersRows,
+    decisionItemsRows, stageAssignmentsRows,
   ] = productModeEnabled
     ? await Promise.all([
         getClientLifecycleStatus(project.id),
@@ -524,12 +532,25 @@ export default async function ProjectDetailPage({
         listApprovals(project.id),
         listHandoffPackages(project.id),
         listHandoffPartners(project.id),
+        listDecisionItems(project.id),
+        listStageAssignments(project.id),
       ])
-    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
+    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
   const latestHandoffPackage = handoffPackagesRows.length > 0 ? handoffPackagesRows[0] : null;
-  const handoffItemsRows = latestHandoffPackage
-    ? await listHandoffItems(latestHandoffPackage.id)
-    : [];
+  const [handoffItemsRows, handoffQuestionsRows, handoffDeliveriesRows] = latestHandoffPackage
+    ? await Promise.all([
+        listHandoffItems(latestHandoffPackage.id),
+        listHandoffQuestions(latestHandoffPackage.id),
+        listHandoffDeliveries(latestHandoffPackage.id),
+      ])
+    : [[], [], []];
+  // Readiness overview signals (display-only)
+  const overdueStagesCount = productModeEnabled
+    ? summarizeStageAssignments(stageAssignmentsRows, new Date().toISOString()).overdue
+    : 0;
+  const criticalOpenRisksCount = productModeEnabled
+    ? countCriticalOpenRisks(decisionItemsRows)
+    : 0;
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
   // Owner only can hard-delete
   const canDeleteProject = currentUserRole === "owner";
@@ -1026,6 +1047,41 @@ export default async function ProjectDetailPage({
         ),
       },
       {
+        key: "decisions",
+        label: "سجل القرارات",
+        content: (
+          <DecisionsPanel
+            projectId={project.id}
+            items={decisionItemsRows}
+            requirements={definitionRequirements}
+            stories={storiesRows}
+            evidenceCounts={(() => {
+              const m: Record<string, number> = {};
+              for (const link of evidenceLinkRows) {
+                if (link.sourceType === "product_decision_item") {
+                  m[link.sourceId] = (m[link.sourceId] ?? 0) + 1;
+                }
+              }
+              return m;
+            })()}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
+        key: "stageOwners",
+        label: "مسؤولو المراحل",
+        content: (
+          <StageOwnersPanel
+            projectId={project.id}
+            assignments={stageAssignmentsRows}
+            users={allUsersForWork}
+            decisions={decisionItemsRows}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      {
         key: "approvals",
         label: "اعتماد العميل",
         content: (
@@ -1047,6 +1103,9 @@ export default async function ProjectDetailPage({
             items={handoffItemsRows}
             latestPackage={latestHandoffPackage}
             canWrite={canWriteCommercial}
+            questions={handoffQuestionsRows}
+            deliveries={handoffDeliveriesRows}
+            partners={externalPartnersRows}
           />
         ),
       },
@@ -1204,6 +1263,20 @@ export default async function ProjectDetailPage({
               <b className="font-mono-plex text-[var(--v-text)]">{nexvoraOverallReadiness}%</b>
             </span>
           </div>
+          {(overdueStagesCount > 0 || criticalOpenRisksCount > 0) && (
+            <div className="flex flex-wrap items-center gap-3 rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] px-3 py-2 text-xs">
+              {overdueStagesCount > 0 && (
+                <span className="text-[var(--v-red)]">
+                  مراحل متأخرة: <b className="font-mono-plex">{overdueStagesCount}</b>
+                </span>
+              )}
+              {criticalOpenRisksCount > 0 && (
+                <span className="text-[var(--v-red)]">
+                  مخاطر حرجة مفتوحة: <b className="font-mono-plex">{criticalOpenRisksCount}</b>
+                </span>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {nexvoraReadinessMetrics.map((m) => (
               <div

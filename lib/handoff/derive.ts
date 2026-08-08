@@ -4,6 +4,8 @@
 import type {
   HandoffItemRow, HandoffItemDef, ExternalPartnerRow,
   HandoffPackageStatus,
+  HandoffQuestionRow, HandoffQuestionStatus,
+  HandoffDeliveryRow,
 } from "./types";
 import { MANDATORY_HANDOFF_KEYS, HANDOFF_ITEM_REGISTRY } from "./types";
 
@@ -95,4 +97,36 @@ export function summarizePartners(rows: readonly ExternalPartnerRow[], nowISO: s
 
 export function ensureMandatoryKeys() {
   return MANDATORY_HANDOFF_KEYS;
+}
+
+// ---------- Handoff Questions (0107) ----------
+export interface QuestionsSummary {
+  total: number;
+  open: number;
+  answered: number;
+  needsClarification: number;
+  closed: number;
+  byStatus: Record<HandoffQuestionStatus, number>;
+}
+
+export function summarizeQuestions(rows: readonly HandoffQuestionRow[]): QuestionsSummary {
+  const byStatus: Record<HandoffQuestionStatus, number> = {
+    open: 0, answered: 0, needs_clarification: 0, closed: 0,
+  };
+  for (const r of rows) byStatus[r.status]++;
+  return {
+    total: rows.length,
+    open: byStatus.open,
+    answered: byStatus.answered,
+    needsClarification: byStatus.needs_clarification,
+    closed: byStatus.closed,
+    byStatus,
+  };
+}
+
+// ---------- Handoff Deliveries (0107) ----------
+/** ترجّع آخر تسليم زمنيًا (بأحدث updatedAt) أو null لو الصفّية فاضية. */
+export function latestDelivery(rows: readonly HandoffDeliveryRow[]): HandoffDeliveryRow | null {
+  if (rows.length === 0) return null;
+  return rows.slice().sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0];
 }

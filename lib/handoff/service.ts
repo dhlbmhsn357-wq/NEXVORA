@@ -8,6 +8,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 import type {
   HandoffPackageRow, HandoffItemRow, HandoffPackageStatus, HandoffItemStatus,
   ExternalPartnerRow, PartnerRole, PartnerStatus,
+  HandoffQuestionRow, HandoffQuestionStatus, HandoffQuestionPriority,
+  HandoffDeliveryRow, HandoffDeliveryStatus,
 } from "./types";
 import { HANDOFF_ITEM_REGISTRY } from "./types";
 
@@ -243,4 +245,178 @@ export async function revokePartner(
   id: string, reason: string, revokedBy: string | null,
 ): Promise<void> {
   await updatePartnerStatus(id, "revoked", revokedBy, reason);
+}
+
+// ============================================================================
+// Handoff Questions (0107)
+// ============================================================================
+type DbQuestion = {
+  id: string; project_id: string; package_id: string; partner_id: string | null;
+  question: string; answer: string;
+  status: HandoffQuestionStatus; priority: HandoffQuestionPriority;
+  asked_by: string | null; assigned_to: string | null; answered_by: string | null;
+  asked_at: string; answered_at: string | null; closed_at: string | null;
+  created_at: string; updated_at: string;
+};
+function mapQuestion(r: DbQuestion): HandoffQuestionRow {
+  return {
+    id: r.id, projectId: r.project_id, packageId: r.package_id, partnerId: r.partner_id,
+    question: r.question, answer: r.answer, status: r.status, priority: r.priority,
+    askedBy: r.asked_by, assignedTo: r.assigned_to, answeredBy: r.answered_by,
+    askedAt: r.asked_at, answeredAt: r.answered_at, closedAt: r.closed_at,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+export async function listQuestions(packageId: string): Promise<HandoffQuestionRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("handoff_questions").select("*").eq("package_id", packageId)
+    .order("asked_at", { ascending: false });
+  if (error) throw error;
+  return (data as DbQuestion[]).map(mapQuestion);
+}
+
+export interface CreateQuestionInput {
+  projectId: string;
+  packageId: string;
+  question: string;
+  partnerId?: string | null;
+  priority?: HandoffQuestionPriority;
+  assignedTo?: string | null;
+}
+
+export async function createQuestion(
+  input: CreateQuestionInput, askedBy: string | null,
+): Promise<HandoffQuestionRow> {
+  const svc = createServiceClient();
+  const { data, error } = await svc.from("handoff_questions").insert({
+    project_id: input.projectId,
+    package_id: input.packageId,
+    partner_id: input.partnerId ?? null,
+    question: input.question,
+    priority: input.priority ?? "medium",
+    assigned_to: input.assignedTo ?? null,
+    asked_by: askedBy,
+  }).select("*").single();
+  if (error) throw error;
+  return mapQuestion(data as DbQuestion);
+}
+
+export async function answerQuestion(
+  id: string, answer: string, answeredBy: string | null,
+): Promise<HandoffQuestionRow> {
+  const svc = createServiceClient();
+  const now = new Date().toISOString();
+  const { data, error } = await svc.from("handoff_questions")
+    .update({ answer, answered_by: answeredBy, answered_at: now, status: "answered" })
+    .eq("id", id).select("*").single();
+  if (error) throw error;
+  return mapQuestion(data as DbQuestion);
+}
+
+export async function updateQuestionStatus(
+  id: string, status: HandoffQuestionStatus,
+): Promise<HandoffQuestionRow> {
+  const svc = createServiceClient();
+  const patch: Record<string, unknown> = { status };
+  if (status === "closed") patch.closed_at = new Date().toISOString();
+  const { data, error } = await svc.from("handoff_questions")
+    .update(patch).eq("id", id).select("*").single();
+  if (error) throw error;
+  return mapQuestion(data as DbQuestion);
+}
+
+export async function getQuestion(id: string): Promise<HandoffQuestionRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("handoff_questions").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? mapQuestion(data as DbQuestion) : null;
+}
+
+// ============================================================================
+// Handoff Deliveries (0107)
+// ============================================================================
+type DbDelivery = {
+  id: string; project_id: string; package_id: string; partner_id: string | null;
+  partner_name: string; receipt_status: HandoffDeliveryStatus;
+  sent_at: string | null; sent_by: string | null;
+  received_at: string | null; accepted_at: string | null; rejected_at: string | null;
+  status_updated_by: string | null; notes: string;
+  created_at: string; updated_at: string;
+};
+function mapDelivery(r: DbDelivery): HandoffDeliveryRow {
+  return {
+    id: r.id, projectId: r.project_id, packageId: r.package_id, partnerId: r.partner_id,
+    partnerName: r.partner_name, receiptStatus: r.receipt_status,
+    sentAt: r.sent_at, sentBy: r.sent_by,
+    receivedAt: r.received_at, acceptedAt: r.accepted_at, rejectedAt: r.rejected_at,
+    statusUpdatedBy: r.status_updated_by, notes: r.notes,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+  };
+}
+
+export async function listDeliveries(packageId: string): Promise<HandoffDeliveryRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("handoff_deliveries").select("*").eq("package_id", packageId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as DbDelivery[]).map(mapDelivery);
+}
+
+export interface CreateDeliveryInput {
+  projectId: string;
+  packageId: string;
+  partnerId?: string | null;
+  partnerName?: string;
+  receiptStatus?: HandoffDeliveryStatus;
+  notes?: string;
+}
+
+export async function createDelivery(
+  input: CreateDeliveryInput, actor: string | null,
+): Promise<HandoffDeliveryRow> {
+  const svc = createServiceClient();
+  const now = new Date().toISOString();
+  const status = input.receiptStatus ?? "pending";
+  const insertRow: Record<string, unknown> = {
+    project_id: input.projectId,
+    package_id: input.packageId,
+    partner_id: input.partnerId ?? null,
+    partner_name: input.partnerName ?? "",
+    receipt_status: status,
+    notes: input.notes ?? "",
+    status_updated_by: actor,
+  };
+  if (status === "sent") { insertRow.sent_at = now; insertRow.sent_by = actor; }
+  if (status === "received") insertRow.received_at = now;
+  if (status === "accepted") insertRow.accepted_at = now;
+  if (status === "rejected") insertRow.rejected_at = now;
+  const { data, error } = await svc.from("handoff_deliveries").insert(insertRow).select("*").single();
+  if (error) throw error;
+  return mapDelivery(data as DbDelivery);
+}
+
+export async function updateDeliveryStatus(
+  id: string, status: HandoffDeliveryStatus, actor: string | null,
+): Promise<HandoffDeliveryRow> {
+  const svc = createServiceClient();
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { receipt_status: status, status_updated_by: actor };
+  if (status === "sent") { patch.sent_at = now; patch.sent_by = actor; }
+  if (status === "received") patch.received_at = now;
+  if (status === "accepted") patch.accepted_at = now;
+  if (status === "rejected") patch.rejected_at = now;
+  const { data, error } = await svc.from("handoff_deliveries")
+    .update(patch).eq("id", id).select("*").single();
+  if (error) throw error;
+  return mapDelivery(data as DbDelivery);
+}
+
+export async function getDelivery(id: string): Promise<HandoffDeliveryRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("handoff_deliveries").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? mapDelivery(data as DbDelivery) : null;
 }
