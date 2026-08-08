@@ -68,10 +68,10 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
     key: "knowledge",
     label: "المعرفة والدماغ",
     tabs: [
-      e("projectBrain"),
-      a("knowledgeHub"),           // مركز المعرفة (advanced)
-      e("brainReview"),
-      a("smartRecommendations"),   // ذكاء توصيات — أداة متقدّمة
+      e("projectBrain"),           // 1) بناء الأساس
+      e("smartRecommendations"),   // 2) قرار على التوصيات (gate للاعتماد)
+      e("brainReview"),            // 3) الاعتماد النهائي (يعتمد على 2)
+      a("knowledgeHub"),           // 4) مرجع cross-project (advanced)
     ],
   },
   {
