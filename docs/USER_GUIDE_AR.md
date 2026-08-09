@@ -4,6 +4,57 @@
 
 ---
 
+## Consolidation UX 2026 — بنية التبويبات المُحدَّثة
+
+الواجهة اتجمّعت من **34 tab** لـ **~17 top-level tab** — التبويبات المتقاربة بقت **أقسام فرعية (subtabs)** جوّه survivor واحد بدل ما تكون منفصلة. مفيش حذف بيانات؛ كل الروابط القديمة (`?tab=<key>`) بيتم توجيهها تلقائيًا للـ survivor مع section param مناسب.
+
+### التبويبات بعد التجميع (v2 mode)
+
+| Survivor | Subtabs (أقسام فرعية) |
+|---|---|
+| **analysis** (التحليل) | التحليل الأساسي + Manual Notes + AnalysisPanel legacy (collapsible) |
+| **projectBrain** (Project Brain) | النظرة العامة \| التوصيات \| مراجعة الاعتماد |
+| **meetings** (الاجتماعات) | قائمة الاجتماعات \| تجهيز الاجتماع \| عرض الاجتماع |
+| **traceability** (الأدلة والربط) | الأدلة والربط \| أثر التغيير |
+| **commercial** (التجاري) | دورة الحياة \| العروض والباقات وطلبات التغيير |
+| **deliveryMilestones** (مراحل التسليم) | المراحل \| لوحة المهام \| مسؤولو المراحل |
+| **handoff** (حزمة التسليم) | الحزمة \| الوثيقة التقنية (Developer Handoff) \| الشركاء |
+| **engineeringQa** (Engineering QA — extended) | المراجعات \| حلقات الإصلاح (Fix Prompt) \| بوابة الاعتماد |
+| **productionMonitoring** (Production Monitoring — extended) | الفحوصات \| برومبتات الإصلاح \| بوابة الاعتماد |
+
+### جدول توجيه الروابط القديمة (Backwards Compatibility)
+
+كل تبويب مُدمج بيعيد توجيه المستخدم تلقائيًا (server-side `redirect()`) للـ survivor:
+
+| Legacy `?tab=` | Redirect target |
+|---|---|
+| `?tab=overview` | `?tab=analysis` |
+| `?tab=smartRecommendations` | `?tab=projectBrain&section=recommendations` |
+| `?tab=brainReview` | `?tab=projectBrain&section=review` |
+| `?tab=meetingPreparation` | `?tab=meetings&section=prep` |
+| `?tab=meetingPresentation` | `?tab=meetings&section=deck` |
+| `?tab=impact` | `?tab=traceability&section=impact` |
+| `?tab=commercial-full` | `?tab=commercial&section=proposals` |
+| `?tab=tasks` | `?tab=deliveryMilestones&section=tasks` |
+| `?tab=stageOwners` | `?tab=deliveryMilestones&section=owners` |
+| `?tab=developerHandoff` | `?tab=handoff&section=document` |
+| `?tab=partners` | `?tab=handoff&section=partners` |
+| `?tab=engineeringQaReview` (extended) | `?tab=engineeringQa&section=review` |
+| `?tab=fixPrompt` (extended) | `?tab=engineeringQa&section=fix-loops` |
+| `?tab=productionMonitoringPrompt` (extended) | `?tab=productionMonitoring&section=fix-prompts` |
+| `?tab=productionMonitoringReview` (extended) | `?tab=productionMonitoring&section=review` |
+
+### كيف تشتغل الـ subtabs
+
+كل survivor بيستخدم مكوّن `SubTabs` (client component) اللي بيقرا `?section=<key>` من الـ URL ويظهر القسم المناسب. التبديل بين الأقسام بيحدّث الـ URL بلا scroll (يشبه سلوك WorkflowNav). الـ redirects ضمان أن أي bookmark قديم لسه يفتح على نفس المحتوى — بس في مكانه الجديد.
+
+### مسائل الحماية
+
+- Extended tabs (execution phase): محجوبة تمامًا لما `extended_technical_delivery` flag off. الـ redirects للمفاتيح الممتدة (engineeringQaReview/fixPrompt/…) بتشتغل بس لو الفلاغ ON. لو الفلاغ OFF، الـ early guard في page.tsx بيعيد التوجيه لـ analysis مباشرة.
+- كل server action لسه محمي بـ `requireExtendedTechnical()` — تحريك المفاتيح من top-level لـ subtabs مغيّرش الحماية على مستوى الـ action.
+
+---
+
 ## المحتويات
 
 1. [نظرة عامة](#١-نظرة-عامة)

@@ -12,8 +12,9 @@
  * ordering دي بتنزل في phase "أخرى" في الآخر (ما بنخفيش شيء عشان نضمن
  * ما نخسرش أي فيتشر عن طريق الخطأ).
  *
- * الوضع الأساسي = 8 phases (discovery → delivery).
- * الوضع الممتد  = 9 phases (بإضافة execution خلف الفلاغ).
+ * الوضع الأساسي = 8 phases (discovery → delivery), ~14 top-level tabs بعد Consolidation UX 2026.
+ * الوضع الممتد  = 9 phases (بإضافة execution خلف الفلاغ) — +3 top-level tabs.
+ * قبل الـ Consolidation كانوا 34 tab، بعدها ~17 top-level (الباقي بقى subtabs).
  *
  * Security note: Extended tabs محجوبة تمامًا لما الفلاغ off — server-side
  * redirect في page.tsx يرفض ?tab=<execution-key> ويعيد التوجيه للـ overview،
@@ -118,14 +119,23 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
     key: "execution",
     label: "التنفيذ والجودة",
     requiresExtended: true,
+    // Consolidation UX 2026 (Commit 3A):
+    //  • في v2: engineeringQaReview + fixPrompt بقوا subtabs جوّه engineeringQa،
+    //    وproductionMonitoringPrompt + productionMonitoringReview بقوا subtabs
+    //    جوّه productionMonitoring. page.tsx بيخفيهم من top-level لما v2 مفعّل.
+    //  • في v1 (workflow_version = v1 + product_mode OFF): يفضلوا top-level tabs
+    //    زي ما كانوا (backwards compat).
+    // خلّينا مفاتيحهم في القائمة هنا عشان EXTENDED_TAB_KEYS يظل يشملهم كـ gate
+    // لـ deep-links مع extended flag off — الحماية الأصلية على مستوى الرابط
+    // ما تتغيّرش (server guard + requireExtendedTechnical على كل action).
     tabs: [
       a("promptReview"),                    // Code Execution / Prompt Review
-      a("engineeringQa"),
-      a("engineeringQaReview"),
-      a("fixPrompt"),
-      a("productionMonitoring"),
-      a("productionMonitoringPrompt"),      // Prompt Studio على المونيتورينج
-      a("productionMonitoringReview"),
+      a("engineeringQa"),                   // (v2: subtabs المراجعات + حلقات الإصلاح + بوابة الاعتماد)
+      a("engineeringQaReview"),             // (v2: subtab جوّه engineeringQa)
+      a("fixPrompt"),                       // (v2: subtab جوّه engineeringQa)
+      a("productionMonitoring"),            // (v2: subtabs الفحوصات + برومبتات الإصلاح + بوابة الاعتماد)
+      a("productionMonitoringPrompt"),      // (v2: subtab جوّه productionMonitoring)
+      a("productionMonitoringReview"),      // (v2: subtab جوّه productionMonitoring)
     ],
   },
 ];

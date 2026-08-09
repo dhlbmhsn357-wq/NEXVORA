@@ -541,6 +541,25 @@ export default async function ProjectDetailPage({
       meetingPresentation: { tab: "meetings", section: "deck" },
       overview: { tab: "analysis" },
     };
+    // Commit 3 — Extended phase merges: يشتغلوا بس لما extended flag مفعّل،
+    // عشان الـ extended guard المبكر (فوق) يظل مصدر الحقيقة لحماية المفاتيح
+    // الممتدة. لو الـ flag off وطلب المستخدم extended key، الـ guard يوجّه
+    // لـ overview قبل ما نوصل هنا (وoverview بيتوجّه لـ analysis).
+    if (extendedEnabledEarly) {
+      const extendedRedirects: Record<string, { tab: string; section?: string }> = {
+        engineeringQaReview: { tab: "engineeringQa", section: "review" },
+        fixPrompt: { tab: "engineeringQa", section: "fix-loops" },
+        productionMonitoringPrompt: { tab: "productionMonitoring", section: "fix-prompts" },
+        productionMonitoringReview: { tab: "productionMonitoring", section: "review" },
+      };
+      const extTarget = extendedRedirects[currentTabParam];
+      if (extTarget) {
+        const q = new URLSearchParams();
+        q.set("tab", extTarget.tab);
+        if (extTarget.section) q.set("section", extTarget.section);
+        redirect(`/dashboard/projects/${id}?${q.toString()}`);
+      }
+    }
     const target = legacyTabRedirects[currentTabParam];
     if (target) {
       const q = new URLSearchParams();
@@ -1059,7 +1078,62 @@ export default async function ProjectDetailPage({
         currentBrainVersion={brainV2ForGeneration?.version ?? null}
       />
     ),
-    engineeringQa: (
+    // Consolidation UX 2026 (Commit 3A): engineeringQa يبلع engineeringQaReview + fixPrompt
+    // كـ subtabs لما v2 مفعّل. الحماية server-side بتفضل: كل action تحت
+    // requireExtendedTechnical() زي ما كان.
+    engineeringQa: workflowV2Enabled ? (
+      <SubTabs
+        ariaLabel="أقسام Engineering QA"
+        sections={[
+          {
+            key: "",
+            label: "المراجعات",
+            content: (
+              <EngineeringQAPanel
+                projectId={project.id}
+                reviews={engineeringQAState.reviews}
+                currentReview={engineeringQAState.currentReview}
+                stages={engineeringQAState.stages}
+                results={engineeringQAState.results}
+                certificate={engineeringQAState.certificate}
+                events={engineeringQAState.events}
+                staticReview={staticReviewState}
+                securityReview={securityReviewState}
+                databaseReview={databaseReviewState}
+                architectureReview={architectureReviewState}
+                codeQualityReview={codeQualityReviewState}
+                performanceReview={performanceReviewState}
+                prdComplianceReview={prdComplianceReviewState}
+                productionValidation={{ stagingUrl: project.staging_url ?? "", ...productionValidationState }}
+              />
+            ),
+          },
+          {
+            key: "fix-loops",
+            label: "حلقات الإصلاح",
+            content: <FixPromptPanel qaFixLoops={(qaFixLoops ?? []).filter((l) => l.qa_stage === "engineering_qa")} executionTasks={executionTasks} />,
+          },
+          {
+            key: "review",
+            label: "بوابة الاعتماد",
+            content: (
+              <QaReviewGatePanel
+                kind="engineering"
+                projectId={project.id}
+                targetId={engineeringQAState.currentReview?.id ?? null}
+                scoreLabel={engineeringReviewScoreLabel}
+                canApprove={isAdmin}
+                decisionStatus={engineeringQAState.currentReview?.pm_approval_status ?? null}
+                decisionAt={engineeringQAState.currentReview?.pm_approved_at ?? null}
+                readyToReview={
+                  engineeringQAState.currentReview?.review_status === "completed" || engineeringQAState.currentReview?.review_status === "certified"
+                }
+              />
+            ),
+          },
+        ]}
+      />
+    ) : (
       <EngineeringQAPanel
         projectId={project.id}
         reviews={engineeringQAState.reviews}
@@ -1078,8 +1152,10 @@ export default async function ProjectDetailPage({
         productionValidation={{ stagingUrl: project.staging_url ?? "", ...productionValidationState }}
       />
     ),
-    fixPrompt: <FixPromptPanel qaFixLoops={(qaFixLoops ?? []).filter((l) => l.qa_stage === "engineering_qa")} executionTasks={executionTasks} />,
-    engineeringQaReview: (
+    fixPrompt: workflowV2Enabled ? null : (
+      <FixPromptPanel qaFixLoops={(qaFixLoops ?? []).filter((l) => l.qa_stage === "engineering_qa")} executionTasks={executionTasks} />
+    ),
+    engineeringQaReview: workflowV2Enabled ? null : (
       <QaReviewGatePanel
         kind="engineering"
         projectId={project.id}
@@ -1093,7 +1169,62 @@ export default async function ProjectDetailPage({
         }
       />
     ),
-    productionMonitoring: (
+    productionMonitoring: workflowV2Enabled ? (
+      <SubTabs
+        ariaLabel="أقسام Production Monitoring"
+        sections={[
+          {
+            key: "",
+            label: "الفحوصات",
+            content: (
+              <ProductionMonitoringPanel
+                projectId={project.id}
+                productionUrl={project.production_url ?? ""}
+                checks={productionMonitoringState.checks}
+                currentCheck={productionMonitoringState.currentCheck}
+                incidents={productionMonitoringState.incidents}
+                events={productionMonitoringState.events}
+                infraStatus={productionMonitoringState.infraStatus}
+              />
+            ),
+          },
+          {
+            key: "fix-prompts",
+            label: "برومبتات الإصلاح",
+            content: (
+              <ProductionMonitoringPromptPanel
+                projectId={project.id}
+                incidents={productionMonitoringState.incidents}
+                fixPrompts={productionMonitoringState.fixPrompts}
+              />
+            ),
+          },
+          {
+            key: "review",
+            label: "بوابة الاعتماد",
+            content: (
+              <>
+                <QaReviewGatePanel
+                  kind="production"
+                  projectId={project.id}
+                  targetId={productionMonitoringState.currentCheck?.id ?? null}
+                  scoreLabel={productionReviewScoreLabel}
+                  canApprove={isAdmin}
+                  decisionStatus={productionMonitoringState.currentCheck?.pm_approval_status ?? null}
+                  decisionAt={productionMonitoringState.currentCheck?.pm_approved_at ?? null}
+                  readyToReview={productionMonitoringState.currentCheck?.status === "ready"}
+                />
+                <ProductionReviewVerdictPanel
+                  projectId={project.id}
+                  incidents={productionMonitoringState.incidents}
+                  latestReport={productionMonitoringState.latestReviewReport}
+                />
+              </>
+            ),
+          },
+        ]}
+      />
+    ) : (
       <ProductionMonitoringPanel
         projectId={project.id}
         productionUrl={project.production_url ?? ""}
@@ -1104,14 +1235,14 @@ export default async function ProjectDetailPage({
         infraStatus={productionMonitoringState.infraStatus}
       />
     ),
-    productionMonitoringPrompt: (
+    productionMonitoringPrompt: workflowV2Enabled ? null : (
       <ProductionMonitoringPromptPanel
         projectId={project.id}
         incidents={productionMonitoringState.incidents}
         fixPrompts={productionMonitoringState.fixPrompts}
       />
     ),
-    productionMonitoringReview: (
+    productionMonitoringReview: workflowV2Enabled ? null : (
       <>
         <QaReviewGatePanel
           kind="production"
@@ -1229,7 +1360,12 @@ export default async function ProjectDetailPage({
           stage.id === "brainReview" ||
           stage.id === "meetingPreparation" ||
           stage.id === "meetingPresentation" ||
-          stage.id === "overview"
+          stage.id === "overview" ||
+          // Commit 3A — extended phase merges (still extended-gated on their own)
+          stage.id === "fixPrompt" ||
+          stage.id === "engineeringQaReview" ||
+          stage.id === "productionMonitoringPrompt" ||
+          stage.id === "productionMonitoringReview"
         )) return null;
         const content = stage.id === "deliveryMilestones"
           ? (workflowV2Enabled
