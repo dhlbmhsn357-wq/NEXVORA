@@ -82,7 +82,7 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "docs",
     label: "المستندات والنموذج",
-    tabs: [e("prd"), e("prototypeStudio"), e("prototypePrompt"), e("prototypeReview"), e("evaluation")],
+    tabs: [e("prd"), e("prototypeStudio"), a("prototypePrompt"), e("prototypeReview"), e("evaluation")],
   },
   {
     key: "ops",
