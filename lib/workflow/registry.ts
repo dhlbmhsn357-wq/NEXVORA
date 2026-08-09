@@ -233,7 +233,7 @@ export const STAGE_REGISTRY: StageDefinition[] = [
     id: "developerHandoff",
     slug: "developer-handoff",
     displayName: "Developer Handoff",
-    description: "وثيقة التسليم الفنية للمطورين، متولّدة من PRD + Prototype Review + Brain.",
+    description: "(دُمج داخل تبويب «حزمة التسليم» كقسم فرعي «الوثيقة التقنية») وثيقة التسليم الفنية للمطورين، متولّدة من PRD + Prototype Review + Brain.",
     icon: "PackageCheck",
     order: 14,
     dependencies: ["prd", "prototypeReview"],

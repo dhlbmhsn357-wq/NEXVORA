@@ -57,7 +57,8 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "discovery",
     label: "الاكتشاف",
-    tabs: [e("discovery"), e("overview"), e("stageOwners"), e("analysis"), e("research")],
+    // Consolidation UX 2026: stageOwners اتدمج داخل deliveryMilestones (subtab).
+    tabs: [e("discovery"), e("overview"), e("analysis"), e("research")],
   },
   {
     key: "meetings",
@@ -77,7 +78,8 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "definition",
     label: "تعريف المنتج",
-    tabs: [e("definition"), e("stories"), e("traceability"), e("impact"), e("decisions")],
+    // Consolidation UX 2026: impact اتدمج داخل traceability (subtab).
+    tabs: [e("definition"), e("stories"), e("traceability"), e("decisions")],
   },
   {
     key: "docs",
@@ -87,11 +89,11 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "ops",
     label: "التجاري والإدارة",
+    // Consolidation UX 2026: commercial-full اتدمج داخل commercial (subtab)،
+    // وtasks اتدمج داخل deliveryMilestones (subtab).
     tabs: [
-      e("commercial"),                      // تجاري (essential — core deliverable)
-      e("commercial-full"),                 // عروض وتغيير (essential — core deliverable)
-      e("deliveryMilestones"),
-      e("tasks"),
+      e("commercial"),                      // تجاري (يحوي subtabs: دورة الحياة + العروض والباقات)
+      e("deliveryMilestones"),              // (يحوي subtabs: المراحل + المهام + المسؤولون)
       a("support"),                         // طلبات الدعم
       a("organizationalIntelligence"),      // الذكاء التنظيمي (advanced — مرجع)
       a("activity"),                        // Activity — سجل عابر
@@ -105,7 +107,8 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "delivery",
     label: "تسليم العميل",
-    tabs: [e("clientDelivery"), e("developerHandoff"), e("handoff"), e("partners")],
+    // Consolidation UX 2026: developerHandoff + partners اتدمجوا داخل handoff (subtabs).
+    tabs: [e("clientDelivery"), e("handoff")],
   },
   {
     key: "execution",

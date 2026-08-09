@@ -114,6 +114,7 @@ import { summarizeAssignments as summarizeStageAssignments } from "@/lib/stage-a
 import { listApprovals } from "@/lib/client-approval/service";
 import { listPackages as listHandoffPackages, listItems as listHandoffItems, listPartners as listHandoffPartners } from "@/lib/handoff/service";
 import CommercialFullPanel from "./commercial-full-panel";
+import SubTabs from "./sub-tabs";
 import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { selectWorkflowUiVersion } from "@/lib/workflow-v2/adapter";
@@ -180,6 +181,7 @@ export default async function ProjectDetailPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const rawTabParam = resolvedSearchParams?.tab;
   const currentTabParam = Array.isArray(rawTabParam) ? rawTabParam[0] : rawTabParam;
+
   const supabase = await createClient();
 
   const { data: project, error: projectError } = await supabase
@@ -519,6 +521,27 @@ export default async function ProjectDetailPage({
   const workflowV2Enabled = selectWorkflowUiVersion({
     workflow_version: (project as unknown as { workflow_version?: "v1" | "v2" | null }).workflow_version ?? null,
   }) === "v2" && productModeEnabled;
+
+  // Consolidation UX 2026 — إعادة توجيه deep-links القديمة إلى التبويبات المُدمجة.
+  // القاعدة: مفيش حذف بيانات — الجداول والـ services زي ما هي؛ بس التبويبات تجمّعت.
+  // بيشتغل بس لما workflowV2Enabled=true (وضع NEXVORA)، عشان الوضع القديم يفضل بلا لمس.
+  if (workflowV2Enabled && currentTabParam) {
+    const legacyTabRedirects: Record<string, { tab: string; section?: string }> = {
+      impact: { tab: "traceability", section: "impact" },
+      partners: { tab: "handoff", section: "partners" },
+      developerHandoff: { tab: "handoff", section: "document" },
+      "commercial-full": { tab: "commercial", section: "proposals" },
+      tasks: { tab: "deliveryMilestones", section: "tasks" },
+      stageOwners: { tab: "deliveryMilestones", section: "owners" },
+    };
+    const target = legacyTabRedirects[currentTabParam];
+    if (target) {
+      const q = new URLSearchParams();
+      q.set("tab", target.tab);
+      if (target.section) q.set("section", target.section);
+      redirect(`/dashboard/projects/${id}?${q.toString()}`);
+    }
+  }
   const [
     commercialLifecycle, commercialContracts, commercialPayments,
     marketResearchItems, problemValidationItems,
@@ -987,15 +1010,84 @@ export default async function ProjectDetailPage({
     />
   );
 
+  // Consolidation UX 2026 — Absorbed panels (Commit 1)
+  // ==================================================
+  // بيتم بناؤهم كمحتوى مستقل ثم يُحقنوا داخل survivors كـ inner tabs.
+  // الجداول والـ services للـ absorbed مش بتتغيّر — بس ما بيبقوش top-level tab.
+  // Redirect في page.tsx بيغطي deep-links القديمة (?tab=<absorbed>).
+  const developerHandoffContent = (
+    <DeveloperHandoffPanel
+      projectId={project.id}
+      projectName={project.name}
+      handoff={developerHandoff}
+      currentPrdVersion={prd?.version ?? null}
+      currentReviewVersion={review?.version ?? null}
+      currentBrainVersion={brainV2ForGeneration?.version ?? null}
+    />
+  );
+  const changeImpactContent = workflowV2Enabled ? (
+    <ChangeImpactPanel
+      requirements={definitionRequirements}
+      stories={storiesRows}
+      acs={acceptanceCriteriaRows}
+      scenarios={evalScenarios}
+      evidence={evidenceLinkRows}
+    />
+  ) : null;
+  const partnersContent = workflowV2Enabled ? (
+    <PartnersPanel
+      projectId={project.id}
+      partners={externalPartnersRows}
+      canWrite={canWriteCommercial}
+    />
+  ) : null;
+  const stageOwnersContent = workflowV2Enabled ? (
+    <StageOwnersPanel
+      projectId={project.id}
+      assignments={stageAssignmentsRows}
+      users={allUsersForWork}
+      decisions={decisionItemsRows}
+      canWrite={canWriteCommercial}
+    />
+  ) : null;
+  const commercialFullContent = workflowV2Enabled ? (
+    <CommercialFullPanel
+      projectId={project.id}
+      proposals={proposalsRows}
+      proposalItems={proposalItemsRows}
+      changeRequests={changeRequestsRows}
+      pricingPackages={pricingPackagesRows}
+      contracts={commercialContracts}
+      canWrite={canWriteCommercial}
+    />
+  ) : null;
+
   const workflowItems: WorkflowNavItem[] = [
     ...STAGE_REGISTRY.slice()
       .sort((a, b) => a.order - b.order)
-      .map((stage) => ({
-        key: stage.id,
-        label: stage.displayName,
-        content: stage.id === "deliveryMilestones" ? deliveryMilestonesContent : (stageContentByKey[stage.id] ?? null),
-      })),
-    { key: "tasks", label: "المهام", content: tasksTabContent },
+      .map((stage): WorkflowNavItem | null => {
+        // Consolidation UX 2026 — لما v2 مفعّل: developerHandoff بيتخفى كـ top-level tab
+        // (اتدمج داخل handoff)، وdeliveryMilestones بياخد subtabs (المراحل/المهام/المسؤولون).
+        if (workflowV2Enabled && stage.id === "developerHandoff") return null;
+        const content = stage.id === "deliveryMilestones"
+          ? (workflowV2Enabled
+              ? (
+                  <SubTabs
+                    ariaLabel="أقسام التسليم"
+                    sections={[
+                      { key: "", label: "المراحل", content: deliveryMilestonesContent },
+                      { key: "tasks", label: "لوحة المهام", content: tasksTabContent },
+                      ...(stageOwnersContent ? [{ key: "owners", label: "مسؤولو المراحل", content: stageOwnersContent }] : []),
+                    ]}
+                  />
+                )
+              : deliveryMilestonesContent)
+          : (stageContentByKey[stage.id] ?? null);
+        return { key: stage.id, label: stage.displayName, content };
+      })
+      .filter((x): x is WorkflowNavItem => x !== null),
+    // "المهام" tab القديم يفضل ظاهر بس لما v2 مطفّى (في v2 اتدمج داخل deliveryMilestones).
+    ...(workflowV2Enabled ? [] : [{ key: "tasks", label: "المهام", content: tasksTabContent }]),
     // تبويبات NEXVORA — يظهروا بس لو product_mode مفعّل (NEXVORA Core).
     // "البحث والتحقق" قبل "تجاري" لأنه أساس تعريف المنتج (P5 → P6+).
     ...(workflowV2Enabled ? [
@@ -1043,15 +1135,27 @@ export default async function ProjectDetailPage({
         key: "traceability",
         label: "الأدلة والربط",
         content: (
-          <TraceabilityPanel
-            projectId={project.id}
-            requirements={definitionRequirements}
-            stories={storiesRows}
-            acs={acceptanceCriteriaRows}
-            marketResearch={marketResearchItems}
-            problemValidation={problemValidationItems}
-            evidenceLinks={evidenceLinkRows}
-            canWrite={canWriteCommercial}
+          <SubTabs
+            ariaLabel="أقسام الأدلة والأثر"
+            sections={[
+              {
+                key: "",
+                label: "الأدلة والربط",
+                content: (
+                  <TraceabilityPanel
+                    projectId={project.id}
+                    requirements={definitionRequirements}
+                    stories={storiesRows}
+                    acs={acceptanceCriteriaRows}
+                    marketResearch={marketResearchItems}
+                    problemValidation={problemValidationItems}
+                    evidenceLinks={evidenceLinkRows}
+                    canWrite={canWriteCommercial}
+                  />
+                ),
+              },
+              ...(changeImpactContent ? [{ key: "impact", label: "أثر التغيير", content: changeImpactContent }] : []),
+            ]}
           />
         ),
       },
@@ -1069,19 +1173,7 @@ export default async function ProjectDetailPage({
           />
         ),
       },
-      {
-        key: "impact",
-        label: "أثر التغيير",
-        content: (
-          <ChangeImpactPanel
-            requirements={definitionRequirements}
-            stories={storiesRows}
-            acs={acceptanceCriteriaRows}
-            scenarios={evalScenarios}
-            evidence={evidenceLinkRows}
-          />
-        ),
-      },
+      // impact اتدمج داخل traceability كـ inner tab (Consolidation UX 2026)
       {
         key: "decisions",
         label: "سجل القرارات",
@@ -1104,19 +1196,7 @@ export default async function ProjectDetailPage({
           />
         ),
       },
-      {
-        key: "stageOwners",
-        label: "مسؤولو المراحل",
-        content: (
-          <StageOwnersPanel
-            projectId={project.id}
-            assignments={stageAssignmentsRows}
-            users={allUsersForWork}
-            decisions={decisionItemsRows}
-            canWrite={canWriteCommercial}
-          />
-        ),
-      },
+      // stageOwners اتدمج داخل deliveryMilestones كـ inner tab (Consolidation UX 2026)
       {
         key: "approvals",
         label: "اعتماد العميل",
@@ -1133,55 +1213,55 @@ export default async function ProjectDetailPage({
         key: "handoff",
         label: "حزمة التسليم",
         content: (
-          <HandoffPanel
-            projectId={project.id}
-            packages={handoffPackagesRows}
-            items={handoffItemsRows}
-            latestPackage={latestHandoffPackage}
-            canWrite={canWriteCommercial}
-            questions={handoffQuestionsRows}
-            deliveries={handoffDeliveriesRows}
-            partners={externalPartnersRows}
+          <SubTabs
+            ariaLabel="أقسام التسليم للعميل"
+            sections={[
+              {
+                key: "",
+                label: "الحزمة",
+                content: (
+                  <HandoffPanel
+                    projectId={project.id}
+                    packages={handoffPackagesRows}
+                    items={handoffItemsRows}
+                    latestPackage={latestHandoffPackage}
+                    canWrite={canWriteCommercial}
+                    questions={handoffQuestionsRows}
+                    deliveries={handoffDeliveriesRows}
+                    partners={externalPartnersRows}
+                  />
+                ),
+              },
+              { key: "document", label: "الوثيقة التقنية", content: developerHandoffContent },
+              ...(partnersContent ? [{ key: "partners", label: "الشركاء", content: partnersContent }] : []),
+            ]}
           />
         ),
       },
-      {
-        key: "partners",
-        label: "شركاء خارجيون",
-        content: (
-          <PartnersPanel
-            projectId={project.id}
-            partners={externalPartnersRows}
-            canWrite={canWriteCommercial}
-          />
-        ),
-      },
-      {
-        key: "commercial-full",
-        label: "عروض وتغيير",
-        content: (
-          <CommercialFullPanel
-            projectId={project.id}
-            proposals={proposalsRows}
-            proposalItems={proposalItemsRows}
-            changeRequests={changeRequestsRows}
-            pricingPackages={pricingPackagesRows}
-            contracts={commercialContracts}
-            canWrite={canWriteCommercial}
-          />
-        ),
-      },
+      // partners اتدمج داخل handoff، commercial-full اتدمج داخل commercial (Consolidation UX 2026)
       {
         key: "commercial",
         label: "تجاري",
         content: (
-          <CommercialPanel
-            projectId={project.id}
-            lifecycle={commercialLifecycle}
-            contracts={commercialContracts}
-            payments={commercialPayments}
-            canWrite={canWriteCommercial}
-            nowISO={new Date().toISOString()}
+          <SubTabs
+            ariaLabel="أقسام التجاري"
+            sections={[
+              {
+                key: "",
+                label: "دورة الحياة",
+                content: (
+                  <CommercialPanel
+                    projectId={project.id}
+                    lifecycle={commercialLifecycle}
+                    contracts={commercialContracts}
+                    payments={commercialPayments}
+                    canWrite={canWriteCommercial}
+                    nowISO={new Date().toISOString()}
+                  />
+                ),
+              },
+              ...(commercialFullContent ? [{ key: "proposals", label: "العروض والباقات وطلبات التغيير", content: commercialFullContent }] : []),
+            ]}
           />
         ),
       },
