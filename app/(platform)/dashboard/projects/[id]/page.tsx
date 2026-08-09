@@ -527,12 +527,19 @@ export default async function ProjectDetailPage({
   // بيشتغل بس لما workflowV2Enabled=true (وضع NEXVORA)، عشان الوضع القديم يفضل بلا لمس.
   if (workflowV2Enabled && currentTabParam) {
     const legacyTabRedirects: Record<string, { tab: string; section?: string }> = {
+      // Commit 1 — safe merges
       impact: { tab: "traceability", section: "impact" },
       partners: { tab: "handoff", section: "partners" },
       developerHandoff: { tab: "handoff", section: "document" },
       "commercial-full": { tab: "commercial", section: "proposals" },
       tasks: { tab: "deliveryMilestones", section: "tasks" },
       stageOwners: { tab: "deliveryMilestones", section: "owners" },
+      // Commit 2 — Brain + Meetings + Overview
+      smartRecommendations: { tab: "projectBrain", section: "recommendations" },
+      brainReview: { tab: "projectBrain", section: "review" },
+      meetingPreparation: { tab: "meetings", section: "prep" },
+      meetingPresentation: { tab: "meetings", section: "deck" },
+      overview: { tab: "analysis" },
     };
     const target = legacyTabRedirects[currentTabParam];
     if (target) {
@@ -676,6 +683,10 @@ export default async function ProjectDetailPage({
   // — مفيش أي Array ترتيب تاني هنا، بس تجميع المحتوى الفعلي (Content)
   // لكل مفتاح، عشان WorkflowNav يرتّبهم زي ما هو متعرّف في الـ Registry.
   const stageContentByKey: Partial<Record<(typeof STAGE_REGISTRY)[number]["id"], React.ReactNode>> = {
+    // Consolidation UX 2026 (Commit 2C): overview اتفكّك — ManualNoteComposer + AnalysisPanel
+    // اتنقلوا لتبويب analysis، وProjectBrainEntries اتنقل لتبويب projectBrain.
+    // overview نفسه بيتخفى من الـ nav ويعيد التوجيه إلى analysis (لما v2 مفعّل).
+    // الوضع القديم (v2 مطفّى) يفضل بمحتواه القديم بلا لمس.
     overview: (
       <>
         <div className="mb-6">
@@ -725,10 +736,25 @@ export default async function ProjectDetailPage({
         </div>
       </div>
     ),
-    analysis: (
+    // Consolidation UX 2026 (Commit 2C): analysis بيبلع ManualNoteComposer + legacy AnalysisPanel
+    // (كـ collapsible) لما v2 مفعّل. الوضع القديم زيّ ما هو.
+    analysis: workflowV2Enabled ? (
+      <div className="space-y-6">
+        <ManualNoteComposer projectId={project.id} />
+        <DiscoveryAnalysisPanel projectId={project.id} analysis={(discoveryAnalysis as DiscoveryAnalysisRow | null) ?? null} isAdmin={isAdmin} />
+        <details className="rounded-[var(--v-radius-lg)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3">
+          <summary className="cursor-pointer text-xs text-[var(--v-text-muted)]">التحليل النصّي القديم (Legacy)</summary>
+          <div className="mt-3">
+            <AnalysisPanel projectId={project.id} initialAnalysis={project.ai_analysis} />
+          </div>
+        </details>
+      </div>
+    ) : (
       <DiscoveryAnalysisPanel projectId={project.id} analysis={(discoveryAnalysis as DiscoveryAnalysisRow | null) ?? null} isAdmin={isAdmin} />
     ),
-    meetingPreparation: (
+    // Consolidation UX 2026 (Commit 2B): meetings يبلع meetingPreparation + meetingPresentation
+    // كـ subtabs لما v2 مفعّل. الجداول project-scoped فطبيعي نعرضهم بلا هجرة.
+    meetingPreparation: workflowV2Enabled ? null : (
       <MeetingPrepPanel
         projectId={project.id}
         prep={(meetingPrep as MeetingPreparationRow | null) ?? null}
@@ -738,11 +764,136 @@ export default async function ProjectDetailPage({
         isAdmin={isAdmin}
       />
     ),
-    meetingPresentation: (
+    meetingPresentation: workflowV2Enabled ? null : (
       <MeetingPresentationPanel projectId={project.id} draft={meetingPresentationDraft} history={meetingPresentationHistory} />
     ),
-    meetings: <MeetingsPanel projectId={project.id} projectCode={project.project_code} meetings={meetings ?? []} />,
-    projectBrain: (
+    meetings: workflowV2Enabled ? (
+      <SubTabs
+        ariaLabel="أقسام الاجتماعات"
+        sections={[
+          { key: "", label: "قائمة الاجتماعات", content: <MeetingsPanel projectId={project.id} projectCode={project.project_code} meetings={meetings ?? []} /> },
+          {
+            key: "prep",
+            label: "تجهيز الاجتماع",
+            content: (
+              <MeetingPrepPanel
+                projectId={project.id}
+                prep={(meetingPrep as MeetingPreparationRow | null) ?? null}
+                participants={(meetingPrepParticipants as MeetingPrepParticipant[] | null) ?? []}
+                requiredItems={(meetingRequiredItems as MeetingRequiredItem[] | null) ?? []}
+                attachments={(meetingPrepAttachments as MeetingAttachment[] | null) ?? []}
+                isAdmin={isAdmin}
+              />
+            ),
+          },
+          {
+            key: "deck",
+            label: "عرض الاجتماع",
+            content: <MeetingPresentationPanel projectId={project.id} draft={meetingPresentationDraft} history={meetingPresentationHistory} />,
+          },
+        ]}
+      />
+    ) : (
+      <MeetingsPanel projectId={project.id} projectCode={project.project_code} meetings={meetings ?? []} />
+    ),
+    // Consolidation UX 2026 (Commit 2A): projectBrain يبلع smartRecommendations + brainReview
+    // كـ subtabs لما v2 مفعّل. ArchitecturalRecommendationsSummary يظهر مرة واحدة فوق كل الأقسام.
+    // ProjectBrainEntries القديم يبان كـ collapsible داخل قسم النظرة العامة.
+    projectBrain: workflowV2Enabled ? (
+      <div className="space-y-6">
+        <ArchitecturalRecommendationsSummary
+          projectId={project.id}
+          recommendations={recommendations}
+          architectureReport={architectureReport}
+          canManage={isAdmin}
+        />
+        <SubTabs
+          ariaLabel="أقسام الدماغ"
+          sections={[
+            {
+              key: "",
+              label: "النظرة العامة",
+              content: (
+                <div className="space-y-6">
+                  <PendingChangesPanel projectId={project.id} pendingChanges={brainPendingChanges} canManage={isAdmin} />
+                  <KnowledgeGraphPanel
+                    projectId={project.id}
+                    nodes={knowledgeGraphState.nodes}
+                    relations={knowledgeGraphState.relations}
+                    latestReport={knowledgeGraphState.latestReport}
+                    domain={knowledgeGraphState.domain}
+                    isAdmin={isAdmin}
+                  />
+                  <KnowledgeGraphViewer edges={brainKnowledgeGraph} />
+                  {brainV2Latest && (
+                    <BrainOpenItemsPanel
+                      projectId={project.id}
+                      documentId={brainV2Latest.id}
+                      content={brainV2Latest.content}
+                      missingDispositions={brainV2Latest.missing_info_dispositions ?? {}}
+                      assumptionDispositions={brainV2Latest.assumption_dispositions ?? {}}
+                      canReview={isAdmin}
+                      editable={brainV2Latest.status === "draft" || brainV2Latest.status === "in_review"}
+                    />
+                  )}
+                  <BrainV2Panel
+                    projectId={project.id}
+                    document={brainV2Latest}
+                    approvedDocument={brainV2Approved}
+                    versions={brainV2Versions}
+                    isAdmin={isAdmin}
+                  />
+                  <details className="rounded-[var(--v-radius-lg)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3">
+                    <summary className="cursor-pointer text-xs text-[var(--v-text-muted)]">سجل Brain القديم (Legacy — للمرحلة الانتقالية)</summary>
+                    <div className="mt-3 space-y-4">
+                      <BrainPanel projectId={project.id} brain={brain} />
+                      <ProjectBrainEntries projectId={project.id} entries={brainEntries ?? []} />
+                    </div>
+                  </details>
+                </div>
+              ),
+            },
+            {
+              key: "recommendations",
+              label: "التوصيات",
+              content: (
+                <div className="space-y-5">
+                  <SmartRecommendationsPanel
+                    projectId={project.id}
+                    recommendations={recommendations}
+                    dependencies={recommendationDependencies}
+                    canManage={isAdmin}
+                  />
+                  <ArchitectureIntelligencePanel
+                    projectId={project.id}
+                    initialReport={architectureReport}
+                    canManage={isAdmin}
+                  />
+                </div>
+              ),
+            },
+            {
+              key: "review",
+              label: "مراجعة الاعتماد",
+              content: (
+                <BrainReviewPanel
+                  projectId={project.id}
+                  document={brainV2Reviewable}
+                  confidenceThreshold={brainSettings.confidence_threshold_percent}
+                  isAdmin={isAdmin}
+                  recommendations={recommendations}
+                  reviewObjects={brainReviewV2State.objects}
+                  reviewDependencies={brainReviewV2State.dependencies}
+                  reviewComments={brainReviewV2State.comments}
+                  latestValidationReport={brainReviewV2State.latestValidationReport}
+                  reviewEvents={brainReviewV2State.events}
+                />
+              ),
+            },
+          ]}
+        />
+      </div>
+    ) : (
       <div className="space-y-6">
         <ArchitecturalRecommendationsSummary
           projectId={project.id}
@@ -786,7 +937,7 @@ export default async function ProjectDetailPage({
         </details>
       </div>
     ),
-    smartRecommendations: (
+    smartRecommendations: workflowV2Enabled ? null : (
       <div className="space-y-5">
         <SmartRecommendationsPanel
           projectId={project.id}
@@ -801,7 +952,7 @@ export default async function ProjectDetailPage({
         />
       </div>
     ),
-    brainReview: (
+    brainReview: workflowV2Enabled ? null : (
       <div className="space-y-6">
         <ArchitecturalRecommendationsSummary
           projectId={project.id}
@@ -1066,9 +1217,20 @@ export default async function ProjectDetailPage({
     ...STAGE_REGISTRY.slice()
       .sort((a, b) => a.order - b.order)
       .map((stage): WorkflowNavItem | null => {
-        // Consolidation UX 2026 — لما v2 مفعّل: developerHandoff بيتخفى كـ top-level tab
-        // (اتدمج داخل handoff)، وdeliveryMilestones بياخد subtabs (المراحل/المهام/المسؤولون).
-        if (workflowV2Enabled && stage.id === "developerHandoff") return null;
+        // Consolidation UX 2026 — لما v2 مفعّل، التبويبات دي بتتخفى كـ top-level
+        // وبتتحول لـ subtabs جوّه survivor:
+        //  • developerHandoff → handoff (Commit 1)
+        //  • smartRecommendations, brainReview → projectBrain (Commit 2A)
+        //  • meetingPreparation, meetingPresentation → meetings (Commit 2B)
+        //  • overview → analysis (Commit 2C — المحتوى اتنقل)
+        if (workflowV2Enabled && (
+          stage.id === "developerHandoff" ||
+          stage.id === "smartRecommendations" ||
+          stage.id === "brainReview" ||
+          stage.id === "meetingPreparation" ||
+          stage.id === "meetingPresentation" ||
+          stage.id === "overview"
+        )) return null;
         const content = stage.id === "deliveryMilestones"
           ? (workflowV2Enabled
               ? (

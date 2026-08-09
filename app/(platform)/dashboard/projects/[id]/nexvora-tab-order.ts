@@ -57,22 +57,26 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "discovery",
     label: "الاكتشاف",
-    // Consolidation UX 2026: stageOwners اتدمج داخل deliveryMilestones (subtab).
-    tabs: [e("discovery"), e("overview"), e("analysis"), e("research")],
+    // Consolidation UX 2026:
+    //  • stageOwners اتدمج داخل deliveryMilestones (subtab)
+    //  • overview اتفكّك: محتواه اتنقل لـ analysis + projectBrain
+    tabs: [e("discovery"), e("analysis"), e("research")],
   },
   {
     key: "meetings",
     label: "الاجتماعات",
-    tabs: [e("meetingPreparation"), e("meetingPresentation"), e("meetings")],
+    // Consolidation UX 2026: meetingPreparation + meetingPresentation
+    // بقوا subtabs جوّه meetings (قائمة / تجهيز / عرض).
+    tabs: [e("meetings")],
   },
   {
     key: "knowledge",
     label: "المعرفة والدماغ",
+    // Consolidation UX 2026: smartRecommendations + brainReview
+    // بقوا subtabs جوّه projectBrain (نظرة عامة / توصيات / مراجعة).
     tabs: [
-      e("projectBrain"),           // 1) بناء الأساس
-      e("smartRecommendations"),   // 2) قرار على التوصيات (gate للاعتماد)
-      e("brainReview"),            // 3) الاعتماد النهائي (يعتمد على 2)
-      a("knowledgeHub"),           // 4) مرجع cross-project (advanced)
+      e("projectBrain"),           // 1) بناء الأساس + التوصيات + المراجعة (كلها subtabs)
+      a("knowledgeHub"),           // 2) مرجع cross-project (advanced)
     ],
   },
   {
