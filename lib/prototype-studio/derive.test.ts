@@ -13,6 +13,7 @@ function mrItem(id: string, title: string, confidentiality: Confidentiality): Ma
     id, projectId: "prj", itemType: "direct_competitor", title, summary: "",
     details: {}, sourceUrl: null, sourceNotes: "", confidence: 50, tags: [],
     informationClass: "fact", confidentiality,
+    origin: "unverified",
     createdAt: NOW, updatedAt: NOW, createdBy: null,
   };
 }

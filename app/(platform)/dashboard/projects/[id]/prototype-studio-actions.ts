@@ -8,6 +8,7 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
 import { saveConfig, type SaveConfigPatch } from "@/lib/prototype-studio/config-service";
+import { suggestStudioConfig, type StudioConfigSuggestion } from "@/lib/prototype-studio/suggest-config";
 import {
   createArtifact, listArtifacts, approve as approveArtifact, getLatest as getLatestArtifact,
 } from "@/lib/prototype-studio/artifact-service";
@@ -176,6 +177,24 @@ export async function downloadCodexPackZipAction(
     return { ok: true, data: zip };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "فشل تجهيز الملف." };
+  }
+}
+
+/**
+ * Suggest studio config values from Product Definition sources (personas,
+ * flows, requirements, decisions). Returns the raw suggestion so the client
+ * can preview the diff before applying. Doesn't mutate.
+ */
+export async function suggestStudioConfigAction(
+  projectId: string,
+): Promise<ActionResult<StudioConfigSuggestion>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    const suggestion = await suggestStudioConfig(projectId);
+    return { ok: true, data: suggestion };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل جلب الاقتراحات." };
   }
 }
 

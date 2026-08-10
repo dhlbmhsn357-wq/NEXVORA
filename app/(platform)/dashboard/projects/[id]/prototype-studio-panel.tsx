@@ -20,8 +20,10 @@ import {
   saveStudioConfigAction, generateContextPackAction,
   importBuildBriefAction, approveBuildBriefAction,
   generateCodexBuildPackAction, downloadCodexPackZipAction,
-  listStudioArtifactsAction,
+  listStudioArtifactsAction, suggestStudioConfigAction,
 } from "./prototype-studio-actions";
+import Modal from "@/components/ui/Modal";
+import type { StudioConfigSuggestion } from "@/lib/prototype-studio/suggest-config";
 import {
   DEFAULT_DESIGN_DIRECTION,
   PROTOTYPE_TYPES, PROTOTYPE_PLATFORMS, PROTOTYPE_FIDELITIES,
@@ -174,9 +176,75 @@ interface FormProps {
 }
 
 function ConfigForm({ cfg, updateCfg, onSave, pending }: FormProps) {
+  const [suggestion, setSuggestion] = useState<StudioConfigSuggestion | null>(null);
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+
+  async function fetchSuggestion() {
+    setLoadingSuggestion(true);
+    const res = await suggestStudioConfigAction(cfg.projectId);
+    setLoadingSuggestion(false);
+    if (res.ok && res.data) {
+      setSuggestion(res.data);
+    } else if (!res.ok) {
+      toast.error(res.message);
+    }
+  }
+
+  function applyNonDestructive() {
+    if (!suggestion) return;
+    // نطبّق فقط الحقول اللي لسه فاضية عند المستخدم — عشان لا نطمس تعديلاته.
+    if (cfg.primaryPersonas.length === 0 && suggestion.personaNames.length > 0) {
+      updateCfg("primaryPersonas", suggestion.personaNames);
+    }
+    if (cfg.coreFlows.length === 0 && suggestion.coreFlowNames.length > 0) {
+      updateCfg("coreFlows", suggestion.coreFlowNames);
+    }
+    if (cfg.inScopeItems.length === 0 && suggestion.inScopeItems.length > 0) {
+      updateCfg("inScopeItems", suggestion.inScopeItems);
+    }
+    if (cfg.outOfScopeItems.length === 0 && suggestion.outOfScopeItems.length > 0) {
+      updateCfg("outOfScopeItems", suggestion.outOfScopeItems);
+    }
+    toast.success("تم تطبيق الاقتراحات على الحقول الفارغة فقط.");
+    setSuggestion(null);
+  }
+
   return (
     <section className="rounded-xl border border-[var(--v-border)] bg-[var(--v-surface)] p-4 flex flex-col gap-4">
-      <h3 className="font-bold">إعدادات النموذج</h3>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-bold">إعدادات النموذج</h3>
+        <Button size="sm" variant="ghost" onClick={fetchSuggestion} loading={loadingSuggestion}>
+          اقتراح من Product Definition
+        </Button>
+      </div>
+
+      {suggestion && (
+        <Modal open={true} onClose={() => setSuggestion(null)} maxWidth="max-w-lg">
+          <div className="space-y-4 p-6" dir="rtl">
+            <h4 className="text-lg font-semibold text-[var(--v-text)]">اقتراحات من مصدر الحقيقة</h4>
+            <p className="text-xs text-[var(--v-text-muted)]">{suggestion.suggestedNotes}</p>
+
+            <SuggestionRow label="Personas أساسية" current={cfg.primaryPersonas} suggested={suggestion.personaNames} />
+            <SuggestionRow label="Core flows" current={cfg.coreFlows} suggested={suggestion.coreFlowNames} />
+            <SuggestionRow label="داخل النطاق" current={cfg.inScopeItems} suggested={suggestion.inScopeItems} />
+            <SuggestionRow label="خارج النطاق" current={cfg.outOfScopeItems} suggested={suggestion.outOfScopeItems} />
+
+            {suggestion.criticalDecisionCount > 0 && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-2 text-xs">
+                ⚠ قرارات حرجة مفتوحة: {suggestion.criticalDecisionCount} — يفضّل حسمها قبل تجميد النطاق.
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setSuggestion(null)}>إلغاء</Button>
+              <Button variant="primary" onClick={applyNonDestructive}>
+                تطبيق الاقتراحات (على الحقول الفارغة فقط)
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
 
       <SelectField label="نوع النموذج" value={cfg.prototypeType}
         options={PROTOTYPE_TYPES}
@@ -723,5 +791,28 @@ function CodexBuildSection({
         </pre>
       )}
     </section>
+  );
+}
+
+function SuggestionRow({ label, current, suggested }: { label: string; current: string[]; suggested: string[] }) {
+  const alreadyFilled = current.length > 0;
+  return (
+    <div className="rounded-lg border border-[var(--v-border)] bg-[var(--v-surface-2)] p-2 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-semibold text-[var(--v-text)]">{label}</span>
+        <span className="text-[var(--v-text-muted)]">
+          {alreadyFilled ? `الحالي: ${current.length}` : "فارغ حاليًا"} · اقتراح: {suggested.length}
+        </span>
+      </div>
+      {suggested.length > 0 && (
+        <ul className="mt-1 list-disc space-y-0.5 pr-4 text-[11px] text-[var(--v-text-secondary)]">
+          {suggested.slice(0, 6).map((s, i) => <li key={i}>{s}</li>)}
+          {suggested.length > 6 && <li className="text-[var(--v-text-muted)]">…و {suggested.length - 6} عناصر أخرى</li>}
+        </ul>
+      )}
+      {alreadyFilled && (
+        <p className="mt-1 text-[10px] text-[var(--v-yellow)]">لن يُطبَّق — الحقل يحتوي على قيم حاليًا (لا نطمس تعديل المستخدم).</p>
+      )}
+    </div>
   );
 }

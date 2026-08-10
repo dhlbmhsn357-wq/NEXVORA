@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PrintButton from "@/components/ui/PrintButton";
+import { ProjectModeBanner } from "@/app/(platform)/_shared/project-mode-banner";
 import {
   getLatestPackage,
   listItems,
@@ -38,7 +39,7 @@ export default async function HandoffPrintPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("name")
+    .select("name, mode")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) notFound();
@@ -72,6 +73,8 @@ export default async function HandoffPrintPage({
         <div className="no-print mb-6">
           <PrintButton />
         </div>
+
+        <ProjectModeBanner mode={(project as { mode?: string | null }).mode ?? null} />
 
         <header className="border-b-2 border-[#3D5CFF] pb-3">
           <h1 className="font-display text-3xl">

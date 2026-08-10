@@ -11,7 +11,7 @@ import type {
   MarketResearchItem, MarketResearchItemType,
   ProblemValidationItem, EvidenceType,
   InformationClassificationMark, InformationClassification,
-  Confidentiality,
+  Confidentiality, EvidenceOrigin,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,7 @@ type DbMr = {
   confidence: number; tags: string[];
   information_class?: InformationClassification | null;
   confidentiality?: Confidentiality | null;
+  origin?: EvidenceOrigin | null;
   created_at: string; updated_at: string; created_by: string | null;
 };
 function mapMr(r: DbMr): MarketResearchItem {
@@ -34,6 +35,7 @@ function mapMr(r: DbMr): MarketResearchItem {
     confidence: r.confidence, tags: r.tags ?? [],
     informationClass: (r.information_class ?? "unclassified") as InformationClassification,
     confidentiality: (r.confidentiality ?? "internal") as Confidentiality,
+    origin: (r.origin ?? "unverified") as EvidenceOrigin,
     createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
   };
 }
@@ -46,6 +48,7 @@ type DbPv = {
   strength: number; tags: string[];
   information_class?: InformationClassification | null;
   confidentiality?: Confidentiality | null;
+  origin?: EvidenceOrigin | null;
   created_at: string; updated_at: string; created_by: string | null;
 };
 function mapPv(r: DbPv): ProblemValidationItem {
@@ -57,6 +60,7 @@ function mapPv(r: DbPv): ProblemValidationItem {
     strength: r.strength, tags: r.tags ?? [],
     informationClass: (r.information_class ?? "unclassified") as InformationClassification,
     confidentiality: (r.confidentiality ?? "internal") as Confidentiality,
+    origin: (r.origin ?? "unverified") as EvidenceOrigin,
     createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
   };
 }
@@ -101,6 +105,7 @@ export interface MarketResearchInput {
   tags?: string[];
   informationClass?: InformationClassification;
   confidentiality?: Confidentiality;
+  origin?: EvidenceOrigin;
 }
 
 export async function createMarketResearchItem(
@@ -121,6 +126,7 @@ export async function createMarketResearchItem(
       tags: input.tags ?? [],
       information_class: input.informationClass ?? "unclassified",
       confidentiality: input.confidentiality ?? "internal",
+      origin: input.origin ?? "unverified",
       created_by: createdBy,
     })
     .select("*").single();
@@ -183,6 +189,7 @@ export interface ProblemValidationInput {
   tags?: string[];
   informationClass?: InformationClassification;
   confidentiality?: Confidentiality;
+  origin?: EvidenceOrigin;
 }
 
 export async function createProblemValidationItem(
@@ -206,6 +213,7 @@ export async function createProblemValidationItem(
       tags: input.tags ?? [],
       information_class: input.informationClass ?? "unclassified",
       confidentiality: input.confidentiality ?? "internal",
+      origin: input.origin ?? "unverified",
       created_by: createdBy,
     })
     .select("*").single();
@@ -240,6 +248,22 @@ export async function updateProblemValidationItem(
 export async function deleteProblemValidationItem(id: string): Promise<void> {
   const svc = createServiceClient();
   const { error } = await svc.from("problem_validation_items").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/**
+ * تعديل حقل origin على أي عنصر بحث/تحقق. الجدول واحد من:
+ *   - market_research_items
+ *   - problem_validation_items
+ * القيم المسموحة على الـ DB: 'unverified' | 'verified_real' | 'simulated'.
+ */
+export async function updateEvidenceOrigin(
+  table: "market_research_items" | "problem_validation_items",
+  id: string,
+  origin: EvidenceOrigin,
+): Promise<void> {
+  const svc = createServiceClient();
+  const { error } = await svc.from(table).update({ origin }).eq("id", id);
   if (error) throw error;
 }
 

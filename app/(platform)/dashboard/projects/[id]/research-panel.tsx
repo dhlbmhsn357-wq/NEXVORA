@@ -24,8 +24,10 @@ import {
   MARKET_RESEARCH_ITEM_TYPES, MARKET_RESEARCH_TYPE_LABELS,
   EVIDENCE_TYPES, EVIDENCE_TYPE_LABELS,
   CLASSIFICATION_LABELS, CONFIDENTIALITY_LABELS,
+  EVIDENCE_ORIGIN_LABELS,
   type MarketResearchItem, type MarketResearchItemType,
   type ProblemValidationItem, type EvidenceType,
+  type EvidenceOrigin,
 } from "@/lib/market-research/types";
 import {
   summarizeMarketResearch, summarizeProblemValidation,
@@ -34,6 +36,7 @@ import {
 import {
   createMarketResearchAction, updateMarketResearchAction, deleteMarketResearchAction,
   createProblemValidationAction, updateProblemValidationAction, deleteProblemValidationAction,
+  updateEvidenceOriginAction,
 } from "./research-actions";
 
 // ---------------------------------------------------------------------------
@@ -52,16 +55,25 @@ const EV_TYPE_TONE: Record<EvidenceType, BadgeTone> = {
 const QUALITY_TONE: Record<"weak" | "moderate" | "strong", BadgeTone> = {
   weak: "danger", moderate: "warning", strong: "success",
 };
+const ORIGIN_TONE: Record<EvidenceOrigin, BadgeTone> = {
+  verified_real: "success",
+  unverified: "neutral",
+  simulated: "warning",
+};
 
 export interface ResearchPanelProps {
   projectId: string;
   marketResearch: MarketResearchItem[];
   problemValidation: ProblemValidationItem[];
   canWrite: boolean;
+  /** Owner/Admin only — لتغيير origin (verified_real / unverified / simulated). */
+  canManageOrigin?: boolean;
+  /** True لو المشروع mode='test' — يمنع رفع الدليل لـ verified_real في الـ UI. */
+  isTestProject?: boolean;
 }
 
 export default function ResearchPanel(props: ResearchPanelProps) {
-  const { projectId, marketResearch, problemValidation, canWrite } = props;
+  const { projectId, marketResearch, problemValidation, canWrite, canManageOrigin = false, isTestProject = false } = props;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -134,6 +146,15 @@ export default function ResearchPanel(props: ResearchPanelProps) {
                     <Badge tone="neutral">{CLASSIFICATION_LABELS[m.informationClass]}</Badge>
                     <Badge tone={m.confidentiality === "confidential" ? "danger" : m.confidentiality === "public" ? "success" : "info"}>{CONFIDENTIALITY_LABELS[m.confidentiality]}</Badge>
                     <span className="text-[11px] text-[var(--v-text-subtle)]">ثقة: {m.confidence}%</span>
+                    <OriginControl
+                      origin={m.origin}
+                      canManage={canManageOrigin}
+                      isTestProject={isTestProject}
+                      onChange={(newOrigin) => runAction(
+                        () => updateEvidenceOriginAction(projectId, "market_research", m.id, newOrigin),
+                        "تم تحديث الأصل"
+                      )}
+                    />
                   </div>
                   {m.summary && <p className="mt-1 text-xs text-[var(--v-text-secondary)]">{m.summary}</p>}
                   {m.sourceUrl && (
@@ -181,6 +202,15 @@ export default function ResearchPanel(props: ResearchPanelProps) {
                       <Badge tone="neutral">{CLASSIFICATION_LABELS[p.informationClass]}</Badge>
                       <Badge tone={p.confidentiality === "confidential" ? "danger" : p.confidentiality === "public" ? "success" : "info"}>{CONFIDENTIALITY_LABELS[p.confidentiality]}</Badge>
                       <Badge tone={QUALITY_TONE[q]}>قوّة {p.strength}%</Badge>
+                      <OriginControl
+                        origin={p.origin}
+                        canManage={canManageOrigin}
+                        isTestProject={isTestProject}
+                        onChange={(newOrigin) => runAction(
+                          () => updateEvidenceOriginAction(projectId, "problem_validation", p.id, newOrigin),
+                          "تم تحديث الأصل"
+                        )}
+                      />
                     </div>
                     <p className="mt-1 text-sm text-[var(--v-text-secondary)]">
                       <span className="text-[var(--v-text-muted)]">الألم:</span> {p.painPoint}
@@ -259,6 +289,39 @@ function StatTile({ icon, label, value, sub, tone }: { icon: React.ReactNode; la
       </p>
       {sub && <p className="text-[11px] text-[var(--v-text-subtle)]">{sub}</p>}
     </div>
+  );
+}
+
+function OriginControl({
+  origin,
+  canManage,
+  isTestProject,
+  onChange,
+}: {
+  origin: EvidenceOrigin;
+  canManage: boolean;
+  isTestProject: boolean;
+  onChange: (o: EvidenceOrigin) => void;
+}) {
+  if (!canManage) {
+    return <Badge tone={ORIGIN_TONE[origin]}>{EVIDENCE_ORIGIN_LABELS[origin]}</Badge>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Badge tone={ORIGIN_TONE[origin]}>{EVIDENCE_ORIGIN_LABELS[origin]}</Badge>
+      <select
+        value={origin}
+        onChange={(e) => onChange(e.target.value as EvidenceOrigin)}
+        className="h-6 rounded border border-[var(--v-border)] bg-[var(--v-bg)] px-1 text-[10px] text-[var(--v-text)]"
+        title={isTestProject ? "المشروع تجريبي — 'حقيقي' معطَّل." : "تغيير أصل الدليل"}
+      >
+        <option value="unverified">غير موثَّق</option>
+        <option value="verified_real" disabled={isTestProject}>
+          دليل حقيقي{isTestProject ? " (معطَّل — تجريبي)" : ""}
+        </option>
+        <option value="simulated">محاكاة</option>
+      </select>
+    </span>
   );
 }
 

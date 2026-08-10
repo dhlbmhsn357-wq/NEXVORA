@@ -20,6 +20,7 @@ function mr(over: Partial<MarketResearchItem>): MarketResearchItem {
     summary: "", details: {}, sourceUrl: null, sourceNotes: "",
     confidence: 50, tags: [],
     informationClass: "unclassified", confidentiality: "internal",
+    origin: "unverified",
     createdAt: NOW, updatedAt: NOW, createdBy: null,
     ...over,
   };
@@ -31,6 +32,7 @@ function pv(over: Partial<ProblemValidationItem>): ProblemValidationItem {
     sourceDate: null, supportingUrl: null, supportingNotes: "",
     strength: 60, tags: [],
     informationClass: "unclassified", confidentiality: "internal",
+    origin: "unverified",
     createdAt: NOW, updatedAt: NOW, createdBy: null,
     ...over,
   };

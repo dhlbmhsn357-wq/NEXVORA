@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PrintButton from "@/components/ui/PrintButton";
+import { ProjectModeBanner } from "@/app/(platform)/_shared/project-mode-banner";
 import type { AcceptanceCriterion, UserStory } from "@/lib/types/database";
 import "@/app/print.css";
 
@@ -25,7 +26,7 @@ export default async function PRDPrintPage({
 
   const { data: project } = await supabase
     .from("projects")
-    .select("name")
+    .select("name, mode")
     .eq("id", id)
     .maybeSingle();
 
@@ -44,6 +45,8 @@ export default async function PRDPrintPage({
         <div className="mb-6 no-print">
           <PrintButton />
         </div>
+
+        <ProjectModeBanner mode={(project as { mode?: string | null }).mode ?? null} />
 
         <h1 className="font-display text-3xl">PRD — {project.name}</h1>
         <p className="mt-1 text-sm text-slate-500">

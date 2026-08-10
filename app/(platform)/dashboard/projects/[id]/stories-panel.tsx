@@ -69,6 +69,9 @@ export default function StoriesPanel(props: StoriesPanelProps) {
   const [editingAc, setEditingAc] = useState<AcceptanceCriterionRow | null>(null);
   const [creatingAcForStory, setCreatingAcForStory] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(stories.map((s) => s.id)));
+  // فلترة القصص لعرض غير المغطّاة بمعايير القبول (AC) فقط — يفعّلها زر
+  // "عرض القصص غير المغطّاة" في ويدجت التغطية.
+  const [showUncoveredOnly, setShowUncoveredOnly] = useState(false);
 
   const storyIds = useMemo(() => stories.map((s) => s.id), [stories]);
   const sSum = useMemo(() => summarizeStories(stories), [stories]);
@@ -111,6 +114,35 @@ export default function StoriesPanel(props: StoriesPanelProps) {
         <StatTile icon={<Target size={16} />} label="جاهزية القصص" value={`${readiness.score}%`} tone={readiness.ready ? "success" : readiness.score >= 40 ? "warning" : "danger"} />
       </div>
 
+      {/* AC Coverage widget — تُقرأ من deriveStoriesReadiness (breakdown.acCoveragePercent). */}
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs text-[var(--v-text-muted)]">تغطية معايير القبول</p>
+            <p className="mt-0.5 text-sm text-[var(--v-text)]">
+              معايير القبول: <b>{acSum.storiesWithAcCount}</b> من <b>{sSum.total}</b> قصة مغطّاة
+              {" "}(<b className="font-mono-plex">{readiness.breakdown.acCoveragePercent}%</b>)
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge tone={readiness.checks.acCoverageOk ? "success" : "warning"}>
+              {readiness.checks.acCoverageOk ? "≥ 80% ✓" : "أقل من 80%"}
+            </Badge>
+            {sSum.total - acSum.storiesWithAcCount > 0 && (
+              <Button
+                size="sm"
+                variant={showUncoveredOnly ? "primary" : "ghost"}
+                onClick={() => setShowUncoveredOnly((v) => !v)}
+              >
+                {showUncoveredOnly
+                  ? "عرض كل القصص"
+                  : `عرض القصص غير المغطّاة (${sSum.total - acSum.storiesWithAcCount})`}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {/* Readiness checklist */}
       <Card>
         <SectionHeader title="مؤشر جاهزية القصص قبل PRD" />
@@ -136,7 +168,9 @@ export default function StoriesPanel(props: StoriesPanelProps) {
         ) : (
           <div className="space-y-4">
             {STORY_STATUSES.map((status) => {
-              const items = stories.filter((s) => s.status === status);
+              const items = stories
+                .filter((s) => s.status === status)
+                .filter((s) => !showUncoveredOnly || (acsByStory.get(s.id)?.length ?? 0) === 0);
               if (items.length === 0) return null;
               return (
                 <div key={status}>

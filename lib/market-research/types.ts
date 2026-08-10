@@ -34,6 +34,18 @@ export const MARKET_RESEARCH_TYPE_LABELS: Record<MarketResearchItemType, string>
   other: "أخرى",
 };
 
+/**
+ * (0109) أصل الدليل — حقيقي/غير موثَّق/محاكاة. المشاريع التجريبية (mode='test')
+ * تُنشئ عناصر جديدة بـ 'simulated' افتراضيًا (الـ UI بيمنع رفعها لـ verified_real).
+ */
+export type EvidenceOrigin = "unverified" | "verified_real" | "simulated";
+export const EVIDENCE_ORIGINS: readonly EvidenceOrigin[] = ["unverified", "verified_real", "simulated"] as const;
+export const EVIDENCE_ORIGIN_LABELS: Record<EvidenceOrigin, string> = {
+  unverified: "غير موثَّق",
+  verified_real: "دليل حقيقي",
+  simulated: "محاكاة",
+};
+
 export interface MarketResearchItem {
   id: string;
   projectId: string;
@@ -49,6 +61,8 @@ export interface MarketResearchItem {
   informationClass: InformationClassification;
   /** مستوى السرّية (0106): public/internal/confidential. */
   confidentiality: Confidentiality;
+  /** أصل الدليل (0109). */
+  origin: EvidenceOrigin;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
@@ -101,6 +115,8 @@ export interface ProblemValidationItem {
   informationClass: InformationClassification;
   /** مستوى السرّية (0106). */
   confidentiality: Confidentiality;
+  /** أصل الدليل (0109). */
+  origin: EvidenceOrigin;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;

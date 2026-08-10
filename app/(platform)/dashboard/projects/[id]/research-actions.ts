@@ -16,6 +16,7 @@ import {
   updateProblemValidationItem,
   deleteProblemValidationItem,
   upsertClassificationMark,
+  updateEvidenceOrigin,
   type MarketResearchInput,
   type ProblemValidationInput,
 } from "@/lib/market-research/service";
@@ -24,11 +25,30 @@ import {
   EVIDENCE_TYPES,
   INFORMATION_CLASSIFICATIONS,
   CONFIDENTIALITY_LEVELS,
+  EVIDENCE_ORIGINS,
   type MarketResearchItemType,
   type EvidenceType,
   type InformationClassification,
   type Confidentiality,
+  type EvidenceOrigin,
 } from "@/lib/market-research/types";
+import { createServiceClient } from "@/lib/supabase/service";
+
+/**
+ * يقرأ mode المشروع (test|real|unclassified) عبر service client.
+ * يُستخدم لحسم origin الافتراضي عند الإنشاء + قواعد التغيير.
+ */
+async function getProjectMode(projectId: string): Promise<"unclassified" | "test" | "real"> {
+  try {
+    const svc = createServiceClient();
+    const { data } = await svc.from("projects").select("mode").eq("id", projectId).maybeSingle();
+    const m = (data as { mode?: string } | null)?.mode ?? "unclassified";
+    if (m === "test" || m === "real") return m;
+    return "unclassified";
+  } catch {
+    return "unclassified";
+  }
+}
 
 type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; message: string };
 
@@ -75,6 +95,8 @@ export async function createMarketResearchAction(
   const conf = raw.confidence == null || raw.confidence === "" ? 50 : Number(raw.confidence);
   if (Number.isNaN(conf)) return { ok: false, message: "قيمة الثقة غير صحيحة." };
 
+  // مشاريع test: origin الافتراضي 'simulated'، مشاريع أخرى: 'unverified'.
+  const projectMode = await getProjectMode(projectId);
   const input: MarketResearchInput = {
     itemType: raw.itemType,
     title,
@@ -85,6 +107,7 @@ export async function createMarketResearchAction(
     tags: parseTags(raw.tags),
     informationClass: raw.informationClass && isValidClassification(raw.informationClass) ? raw.informationClass : undefined,
     confidentiality: raw.confidentiality && isValidConfidentiality(raw.confidentiality) ? raw.confidentiality : "internal",
+    origin: projectMode === "test" ? "simulated" : "unverified",
   };
   try {
     const row = await createMarketResearchItem(projectId, input, g.userId);
@@ -171,6 +194,7 @@ export async function createProblemValidationAction(
   const st = raw.strength == null || raw.strength === "" ? 50 : Number(raw.strength);
   if (Number.isNaN(st)) return { ok: false, message: "قيمة القوّة غير صحيحة." };
 
+  const projectMode = await getProjectMode(projectId);
   const input: ProblemValidationInput = {
     evidenceType: raw.evidenceType,
     title,
@@ -185,6 +209,7 @@ export async function createProblemValidationAction(
     tags: parseTags(raw.tags),
     informationClass: raw.informationClass && isValidClassification(raw.informationClass) ? raw.informationClass : undefined,
     confidentiality: raw.confidentiality && isValidConfidentiality(raw.confidentiality) ? raw.confidentiality : "internal",
+    origin: projectMode === "test" ? "simulated" : "unverified",
   };
   try {
     const row = await createProblemValidationItem(projectId, input, g.userId);
@@ -253,6 +278,46 @@ export async function deleteProblemValidationAction(projectId: string, id: strin
     return { ok: true };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "فشل الحذف." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Evidence Origin (owner/admin only) — يعدّل حقل origin على أي عنصر
+// market_research_items أو problem_validation_items. المشاريع التجريبية
+// لا يُسمح فيها بترقية دليل لـ verified_real (يبقى كـ محاكاة).
+// ---------------------------------------------------------------------------
+const ORIGIN_ADMIN_ROLES = ["owner", "admin"] as const;
+
+export async function updateEvidenceOriginAction(
+  projectId: string,
+  tableType: "market_research" | "problem_validation",
+  itemId: string,
+  origin: string,
+): Promise<ActionResult> {
+  const { requireRole: rr } = await import("@/lib/auth/rbac");
+  const gate = await rr([...ORIGIN_ADMIN_ROLES]);
+  if (!gate.ok) return { ok: false, message: gate.message ?? "ماعندكش صلاحية." };
+
+  if (!(EVIDENCE_ORIGINS as readonly string[]).includes(origin)) {
+    return { ok: false, message: "قيمة origin غير صالحة." };
+  }
+  const table = tableType === "market_research" ? "market_research_items" : "problem_validation_items";
+  if (!itemId) return { ok: false, message: "معرّف العنصر مطلوب." };
+
+  // Test-mode gate: ترقية دليل لـ verified_real ممنوعة على مشاريع تجريبية.
+  if (origin === "verified_real") {
+    const mode = await getProjectMode(projectId);
+    if (mode === "test") {
+      return { ok: false, message: "المشروع تجريبي — لا يمكن ترقية الدليل لـ 'حقيقي'." };
+    }
+  }
+
+  try {
+    await updateEvidenceOrigin(table, itemId, origin as EvidenceOrigin);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." };
   }
 }
 

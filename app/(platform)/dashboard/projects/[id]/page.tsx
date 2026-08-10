@@ -93,6 +93,8 @@ import { getArchitectureReport } from "@/lib/architecture-validation/service";
 import SupportPanel from "./support-panel";
 import ArchiveButton from "../../archive-button";
 import PromoteExperienceButton from "./promote-experience-button";
+import ProjectModeBadge from "./project-mode-badge";
+import ReadinessTiles from "./readiness-tiles";
 import ActivityPanel from "./activity-panel";
 import CommercialPanel from "./commercial-panel";
 import ResearchPanel from "./research-panel";
@@ -188,7 +190,7 @@ export default async function ProjectDetailPage({
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select(
-      "id, name, project_type, stage, ai_analysis, project_code, widget_key, archived_at, stage_changed_at, owner_id, lead_id, discovery_template_id, staging_url, production_url, workflow_version, clients(company_name)"
+      "id, name, project_type, stage, ai_analysis, project_code, widget_key, archived_at, stage_changed_at, owner_id, lead_id, discovery_template_id, staging_url, production_url, workflow_version, mode, clients(company_name)"
     )
     .eq("id", id)
     .single();
@@ -1465,6 +1467,8 @@ export default async function ProjectDetailPage({
             marketResearch={marketResearchItems}
             problemValidation={problemValidationItems}
             canWrite={canWriteCommercial}
+            canManageOrigin={isAdmin}
+            isTestProject={((project as unknown as { mode?: string }).mode ?? "unclassified") === "test"}
           />
         ),
       },
@@ -1695,6 +1699,11 @@ export default async function ProjectDetailPage({
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex flex-wrap items-center gap-2">
+              <ProjectModeBadge
+                projectId={project.id}
+                currentMode={((project as unknown as { mode?: "unclassified" | "test" | "real" }).mode ?? "unclassified")}
+                canChange={isAdmin}
+              />
               <ArchiveButton
                 table="projects"
                 id={project.id}
@@ -1758,19 +1767,12 @@ export default async function ProjectDetailPage({
               )}
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {nexvoraReadinessMetrics.map((m) => (
-              <div
-                key={m.metric}
-                className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3"
-              >
-                <p className="text-[11px] leading-tight text-[var(--v-text-muted)]">
-                  {READINESS_METRICS_ORDERED.find((d) => d.key === m.metric)?.displayName ?? m.metric}
-                </p>
-                <p className="mt-1 font-mono-plex text-lg font-semibold text-[var(--v-text)]">{m.percentage}%</p>
-              </div>
-            ))}
-          </div>
+          <ReadinessTiles
+            metrics={nexvoraReadinessMetrics}
+            displayNameByKey={Object.fromEntries(
+              READINESS_METRICS_ORDERED.map((d) => [d.key, d.displayName])
+            )}
+          />
         </div>
       ) : (
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

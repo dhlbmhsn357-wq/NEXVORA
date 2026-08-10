@@ -15,6 +15,7 @@ export default function NewLeadForm({ templates }: { templates: DiscoveryFormTem
   const [whatsapp, setWhatsapp] = useState("");
   const [source, setSource] = useState("");
   const [templateId, setTemplateId] = useState("");
+  const [intendedMode, setIntendedMode] = useState<"unclassified" | "test" | "real">("unclassified");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -65,10 +66,20 @@ export default function NewLeadForm({ templates }: { templates: DiscoveryFormTem
     }
 
     // 3) إنشاء الـ Lead نفسه
+    // ملاحظة: `intendedMode` هو نيّة المستخدم في وقت إنشاء الـ Lead — لا يوجد
+    // عمود مخصّص له في جدول leads (بدون migration)، لذلك نلحقه بحقل source
+    // كوسم صغير `[mode:test|real]` عشان تحويل الـ Lead لاحقًا يقدر يقرأه ويقترحه
+    // في ConvertLeadButton. لو المستخدم اختار "لاحقًا" (unclassified) لا نلحق شيئًا.
+    const sourceValue = (() => {
+      const raw = source.trim();
+      if (intendedMode === "unclassified") return raw || null;
+      const tag = `[mode:${intendedMode}]`;
+      return raw ? `${raw} ${tag}` : tag;
+    })();
     const { error: leadErr } = await supabase.from("leads").insert({
       client_id: clientId,
       contact_id: contactId,
-      source: source.trim() || null,
+      source: sourceValue,
       discovery_template_id: templateId || null,
       owner_id: user?.id ?? null,
     });
@@ -84,6 +95,7 @@ export default function NewLeadForm({ templates }: { templates: DiscoveryFormTem
     setWhatsapp("");
     setSource("");
     setTemplateId("");
+    setIntendedMode("unclassified");
     setSaving(false);
     router.refresh();
   }
@@ -112,6 +124,22 @@ export default function NewLeadForm({ templates }: { templates: DiscoveryFormTem
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs text-[var(--v-text-muted)]">نوع المشروع المرتبط</label>
+          <select
+            value={intendedMode}
+            onChange={(e) => setIntendedMode(e.target.value as "unclassified" | "test" | "real")}
+            className="h-10 w-full rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-bg)] px-3 text-sm text-[var(--v-text)] outline-none focus:border-[var(--v-primary)]"
+          >
+            <option value="unclassified">لاحقًا — يتحدد وقت التحويل</option>
+            <option value="test">تجريبي (Test)</option>
+            <option value="real">حقيقي (Real)</option>
+          </select>
+          <p className="mt-1 text-[10px] text-[var(--v-text-muted)]">
+            اختيار مبدئي — يتم تأكيده وقت تحويل الـ Lead لمشروع.
+          </p>
         </div>
 
         {error && <p className="text-xs text-[var(--v-red)]">{error}</p>}

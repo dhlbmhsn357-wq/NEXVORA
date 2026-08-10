@@ -29,6 +29,8 @@ import {
   createScenarioAction, updateScenarioAction, deleteScenarioAction,
   recordRunAction, deleteRunAction,
 } from "./evaluation-actions";
+import { deriveDraftsFromScenarioAction } from "./scenario-derivation-actions";
+import type { ScenarioDerivedPlan } from "@/lib/scenario-derivation/service";
 
 const SEVERITY_TONE: Record<EvalSeverity, BadgeTone> = {
   low: "success", medium: "warning", high: "danger", critical: "danger",
@@ -54,6 +56,37 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
   const [editing, setEditing] = useState<EvaluationScenarioRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [runningFor, setRunningFor] = useState<EvaluationScenarioRow | null>(null);
+  const [derivePreview, setDerivePreview] = useState<{ scenarioId: string; plan: ScenarioDerivedPlan } | null>(null);
+  const [deriveLoadingId, setDeriveLoadingId] = useState<string | null>(null);
+
+  function openDerivePreview(scenarioId: string) {
+    setDeriveLoadingId(scenarioId);
+    startTransition(async () => {
+      const res = await deriveDraftsFromScenarioAction(projectId, scenarioId, true);
+      setDeriveLoadingId(null);
+      if (res.ok && res.data) {
+        setDerivePreview({ scenarioId, plan: res.data.plan });
+      } else if (!res.ok) {
+        toast.error(res.message);
+      }
+    });
+  }
+
+  function confirmDeriveApply() {
+    if (!derivePreview) return;
+    const { scenarioId } = derivePreview;
+    startTransition(async () => {
+      const res = await deriveDraftsFromScenarioAction(projectId, scenarioId, false);
+      if (res.ok && res.data?.applied) {
+        const c = res.data.applied.createdIds;
+        toast.success(`تم إنشاء ${c.requirements.length} متطلب، ${c.stories.length} قصص، ${c.acs.length} معايير قبول.`);
+        setDerivePreview(null);
+        router.refresh();
+      } else if (!res.ok) {
+        toast.error(res.message);
+      }
+    });
+  }
 
   const summary = useMemo(() => summarizeEvaluation(scenarios, runs), [scenarios, runs]);
   const readiness = useMemo(() => deriveEvaluationReadiness(scenarios, runs), [scenarios, runs]);
@@ -113,9 +146,18 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
                     {s.steps.length > 0 && <p className="mt-1 text-[11px] text-[var(--v-text-subtle)]">{s.steps.length} خطوات</p>}
                   </div>
                   {canWrite && (
-                    <div className="flex shrink-0 gap-1">
+                    <div className="flex shrink-0 flex-wrap gap-1">
                       <Button size="sm" variant="ghost" icon={<PlayCircle size={14} />} onClick={() => setRunningFor(s)}>تشغيل</Button>
                       <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditing(s)}>تعديل</Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        loading={deriveLoadingId === s.id}
+                        onClick={() => openDerivePreview(s.id)}
+                        title="يشتق متطلب/قصة/AC مسودّة من السيناريو، مربوطة به تلقائيًا."
+                      >
+                        إنشاء المسودات الناقصة
+                      </Button>
                       <Button size="sm" variant="ghost" icon={<Trash2 size={14} />}
                         onClick={() => { if (!confirm(`حذف "${s.title}"؟`)) return; run(() => deleteScenarioAction(projectId, s.id), "تم الحذف"); }}>حذف</Button>
                     </div>
@@ -181,7 +223,57 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
           setRunningFor(null);
         }}
       />
+      {/* Scenario Derivation Preview Modal */}
+      {derivePreview && (
+        <Modal open={true} onClose={() => setDerivePreview(null)} maxWidth="max-w-lg">
+          <div className="space-y-4 p-6" dir="rtl">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--v-text)]">مسودات مقترحة من السيناريو</h2>
+              <p className="mt-1 text-xs text-[var(--v-text-muted)]">
+                سيتم إنشاء العناصر الجديدة كـ Draft فقط، ومربوطة بالسيناريو تلقائيًا. الحقول الناقصة تُملأ بـ [Needs Input].
+              </p>
+            </div>
+
+            <DerivePreviewSection title="متطلبات" items={derivePreview.plan.toCreate.requirements.map((r) => r.title)} existingCount={derivePreview.plan.existing.requirements.length} />
+            <DerivePreviewSection title="قصص مستخدم" items={derivePreview.plan.toCreate.stories.map((s) => s.title)} existingCount={derivePreview.plan.existing.stories.length} />
+            <DerivePreviewSection title="معايير قبول" items={derivePreview.plan.toCreate.acs.map((a) => a.title)} existingCount={derivePreview.plan.existing.acs.length} />
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setDerivePreview(null)} disabled={pending}>إلغاء</Button>
+              <Button
+                variant="primary"
+                onClick={confirmDeriveApply}
+                loading={pending}
+                disabled={
+                  derivePreview.plan.toCreate.requirements.length === 0 &&
+                  derivePreview.plan.toCreate.stories.length === 0 &&
+                  derivePreview.plan.toCreate.acs.length === 0
+                }
+              >
+                تأكيد الإنشاء
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {pending && <span className="sr-only">جارٍ الحفظ...</span>}
+    </div>
+  );
+}
+
+function DerivePreviewSection({ title, items, existingCount }: { title: string; items: string[]; existingCount: number }) {
+  return (
+    <div className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3">
+      <p className="text-xs font-semibold text-[var(--v-text)]">
+        {title} — سيُنشأ: <b className="text-[var(--v-primary)]">{items.length}</b>
+        {existingCount > 0 && <span className="text-[var(--v-text-muted)]"> · موجودة سابقًا: {existingCount}</span>}
+      </p>
+      {items.length > 0 && (
+        <ul className="mt-2 list-disc space-y-0.5 pr-4 text-[11px] text-[var(--v-text-secondary)]">
+          {items.map((t, i) => <li key={i}>{t}</li>)}
+        </ul>
+      )}
     </div>
   );
 }

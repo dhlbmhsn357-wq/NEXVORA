@@ -4,8 +4,33 @@
  */
 @page { size: A4; margin: 15mm; }
 
+/* Test-project watermark: diagonal "TEST" overlay across print pages.
+   يظهر لما مشروع الطباعة نوعه test (mode='test'). البانر العلوي (بأعلى الصفحة)
+   يظل ظاهر على الشاشة أيضًا، لكن الـ overlay القُطري ده مخصّص للطباعة/PDF. */
+body.test-project-watermark::before {
+  content: "TEST — بيانات تجريبية";
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Segoe UI', 'Arial', sans-serif;
+  font-size: 8rem;
+  font-weight: 900;
+  color: rgba(220, 38, 38, 0.08);
+  transform: rotate(-30deg);
+  pointer-events: none;
+  z-index: 9999;
+  letter-spacing: 0.15em;
+}
+
 @media print {
   .no-print, [data-no-print] { display: none !important; }
+  body.test-project-watermark::before {
+    color: rgba(220, 38, 38, 0.15) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   body {
     background: white !important;
     color: black !important;

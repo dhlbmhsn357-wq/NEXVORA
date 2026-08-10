@@ -14,6 +14,8 @@ import {
   createRequirement, updateRequirement, deleteRequirement,
   type PersonaInput, type FlowInput, type RequirementInput,
 } from "@/lib/product-definition/service";
+import { autoTriggerChangeImpact } from "@/lib/change-impact/auto-trigger";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   FLOW_TYPES, MOSCOW_PRIORITIES, REQUIREMENT_STATUSES, REQUIREMENT_TYPES,
   type FlowType, type MoscowPriority, type RequirementStatus, type RequirementType, type FlowStep,
@@ -281,7 +283,35 @@ export async function updateRequirementAction(
   if (patch.linkedFlowId !== undefined) clean.linkedFlowId = patch.linkedFlowId;
   if (patch.tags !== undefined) clean.tags = parseTags(patch.tags);
   try {
+    // اقرأ الـ "before" مباشرة من الجدول (لأن الـ service ما فيهاش getRequirement)
+    // — نستخدمه للـ material-change detection في autoTriggerChangeImpact.
+    const svc = createServiceClient();
+    const { data: beforeRow } = await svc
+      .from("product_requirements")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
     await updateRequirement(id, clean);
+    const { data: afterRow } = await svc
+      .from("product_requirements")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    // Fire-and-forget — لا يجب أن يعطّل التحديث الأصلي لو فشل.
+    if (beforeRow && afterRow && String(beforeRow.status) === "approved") {
+      try {
+        await autoTriggerChangeImpact({
+          table: "product_requirements",
+          projectId,
+          sourceId: id,
+          before: beforeRow as Record<string, unknown>,
+          after: afterRow as Record<string, unknown>,
+          actorId: g.userId,
+        });
+      } catch (err) {
+        console.error("[updateRequirementAction] autoTriggerChangeImpact failed:", err instanceof Error ? err.message : err);
+      }
+    }
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (e) {

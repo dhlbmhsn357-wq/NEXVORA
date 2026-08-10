@@ -12,6 +12,8 @@ import {
   createAc, updateAc, deleteAc, nextAcOrderIndex,
   type StoryInput, type AcInput,
 } from "@/lib/user-stories/service";
+import { autoTriggerChangeImpact } from "@/lib/change-impact/auto-trigger";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   STORY_STATUSES, RISK_LEVELS, AC_STATUSES,
   type StoryStatus, type RiskLevel, type AcStatus,
@@ -132,7 +134,32 @@ export async function updateStoryAction(
   if (patch.linkedRequirementId !== undefined) clean.linkedRequirementId = patch.linkedRequirementId;
   if (patch.tags !== undefined) clean.tags = parseTags(patch.tags);
   try {
+    const svc = createServiceClient();
+    const { data: beforeRow } = await svc
+      .from("user_stories")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
     await updateStory(id, clean);
+    const { data: afterRow } = await svc
+      .from("user_stories")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (beforeRow && afterRow && String(beforeRow.status) === "approved") {
+      try {
+        await autoTriggerChangeImpact({
+          table: "user_stories",
+          projectId,
+          sourceId: id,
+          before: beforeRow as Record<string, unknown>,
+          after: afterRow as Record<string, unknown>,
+          actorId: g.userId,
+        });
+      } catch (err) {
+        console.error("[updateStoryAction] autoTriggerChangeImpact failed:", err instanceof Error ? err.message : err);
+      }
+    }
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (e) {
@@ -215,7 +242,34 @@ export async function updateAcAction(
     clean.orderIndex = n;
   }
   try {
+    const svc = createServiceClient();
+    const { data: beforeRow } = await svc
+      .from("acceptance_criteria")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
     await updateAc(id, clean);
+    const { data: afterRow } = await svc
+      .from("acceptance_criteria")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    const wasApproved =
+      beforeRow && (String(beforeRow.status) === "approved" || String(beforeRow.status) === "verified");
+    if (beforeRow && afterRow && wasApproved) {
+      try {
+        await autoTriggerChangeImpact({
+          table: "acceptance_criteria",
+          projectId,
+          sourceId: id,
+          before: beforeRow as Record<string, unknown>,
+          after: afterRow as Record<string, unknown>,
+          actorId: g.userId,
+        });
+      } catch (err) {
+        console.error("[updateAcAction] autoTriggerChangeImpact failed:", err instanceof Error ? err.message : err);
+      }
+    }
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (e) {
