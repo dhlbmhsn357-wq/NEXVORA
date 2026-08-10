@@ -1,0 +1,24 @@
+/**
+ * Shared print rules for all /*-print pages.
+ * Browser-native print only — Ctrl+P → Save as PDF.
+ */
+@page { size: A4; margin: 15mm; }
+
+@media print {
+  .no-print, [data-no-print] { display: none !important; }
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+  }
+  section, article { break-inside: avoid; }
+  h1, h2, h3 { break-after: avoid; }
+  a { color: inherit; text-decoration: none; }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #666;
+  }
+}

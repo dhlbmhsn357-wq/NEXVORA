@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PrintButton from "@/components/ui/PrintButton";
 import type { AcceptanceCriterion, UserStory } from "@/lib/types/database";
+import "@/app/print.css";
 
 /**
  * صفحة مستقلة (خارج تخطيط /dashboard) مُعدّة للطباعة/تصدير PDF —
@@ -37,7 +38,10 @@ export default async function PRDPrintPage({
   return (
     <div className="min-h-screen bg-white">
       <div className="mx-auto max-w-3xl px-8 py-10 text-[#0A1735]" dir="rtl">
-        <div className="mb-6 print:hidden">
+        <div className="no-print mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          💡 <strong>لأنظف PDF:</strong> اضغط Ctrl+P ← More Settings ← uncheck &quot;Headers and footers&quot;. ثم Save as PDF.
+        </div>
+        <div className="mb-6 no-print">
           <PrintButton />
         </div>
 

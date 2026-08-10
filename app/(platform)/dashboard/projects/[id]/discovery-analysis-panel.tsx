@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Printer,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -562,17 +563,29 @@ export default function DiscoveryAnalysisPanel({
             </p>
           </div>
 
-          {isAdmin && (!isActiveRun || isStaleRun) && (
-            <Button
-              variant="outline"
-              size="sm"
-              icon={rerunning ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              onClick={handleRerun}
-              disabled={rerunning}
-            >
-              إعادة التحليل
-            </Button>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {analysis.status === "completed" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Printer size={13} />}
+                onClick={() => window.open(`/analysis-print/${projectId}`, "_blank")}
+              >
+                طباعة / تصدير PDF
+              </Button>
+            )}
+            {isAdmin && (!isActiveRun || isStaleRun) && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={rerunning ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                onClick={handleRerun}
+                disabled={rerunning}
+              >
+                إعادة التحليل
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
 

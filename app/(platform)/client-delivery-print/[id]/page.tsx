@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PrintButton from "@/components/ui/PrintButton";
 import type { ClientPresentation, ClientPresentationSlides } from "@/lib/types/database";
+import "@/app/print.css";
 
 /**
  * صفحة مستقلة (خارج تخطيط /dashboard) لتصدير العرض التنفيذي كـ PDF —
@@ -42,13 +43,18 @@ export default async function ClientDeliveryPrintPage({
   return (
     <div className="min-h-screen bg-white">
       <div className="mx-auto max-w-3xl px-8 py-10 text-[#0A1735]" dir={dir}>
-        <div className="mb-6 print:hidden">
+        <div className="no-print mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" dir="rtl">
+          💡 <strong>لأنظف PDF:</strong> اضغط Ctrl+P ← More Settings ← uncheck &quot;Headers and footers&quot;. ثم Save as PDF.
+        </div>
+        <div className="mb-6 no-print">
           <PrintButton />
         </div>
 
         {/* Cover */}
         <header className="border-b-2 border-[#3D5CFF] pb-4">
-          <p className="text-sm font-bold tracking-widest text-[#3D5CFF]">VELORA</p>
+          <p className="text-xs tracking-widest text-slate-500">
+            {new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" })}
+          </p>
           <h1 className="font-display mt-2 text-3xl">{slides.cover.title}</h1>
           <p className="mt-1 text-lg text-slate-600">{slides.cover.subtitle}</p>
           <p className="mt-2 text-sm text-slate-500">{slides.cover.client_name} · {project.name}</p>
@@ -156,7 +162,7 @@ export default async function ClientDeliveryPrintPage({
         <footer className="mt-8 break-inside-avoid border-t-2 border-[#3D5CFF] pt-4">
           <h2 className="font-display text-xl">{slides.closing.title}</h2>
           <p className="mt-1 text-slate-600">{slides.closing.body}</p>
-          <p className="mt-3 text-sm font-bold tracking-widest text-[#3D5CFF]">VELORA</p>
+          <p className="mt-3 text-xs tracking-widest text-slate-500">{project.name}</p>
         </footer>
       </div>
     </div>

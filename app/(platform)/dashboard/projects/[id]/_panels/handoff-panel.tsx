@@ -3,7 +3,7 @@
 /** NEXVORA Handoff Package Panel (P12) */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, PackageCheck } from "lucide-react";
+import { CheckCircle2, PackageCheck, Printer } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -108,6 +108,16 @@ export default function HandoffPanel({
             المفقود: {readiness.missingMandatory.map((d) => d.label).join(" · ")}
           </p>
         )}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Printer size={13} />}
+            onClick={() => window.open(`/handoff-print/${projectId}`, "_blank")}
+          >
+            طباعة / تصدير PDF
+          </Button>
+        </div>
         {canWrite && (
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => run(() => createPackageAction(projectId).then((r) => r.ok ? { ok: true } : r), "تم إنشاء نسخة جديدة")}>نسخة جديدة</Button>

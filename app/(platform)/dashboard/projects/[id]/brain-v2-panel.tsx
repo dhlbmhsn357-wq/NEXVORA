@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Printer,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -172,6 +173,14 @@ export default function BrainV2Panel({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Printer size={13} />}
+              onClick={() => window.open(`/brain-print/${projectId}`, "_blank")}
+            >
+              طباعة / تصدير PDF
+            </Button>
             {isAdmin && (
               <Button
                 variant="outline"

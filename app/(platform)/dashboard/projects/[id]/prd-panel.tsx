@@ -211,7 +211,7 @@ export default function PRDPanel({
             target="_blank"
             className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-4 py-2 text-sm font-medium text-[var(--v-text)] transition hover:border-[var(--v-primary)]"
           >
-            Export PDF
+            طباعة / تصدير PDF
           </Link>
         </div>
       </div>

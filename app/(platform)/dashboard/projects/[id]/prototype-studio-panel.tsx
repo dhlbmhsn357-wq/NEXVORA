@@ -9,6 +9,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Printer } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Textarea from "@/components/ui/Textarea";
 import Badge from "@/components/ui/Badge";
@@ -107,7 +108,17 @@ export default function PrototypeStudioPanel(props: Props) {
               خمس خطوات: إعداد → نطاق → اتجاه بصري → نقاش ChatGPT → بناء Codex. لا استدعاءات AI. الرفع لـ ChatGPT/Codex يدوي.
             </p>
           </div>
-          <Badge>Studio · بدون AI</Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Printer size={13} />}
+              onClick={() => window.open(`/prototype-studio-print/${props.projectId}`, "_blank")}
+            >
+              طباعة / تصدير PDF
+            </Button>
+            <Badge>Studio · بدون AI</Badge>
+          </div>
         </div>
         <nav className="mt-4 flex flex-wrap gap-2">
           {STEPS.map((s) => (

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PrintButton from "@/components/ui/PrintButton";
 import { fetchSessionResponses, type SessionResponseItemData } from "@/lib/discovery-portal/session-service";
+import "@/app/print.css";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "بانتظار الفتح",
@@ -96,18 +97,23 @@ export default async function DiscoveryResponsesPrintPage({
       `}</style>
 
       <div className="print-page mx-auto max-w-3xl px-8 py-8 text-[#0A1735]" dir="rtl">
+        <div className="no-print mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          💡 <strong>لأنظف PDF:</strong> اضغط Ctrl+P ← More Settings ← uncheck &quot;Headers and footers&quot;. ثم Save as PDF.
+        </div>
         <div className="no-print mb-6 flex justify-end">
           <PrintButton />
         </div>
 
-        {/* ترويسة العلامة */}
+        {/* ترويسة المشروع */}
         <header className="mb-6 flex items-center justify-between border-b-2 border-[#0A1735] pb-4">
           <div>
-            <p className="font-display text-2xl font-semibold tracking-[0.2em] text-[#0A1735]">VELORA</p>
-            <p className="text-[11px] tracking-[0.15em] text-[#64748B]">Smart Business Solutions</p>
+            <p className="font-display text-xl font-semibold text-[#0A1735]">
+              {projectName}
+              {companyName ? ` — ${companyName}` : ""}
+            </p>
+            <p className="text-[11px] text-[#64748B]">تقرير إجابات الاكتشاف</p>
           </div>
           <div className="text-left">
-            <p className="text-[11px] text-[#64748B]">تقرير إجابات الاكتشاف</p>
             <p className="text-[11px] text-[#64748B]">
               {new Date().toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" })}
             </p>
@@ -176,7 +182,7 @@ export default async function DiscoveryResponsesPrintPage({
 
         {/* تذييل */}
         <footer className="mt-10 border-t border-[#E2E8F0] pt-4 text-center text-[11px] text-[#94A3B8]">
-          صُدِّر من منصة VELORA — PM Operating System · وثيقة داخلية
+          وثيقة داخلية · صُدِّرت في {new Date().toLocaleDateString("ar-EG")}
         </footer>
       </div>
     </div>
