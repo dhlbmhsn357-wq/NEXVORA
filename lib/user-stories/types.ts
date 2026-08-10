@@ -81,6 +81,7 @@ export interface AcceptanceCriterionRow {
   id: string;
   userStoryId: string;
   projectId: string;
+  code: string | null;
   orderIndex: number;
   title: string;
   givenClause: string;

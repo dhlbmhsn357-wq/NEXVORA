@@ -26,7 +26,7 @@ function story(id: string, over: Partial<UserStoryRow> = {}): UserStoryRow {
 }
 function ac(id: string, userStoryId: string): AcceptanceCriterionRow {
   return {
-    id, userStoryId, projectId: "p", orderIndex: 1, title: `AC ${id}`,
+    id, userStoryId, projectId: "p", code: null, orderIndex: 1, title: `AC ${id}`,
     givenClause: "g", whenClause: "w", thenClause: "t", andConditions: [],
     status: "approved", notes: "", createdAt: NOW, updatedAt: NOW, createdBy: null,
   };

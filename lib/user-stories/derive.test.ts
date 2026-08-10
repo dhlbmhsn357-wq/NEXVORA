@@ -21,7 +21,7 @@ function story(over: Partial<UserStoryRow>): UserStoryRow {
 }
 function ac(over: Partial<AcceptanceCriterionRow>): AcceptanceCriterionRow {
   return {
-    id: "a", userStoryId: "s", projectId: "prj", orderIndex: 1, title: "",
+    id: "a", userStoryId: "s", projectId: "prj", code: null, orderIndex: 1, title: "",
     givenClause: "المستخدم مسجّل دخول", whenClause: "يضغط على الاعتماد",
     thenClause: "تظهر رسالة نجاح", andConditions: [],
     status: "draft", notes: "", createdAt: NOW, updatedAt: NOW, createdBy: null,

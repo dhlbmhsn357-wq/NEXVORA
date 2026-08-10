@@ -189,7 +189,7 @@ describe("formatStructuredContextForPrompt", () => {
       ],
       acceptanceCriteria: [
         {
-          id: "a1", userStoryId: "s1", projectId: "p1", orderIndex: 1,
+          id: "a1", userStoryId: "s1", projectId: "p1", code: null, orderIndex: 1,
           title: "نجاح", givenClause: "بيانات صحيحة", whenClause: "أضغط دخول",
           thenClause: "أدخل للوحة", andConditions: [], status: "approved",
           notes: "", createdAt: "", updatedAt: "", createdBy: null,

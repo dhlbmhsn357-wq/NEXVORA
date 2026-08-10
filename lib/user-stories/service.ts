@@ -10,6 +10,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import type {
   UserStoryRow, AcceptanceCriterionRow, StoryStatus, RiskLevel, AcStatus,
 } from "./types";
+import { generateAndInsertWithRetry } from "@/lib/coding/code-service";
 
 // ---------------------------------------------------------------------------
 // Mappers
@@ -36,7 +37,7 @@ function mapStory(r: DbStory): UserStoryRow {
 }
 
 type DbAc = {
-  id: string; user_story_id: string; project_id: string; order_index: number;
+  id: string; user_story_id: string; project_id: string; code: string | null; order_index: number;
   title: string; given_clause: string; when_clause: string; then_clause: string;
   and_conditions: string[]; status: AcStatus; notes: string;
   created_at: string; updated_at: string; created_by: string | null;
@@ -44,6 +45,7 @@ type DbAc = {
 function mapAc(r: DbAc): AcceptanceCriterionRow {
   return {
     id: r.id, userStoryId: r.user_story_id, projectId: r.project_id,
+    code: r.code ?? null,
     orderIndex: r.order_index, title: r.title,
     givenClause: r.given_clause, whenClause: r.when_clause, thenClause: r.then_clause,
     andConditions: r.and_conditions ?? [], status: r.status, notes: r.notes,
@@ -81,9 +83,9 @@ export interface StoryInput {
 
 export async function createStory(projectId: string, input: StoryInput, createdBy: string | null): Promise<UserStoryRow> {
   const svc = createServiceClient();
-  const { data, error } = await svc.from("user_stories").insert({
+  const baseRow = (code: string | null) => ({
     project_id: projectId,
-    code: input.code ?? null, title: input.title,
+    code, title: input.title,
     as_a: input.asA ?? "", i_want: input.iWant ?? "", so_that: input.soThat ?? "",
     narrative_extra: input.narrativeExtra ?? "",
     status: input.status ?? "draft",
@@ -95,9 +97,14 @@ export async function createStory(projectId: string, input: StoryInput, createdB
     linked_requirement_id: input.linkedRequirementId ?? null,
     tags: input.tags ?? [],
     created_by: createdBy,
-  }).select("*").single();
-  if (error) throw error;
-  return mapStory(data as DbStory);
+  });
+  if (input.code) {
+    const { data, error } = await svc.from("user_stories").insert(baseRow(input.code)).select("*").single();
+    if (error) throw error;
+    return mapStory(data as DbStory);
+  }
+  const row = await generateAndInsertWithRetry<DbStory>(svc, "user_stories", projectId, (c) => baseRow(c));
+  return mapStory(row);
 }
 
 export async function updateStory(id: string, patch: Partial<StoryInput>): Promise<UserStoryRow> {
@@ -143,6 +150,7 @@ export async function listAcceptanceCriteria(projectId: string): Promise<Accepta
 
 export interface AcInput {
   userStoryId: string;
+  code?: string | null;
   orderIndex?: number;
   title?: string;
   givenClause?: string;
@@ -155,9 +163,10 @@ export interface AcInput {
 
 export async function createAc(projectId: string, input: AcInput, createdBy: string | null): Promise<AcceptanceCriterionRow> {
   const svc = createServiceClient();
-  const { data, error } = await svc.from("acceptance_criteria").insert({
+  const baseRow = (code: string | null) => ({
     user_story_id: input.userStoryId,
     project_id: projectId,
+    code,
     order_index: input.orderIndex ?? 1,
     title: input.title ?? "",
     given_clause: input.givenClause ?? "",
@@ -167,9 +176,14 @@ export async function createAc(projectId: string, input: AcInput, createdBy: str
     status: input.status ?? "draft",
     notes: input.notes ?? "",
     created_by: createdBy,
-  }).select("*").single();
-  if (error) throw error;
-  return mapAc(data as DbAc);
+  });
+  if (input.code) {
+    const { data, error } = await svc.from("acceptance_criteria").insert(baseRow(input.code)).select("*").single();
+    if (error) throw error;
+    return mapAc(data as DbAc);
+  }
+  const row = await generateAndInsertWithRetry<DbAc>(svc, "acceptance_criteria", projectId, (c) => baseRow(c));
+  return mapAc(row);
 }
 
 export async function updateAc(id: string, patch: Partial<Omit<AcInput, "userStoryId">>): Promise<AcceptanceCriterionRow> {

@@ -8,6 +8,7 @@ import type {
   EvaluationScenarioRow, EvaluationRunRow, EvalStep,
   EvalCategory, EvalSeverity, EvalRunResult,
 } from "./types";
+import { generateAndInsertWithRetry } from "@/lib/coding/code-service";
 
 type DbScen = {
   id: string; project_id: string; code: string | null; title: string; description: string;
@@ -59,8 +60,8 @@ export interface ScenarioInput {
 
 export async function createScenario(projectId: string, input: ScenarioInput, createdBy: string | null): Promise<EvaluationScenarioRow> {
   const svc = createServiceClient();
-  const { data, error } = await svc.from("evaluation_scenarios").insert({
-    project_id: projectId, code: input.code ?? null, title: input.title,
+  const baseRow = (code: string | null) => ({
+    project_id: projectId, code, title: input.title,
     description: input.description ?? "",
     category: input.category ?? "functional",
     severity: input.severity ?? "medium",
@@ -71,9 +72,14 @@ export async function createScenario(projectId: string, input: ScenarioInput, cr
     linked_flow_id: input.linkedFlowId ?? null,
     tags: input.tags ?? [],
     created_by: createdBy,
-  }).select("*").single();
-  if (error) throw error;
-  return mapScen(data as DbScen);
+  });
+  if (input.code) {
+    const { data, error } = await svc.from("evaluation_scenarios").insert(baseRow(input.code)).select("*").single();
+    if (error) throw error;
+    return mapScen(data as DbScen);
+  }
+  const row = await generateAndInsertWithRetry<DbScen>(svc, "evaluation_scenarios", projectId, (c) => baseRow(c));
+  return mapScen(row);
 }
 
 export async function updateScenario(id: string, patch: Partial<ScenarioInput>): Promise<EvaluationScenarioRow> {

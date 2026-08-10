@@ -11,6 +11,7 @@ import type {
   PersonaRow, UserFlowRow, RequirementRow, FlowStep,
   FlowType, MoscowPriority, RequirementStatus, RequirementType,
 } from "./types";
+import { generateAndInsertWithRetry } from "@/lib/coding/code-service";
 
 // ---------------------------------------------------------------------------
 // Row mappers
@@ -202,8 +203,8 @@ export async function createRequirement(
   projectId: string, input: RequirementInput, createdBy: string | null
 ): Promise<RequirementRow> {
   const svc = createServiceClient();
-  const { data, error } = await svc.from("product_requirements").insert({
-    project_id: projectId, code: input.code ?? null, title: input.title,
+  const baseRow = (code: string | null) => ({
+    project_id: projectId, code, title: input.title,
     description: input.description ?? "",
     requirement_type: input.requirementType ?? "functional",
     priority: input.priority ?? "should",
@@ -214,9 +215,14 @@ export async function createRequirement(
     linked_flow_id: input.linkedFlowId ?? null,
     tags: input.tags ?? [],
     created_by: createdBy,
-  }).select("*").single();
-  if (error) throw error;
-  return mapReq(data as DbReq);
+  });
+  if (input.code) {
+    const { data, error } = await svc.from("product_requirements").insert(baseRow(input.code)).select("*").single();
+    if (error) throw error;
+    return mapReq(data as DbReq);
+  }
+  const row = await generateAndInsertWithRetry<DbReq>(svc, "product_requirements", projectId, (c) => baseRow(c));
+  return mapReq(row);
 }
 
 export async function updateRequirement(id: string, patch: Partial<RequirementInput>): Promise<RequirementRow> {
