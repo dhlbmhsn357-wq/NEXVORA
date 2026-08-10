@@ -123,6 +123,7 @@ import {
   computeAllReadiness,
   computeOverallReadiness,
 } from "@/lib/project-readiness";
+import { autoDeriveChecklistStates } from "@/lib/project-readiness/auto-derive";
 import {
   getClientLifecycleStatus,
   listContracts,
@@ -624,11 +625,77 @@ export default async function ProjectDetailPage({
   const canDeleteProject = currentUserRole === "owner";
 
   // ===== NEXVORA Readiness (P3 6-metric system) =====
-  // نحسب على الفور بدون snapshots — الـ workflow_v2 checklist state لسه
-  // ما اتربطش تلقائيًا، فلحد ما ده يحصل هنعرض 0% صريحة (ما نخفيش الحاجة).
-  // بمجرد ما مرحلة v2 checklist item يتحدّث → نسبها تظهر هنا فورًا.
-  const nexvoraReadinessMetrics = workflowV2Enabled
-    ? computeAllReadiness({})
+  // نحسب على الفور بدون snapshots — العناصر تُشتق تلقائيًا من نفس
+  // البيانات المحمّلة أعلاه (personas, requirements, brain, handoff…).
+  // كل حقل اختياري داخل autoDeriveChecklistStates: أي مصدر غائب ⇒
+  // العنصر not_started (لا نفبرك اكتمالًا). backwards compatible لمشاريع
+  // v1 لأننا نمر بالفرع فقط لما workflowV2Enabled=true.
+  const scopeAndMvpMarked = definitionRequirements.some((r) => r.priority === "must");
+  const decisionsCount = decisionItemsRows.filter(
+    (i) => i.itemType === "decision" || i.itemType === "open_question"
+  ).length;
+  const risksCount = decisionItemsRows.filter((i) => i.itemType === "risk").length;
+  const handoffMandatoryTotalCount = handoffItemsRows.filter((i) => i.isMandatory).length;
+  const handoffMandatoryCompletedCount = handoffItemsRows.filter(
+    (i) => i.isMandatory && (i.status === "completed" || i.status === "skipped")
+  ).length;
+  const derivedReadinessInput = workflowV2Enabled
+    ? {
+        project: {
+          id: project.id,
+          stage: project.stage,
+          owner_id: project.owner_id,
+          ai_analysis: project.ai_analysis,
+        },
+        hasDiscoveryForm: !!discoveryForm,
+        discoveryLinkSentCount: discoverySessions.length,
+        discoverySubmittedCount: discoverySessions.filter(
+          (s) => s.link.status === "submitted" || s.link.submitted_at != null
+        ).length,
+        meetingPrepCount: meetingPrep ? 1 : 0,
+        meetingsCount: (meetings ?? []).length,
+        discoveryAnalysisExists: !!discoveryAnalysis,
+        brainDoc: brainV2ForGeneration
+          ? { status: brainV2ForGeneration.status, version: brainV2ForGeneration.version }
+          : null,
+        brainReviewApproved: !!brainV2Approved,
+        smartRecommendationsResolvedCount: recommendations.filter(
+          (r) => r.status === "accepted" || r.status === "dismissed" || r.status === "postponed"
+        ).length,
+        smartRecommendationsPendingCount: recommendations.filter(
+          (r) => r.status === "suggested" || r.status === "needs_discussion"
+        ).length,
+        problemValidationCount: problemValidationItems.length,
+        personasCount: definitionPersonas.length,
+        userFlowsCount: definitionFlows.length,
+        requirementsCount: definitionRequirements.length,
+        storiesCount: storiesRows.length,
+        acceptanceCriteriaCount: acceptanceCriteriaRows.length,
+        marketResearchCount: marketResearchItems.length,
+        competitorResearchCount: 0,
+        contractsCount: commercialContracts.length,
+        studioConfigExists:
+          !!studioConfig && studioConfig.updatedAt !== new Date(0).toISOString(),
+        studioContextPackExists: !!studioLatestContextPack,
+        studioApprovedBriefExists: !!studioLatestApprovedBrief,
+        studioCodexPackExists: !!studioLatestCodexPack,
+        prototypeLink: project.staging_url ?? null,
+        prototypeReviewApproved:
+          (review as { overall_status?: string | null } | null)?.overall_status === "ready",
+        clientApprovals: clientApprovalsRows.map((a) => ({
+          status: a.status,
+          decision: a.decision,
+        })),
+        handoffPackages: handoffPackagesRows.map((p) => ({ status: p.status })),
+        handoffMandatoryCompletedCount,
+        handoffMandatoryTotalCount,
+        decisionsCount,
+        risksCount,
+        scopeAndMvpMarked,
+      }
+    : null;
+  const nexvoraReadinessMetrics = derivedReadinessInput
+    ? computeAllReadiness(autoDeriveChecklistStates(derivedReadinessInput))
     : [];
   const nexvoraOverallReadiness = workflowV2Enabled
     ? computeOverallReadiness(nexvoraReadinessMetrics)
