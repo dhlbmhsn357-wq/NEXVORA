@@ -12,7 +12,7 @@ import {
   createArtifact, listArtifacts, approve as approveArtifact, getLatest as getLatestArtifact,
 } from "@/lib/prototype-studio/artifact-service";
 import { buildContextPackMarkdown } from "@/lib/prototype-studio/context-pack-builder";
-import { parseBuildBrief, type BuildBriefParseResult } from "@/lib/prototype-studio/build-brief-parser";
+import { parseBuildBrief, normalizeHexInBrief, type BuildBriefParseResult } from "@/lib/prototype-studio/build-brief-parser";
 import { buildCodexPack, buildCodexPackZipBase64 } from "@/lib/prototype-studio/codex-pack-builder";
 import type {
   ArtifactSource, ArtifactType, PrototypeStudioArtifactRow,
@@ -93,7 +93,7 @@ export async function importBuildBriefAction(
 ): Promise<ActionResult<ImportBriefResult>> {
   const g = await guard();
   if (!g.ok) return g;
-  const trimmed = content.trim();
+  const trimmed = normalizeHexInBrief(content.trim());
   if (trimmed.length < 30) return { ok: false, message: "المحتوى قصير جدًا للاعتماد." };
   const parse = parseBuildBrief(trimmed);
   try {

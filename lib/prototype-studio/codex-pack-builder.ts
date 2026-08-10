@@ -17,6 +17,7 @@ import { getLatest } from "./artifact-service";
 import { buildContextPackMarkdown } from "./context-pack-builder";
 import { buildAutoBriefFromConfig } from "./auto-brief-builder";
 import { getConfig } from "./config-service";
+import { normalizeHexInBrief } from "./build-brief-parser";
 import {
   PROTOTYPE_CONSTITUTION_HEADING,
   PROTOTYPE_CONSTITUTION_BODY,
@@ -41,18 +42,22 @@ You are extending an existing project as a coding agent.
 - Do NOT invent features not in the Build Brief.
 - Do NOT ask for clarification on minor points — use reasonable defaults matching the design direction.
 - Do NOT build: real payment gateways, real integrations (WhatsApp/Zoom/etc.), authentication systems, backend databases, deployment infrastructure — UNLESS the Build Brief explicitly requires them.
-- Arabic RTL first; English second.
+
+## RTL is mandatory
+- Use \`dir="rtl"\` at the application root (\`<html dir="rtl">\` or root layout).
+- Use CSS logical properties throughout: \`start\`/\`end\` for margin/padding/border/inset, \`text-start\`/\`text-end\` in Tailwind (never \`left\`/\`right\` for layout).
+- Arabic first; English labels as secondary where needed.
 
 ## Default Technology Stack (unless Build Brief overrides)
 - React + TypeScript + Vite
-- Tailwind CSS (with RTL plugin when isRtl=true)
+- Tailwind CSS (with RTL plugin + logical-properties helpers)
 - Zustand for state (in-memory only, no persistence)
 - React Router for navigation
 - **NO backend**, **NO real APIs**, **NO auth libraries**
 
 ## Working style
 - Ship in 2 phases:
-  - **Phase 1:** foundation (routes/design tokens/nav) + the core flows listed in Brief §Core Flows. Full working screens, no skeletons.
+  - **Phase 1:** foundation (routes/design tokens/nav) + the core flows (find them in Build Brief under the section named "Core Flows" / "Critical User Flows" / "MVP Flows" — whichever exists). **Full working screens, no placeholder screens. Loading skeletons are allowed only as an interaction state (e.g., during a mocked async load).**
   - **Phase 2:** secondary screens as simple stubs. Ship after Phase 1 is reviewed.
 - After Phase 1: summarize what shipped, what's stubbed, next steps. Wait for approval before Phase 2.
 - No "TODO" comments left in code.
@@ -106,7 +111,8 @@ export async function buildCodexPack(projectId: string): Promise<CodexPackResult
   let briefSource: BriefSourceInPack;
   let briefHeader: string;
   if (approvedBrief) {
-    briefContent = approvedBrief.contentMd;
+    // Defense-in-depth: normalize hex في briefs معتمَدة قديمة اتحفظت قبل الفيكس.
+    briefContent = normalizeHexInBrief(approvedBrief.contentMd);
     briefSource = "approved";
     briefHeader = `# Build Brief (Approved v${approvedBrief.version})\n\n_Approved at ${approvedBrief.approvedAt ?? "—"}._\n\n---\n\n`;
   } else {

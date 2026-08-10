@@ -27,6 +27,17 @@ export interface BuildBriefParseResult {
   warnings: string[];
 }
 
+/**
+ * ينظّف قيم hex اللي جاي بادئة `#` مكرّرة (`##0E7490` → `#0E7490`).
+ * سبب المشكلة: ChatGPT أحيانًا يكتب `##RRGGBB` بالخطأ (# ثاني من markdown syntax
+ * أو لخلط بين hex prefix و heading marker). النتيجة على الشاشة `##0E7490`.
+ * القاعدة: `##` أو أكثر متبوعة بـ 3/6/8 hex digits → نُبقي `#` واحدة فقط.
+ * لا نلمس `##` في headings (سطر يبدأ بها + مسافة + كلمات).
+ */
+export function normalizeHexInBrief(content: string): string {
+  return content.replace(/#{2,}([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/g, "#$1");
+}
+
 export function parseBuildBrief(content: string): BuildBriefParseResult {
   const trimmed = content.trim();
   const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
