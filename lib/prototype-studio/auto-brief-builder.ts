@@ -13,10 +13,20 @@ function bulletList(items: readonly string[], emptyText: string): string {
   return items.map((i) => `- ${i}`).join("\n");
 }
 
+/**
+ * يضمن إن قيمة hex ليها بادئة `#` واحدة بالضبط.
+ * الـ input المخزّن ممكن يجي بـ "#0E7490" أو "0E7490" أو "##0E7490"
+ * (لو حد نسخها من output markdown سابق) — كلها تتوحّد لـ "#0E7490".
+ */
+function normalizeHex(hex: string): string {
+  const clean = (hex ?? "").replace(/^#+/, "").trim();
+  return clean ? `#${clean}` : "—";
+}
+
 export function buildAutoBriefFromConfig(cfg: PrototypeStudioConfigRow): string {
   const dd = cfg.designDirection;
   const brandColors = dd.brand_colors.length > 0
-    ? dd.brand_colors.map((c) => `${c.name} (${c.hex})`).join(" · ")
+    ? dd.brand_colors.map((c) => `${c.name} (${normalizeHex(c.hex)})`).join(" · ")
     : "—";
   const typography = (dd.typography.heading || dd.typography.body)
     ? `heading=${dd.typography.heading || "—"} · body=${dd.typography.body || "—"}`
@@ -52,6 +62,14 @@ ${bulletList(cfg.coreFlows, "لم تُحدَّد تدفّقات أساسية")}
 - **ألوان العلامة:** ${brandColors}
 - **الطباعة:** ${typography}
 - **ملاحظات a11y:** ${dd.accessibility_notes || "—"}
+
+## Technology Stack (default — override in Build Brief if needed)
+- **Framework:** React + TypeScript + Vite
+- **Styling:** Tailwind CSS (with RTL plugin if isRtl)
+- **State:** Zustand (in-memory only)
+- **Routing:** React Router
+- **Data:** mock JSON in-memory (no backend, no fetch to real APIs)
+- **Build target:** \`npm run build\` must pass with zero TypeScript errors
 
 ## Data Strategy
 - **استراتيجية البيانات:** ${cfg.dataStrategy} (mocked/in-memory — لا backend حقيقي)

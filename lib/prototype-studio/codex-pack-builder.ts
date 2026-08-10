@@ -43,12 +43,28 @@ You are extending an existing project as a coding agent.
 - Do NOT build: real payment gateways, real integrations (WhatsApp/Zoom/etc.), authentication systems, backend databases, deployment infrastructure — UNLESS the Build Brief explicitly requires them.
 - Arabic RTL first; English second.
 
+## Default Technology Stack (unless Build Brief overrides)
+- React + TypeScript + Vite
+- Tailwind CSS (with RTL plugin when isRtl=true)
+- Zustand for state (in-memory only, no persistence)
+- React Router for navigation
+- **NO backend**, **NO real APIs**, **NO auth libraries**
+
 ## Working style
 - Ship in 2 phases:
   - **Phase 1:** foundation (routes/design tokens/nav) + the core flows listed in Brief §Core Flows. Full working screens, no skeletons.
   - **Phase 2:** secondary screens as simple stubs. Ship after Phase 1 is reviewed.
 - After Phase 1: summarize what shipped, what's stubbed, next steps. Wait for approval before Phase 2.
 - No "TODO" comments left in code.
+
+## Phase 1 — Definition of Done
+Phase 1 is complete when ALL of these are true:
+1. Every core flow in Brief §Core Flows runs end-to-end using mock data.
+2. Data stays consistent across screens within a flow (mutations in one screen reflect on others via shared in-memory store).
+3. \`npm run build\` passes with **zero TypeScript errors** and **zero unresolved imports**.
+4. RTL layout works correctly if isRtl=true (no visual flips).
+5. Loading / empty / error states are handled for every list/form.
+Do not proceed to Phase 2 until 1–5 are true.
 `;
 
 export type BriefSourceInPack = "approved" | "auto";

@@ -40,6 +40,12 @@ function bulletsOr(md: string[], items: readonly string[], missingReason: string
   md.push("");
 }
 
+/** يوحّد hex لبادئة `#` واحدة (يتحمّل input مثل "##0E7490" أو "0E7490"). */
+function normalizeHex(hex: string): string {
+  const clean = (hex ?? "").replace(/^#+/, "").trim();
+  return clean ? `#${clean}` : "—";
+}
+
 function renderDesignDirection(dd: DesignDirection): string[] {
   const out: string[] = [];
   out.push(`- **الأسلوب البصري:** ${dd.visual_style || "—"}`);
@@ -48,7 +54,7 @@ function renderDesignDirection(dd: DesignDirection): string[] {
   out.push(`- **أسلوب التنقّل:** ${dd.navigation_preference || "—"}`);
   out.push(`- **ملاحظات الوصول (a11y):** ${dd.accessibility_notes || "—"}`);
   if (dd.brand_colors.length > 0) {
-    out.push(`- **ألوان العلامة:** ${dd.brand_colors.map((c) => `${c.name} (${c.hex})`).join(" · ")}`);
+    out.push(`- **ألوان العلامة:** ${dd.brand_colors.map((c) => `${c.name} (${normalizeHex(c.hex)})`).join(" · ")}`);
   }
   if (dd.typography.heading || dd.typography.body) {
     out.push(`- **الطباعة:** heading=${dd.typography.heading || "—"} · body=${dd.typography.body || "—"} · sizes=${dd.typography.sizes || "—"}`);
