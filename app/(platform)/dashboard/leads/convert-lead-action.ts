@@ -6,14 +6,20 @@ import { createClient } from "@/lib/supabase/server";
 import { ensureProjectWorkspace } from "@/lib/portfolio/service";
 import type { ProjectType } from "@/lib/types/database";
 
+export type ProjectMode = "unclassified" | "test" | "real";
+
 export async function convertLeadToProject(
   leadId: string,
   clientId: string | null,
   name: string,
-  projectType: ProjectType
+  projectType: ProjectType,
+  mode: ProjectMode = "unclassified"
 ): Promise<{ ok: true; projectId: string } | { ok: false; message: string }> {
   if (!name.trim()) {
     return { ok: false, message: "اسم المشروع مطلوب." };
+  }
+  if (mode !== "unclassified" && mode !== "test" && mode !== "real") {
+    return { ok: false, message: "قيمة mode غير صالحة." };
   }
 
   const supabase = await createClient();
@@ -40,6 +46,7 @@ export async function convertLeadToProject(
       lead_id: leadId,
       name: name.trim(),
       project_type: projectType,
+      mode,
       // يورّث قالب الاكتشاف المختار وقت إنشاء الـ Lead (Smart Discovery)
       discovery_template_id: existingLead?.discovery_template_id ?? null,
       owner_id: user?.id ?? null,

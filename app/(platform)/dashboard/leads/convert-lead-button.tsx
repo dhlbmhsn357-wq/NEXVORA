@@ -2,8 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { convertLeadToProject } from "./convert-lead-action";
+import { convertLeadToProject, type ProjectMode } from "./convert-lead-action";
 import type { ProjectType } from "@/lib/types/database";
+
+const projectModeLabels: Record<ProjectMode, string> = {
+  unclassified: "غير مصنَّف",
+  test: "تجريبي (Test)",
+  real: "حقيقي (Real)",
+};
 
 const projectTypeLabels: Record<ProjectType, string> = {
   website: "موقع إلكتروني",
@@ -26,6 +32,7 @@ export default function ConvertLeadButton({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(defaultName);
   const [projectType, setProjectType] = useState<ProjectType>("other");
+  const [mode, setMode] = useState<ProjectMode>("real");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -36,7 +43,7 @@ export default function ConvertLeadButton({
     setSaving(true);
     setError("");
 
-    const result = await convertLeadToProject(leadId, clientId, name, projectType);
+    const result = await convertLeadToProject(leadId, clientId, name, projectType, mode);
 
     if (!result.ok) {
       setSaving(false);
@@ -92,6 +99,26 @@ export default function ConvertLeadButton({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-[var(--v-text-muted)]">نوع المشروع (Mode)</label>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as ProjectMode)}
+                className="w-full rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-bg)] px-3 py-2 text-sm text-[var(--v-text)] outline-none focus:border-[var(--v-primary)]"
+              >
+                {(Object.keys(projectModeLabels) as ProjectMode[]).map((m) => (
+                  <option key={m} value={m}>{projectModeLabels[m]}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-[var(--v-text-muted)]">
+                {mode === "test"
+                  ? "مشروع تجريبي — الأدلة ستُعامل كمحاكاة (simulated) بالافتراض."
+                  : mode === "real"
+                    ? "مشروع حقيقي — يتطلّب أدلة موثّقة قبل بناء الـ prototype."
+                    : "يمكن تحديث النوع لاحقًا من إعدادات المشروع (Owner/Admin فقط)."}
+              </p>
             </div>
 
             {error && <p className="text-xs text-[var(--v-red)]">{error}</p>}
