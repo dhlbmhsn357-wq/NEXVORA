@@ -3,8 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { PRDGenerationEngine, type GenerationResult } from "@/lib/prd/generation-service";
+import {
+  PRDGenerationEngine,
+  type GenerationResult,
+  isProductModeV2Project,
+  PRD_GATE_MESSAGES,
+} from "@/lib/prd/generation-service";
 import { applyManualSectionEdit } from "@/lib/prd/versioning";
+import { createServiceClient } from "@/lib/supabase/service";
 import type { PRDSectionKey, PRDVersion } from "@/lib/types/database";
 
 async function getActorId(): Promise<string | undefined> {
@@ -26,6 +32,23 @@ export async function generateFullPRD(
   isRegeneration: boolean
 ): Promise<GenerationResult> {
   const actorId = await getActorId();
+
+  // Product Mode + v2 gate: نتأكد من وجود Requirements قبل ما نحجز lock ولا
+  // نبدأ Background Job. رسالة واضحة للـ UX بدل ما التوليد يفشل في الخلفية.
+  const svc = createServiceClient();
+  const productModeV2 = await isProductModeV2Project(svc, projectId, actorId);
+  if (productModeV2) {
+    const { count } = await svc
+      .from("product_requirements")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId);
+    if ((count ?? 0) === 0) {
+      return {
+        status: "missing_requirements",
+        message: PRD_GATE_MESSAGES.missingRequirements,
+      };
+    }
+  }
 
   const claimed = await PRDGenerationEngine.tryClaimLock(projectId);
   if (!claimed) {

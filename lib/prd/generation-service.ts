@@ -17,6 +17,187 @@ import {
   persistPromptGeneration,
 } from "@/lib/ai/prompt-framework";
 import type { PRDSectionKey, ProjectRecommendation } from "@/lib/types/database";
+import { isFeatureEnabled } from "@/lib/feature-flags";
+import type { RequirementRow } from "@/lib/product-definition/types";
+import type { UserStoryRow, AcceptanceCriterionRow } from "@/lib/user-stories/types";
+
+/**
+ * سياق مُهيكل مصدره جداول Product Definition + User Stories + AC.
+ * لما يبقى موجود، بيبقى المصدر الأساسي لبناء أقسام user_stories +
+ * acceptance_criteria في PRD، والبراين يفضل داعم لباقي الأقسام.
+ */
+export interface StructuredPRDContext {
+  requirements: RequirementRow[];
+  stories: UserStoryRow[];
+  acceptanceCriteria: AcceptanceCriterionRow[];
+}
+
+/** يقرأ الجداول المُهيكلة بدون رمي أخطاء — أي فشل يرجع صف فاضي. */
+export async function getStructuredContextForPRD(
+  projectId: string,
+  supabase: SupabaseClient
+): Promise<StructuredPRDContext> {
+  const [reqRes, storiesRes, acRes] = await Promise.all([
+    supabase
+      .from("product_requirements")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("priority", { ascending: true }),
+    supabase
+      .from("user_stories")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("status", { ascending: true }),
+    supabase
+      .from("acceptance_criteria")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("user_story_id", { ascending: true })
+      .order("order_index", { ascending: true }),
+  ]);
+
+  const requirements = ((reqRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      code: (row.code as string | null) ?? null,
+      title: String(row.title ?? ""),
+      description: String(row.description ?? ""),
+      requirementType: (row.requirement_type as RequirementRow["requirementType"]) ?? "functional",
+      priority: (row.priority as RequirementRow["priority"]) ?? "should",
+      status: (row.status as RequirementRow["status"]) ?? "draft",
+      rationale: String(row.rationale ?? ""),
+      acceptanceHint: String(row.acceptance_hint ?? ""),
+      effortEstimate: String(row.effort_estimate ?? ""),
+      linkedPersonaId: (row.linked_persona_id as string | null) ?? null,
+      linkedFlowId: (row.linked_flow_id as string | null) ?? null,
+      tags: (row.tags as string[] | null) ?? [],
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as RequirementRow;
+  });
+
+  const stories = ((storiesRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      code: (row.code as string | null) ?? null,
+      title: String(row.title ?? ""),
+      asA: String(row.as_a ?? ""),
+      iWant: String(row.i_want ?? ""),
+      soThat: String(row.so_that ?? ""),
+      narrativeExtra: String(row.narrative_extra ?? ""),
+      status: (row.status as UserStoryRow["status"]) ?? "draft",
+      storyPoints: (row.story_points as number | null) ?? null,
+      businessValue: Number(row.business_value ?? 50),
+      riskLevel: (row.risk_level as UserStoryRow["riskLevel"]) ?? "medium",
+      linkedPersonaId: (row.linked_persona_id as string | null) ?? null,
+      linkedFlowId: (row.linked_flow_id as string | null) ?? null,
+      linkedRequirementId: (row.linked_requirement_id as string | null) ?? null,
+      tags: (row.tags as string[] | null) ?? [],
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as UserStoryRow;
+  });
+
+  const acceptanceCriteria = ((acRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      userStoryId: String(row.user_story_id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      orderIndex: Number(row.order_index ?? 1),
+      title: String(row.title ?? ""),
+      givenClause: String(row.given_clause ?? ""),
+      whenClause: String(row.when_clause ?? ""),
+      thenClause: String(row.then_clause ?? ""),
+      andConditions: (row.and_conditions as string[] | null) ?? [],
+      status: (row.status as AcceptanceCriterionRow["status"]) ?? "draft",
+      notes: String(row.notes ?? ""),
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as AcceptanceCriterionRow;
+  });
+
+  return { requirements, stories, acceptanceCriteria };
+}
+
+/**
+ * يبني قسم نصّي مُهيكَل يُحقن كـ PRIMARY SOURCE في برومبت PRD. يبقى فاضي
+ * لو مافيش أي بيانات مُهيكلة (v1 projects أو Product Mode بدون إدخال بعد).
+ */
+export function formatStructuredContextForPrompt(ctx: StructuredPRDContext): string {
+  if (
+    ctx.requirements.length === 0 &&
+    ctx.stories.length === 0 &&
+    ctx.acceptanceCriteria.length === 0
+  ) {
+    return "";
+  }
+
+  const parts: string[] = [];
+  parts.push("## البيانات المُهيكلة (المصدر الأساسي — استخدمها قبل ما تخترع)");
+
+  if (ctx.requirements.length > 0) {
+    parts.push("### المتطلبات (Requirements)");
+    for (const r of ctx.requirements) {
+      const prefix = r.code ? `[${r.code}] ` : "";
+      parts.push(
+        `- ${prefix}${r.title} — نوع: ${r.requirementType}، أولوية: ${r.priority}، حالة: ${r.status}`
+      );
+      if (r.description) parts.push(`  الوصف: ${r.description}`);
+      if (r.rationale) parts.push(`  المبرّر: ${r.rationale}`);
+      if (r.acceptanceHint) parts.push(`  تلميح قبول: ${r.acceptanceHint}`);
+    }
+  }
+
+  if (ctx.stories.length > 0) {
+    parts.push("\n### قصص المستخدم (User Stories)");
+    const acByStory = new Map<string, AcceptanceCriterionRow[]>();
+    for (const ac of ctx.acceptanceCriteria) {
+      const list = acByStory.get(ac.userStoryId) ?? [];
+      list.push(ac);
+      acByStory.set(ac.userStoryId, list);
+    }
+    for (const s of ctx.stories) {
+      const code = s.code ? `[${s.code}] ` : "";
+      parts.push(`- ${code}${s.title} (حالة: ${s.status}، مخاطرة: ${s.riskLevel})`);
+      if (s.asA || s.iWant || s.soThat) {
+        parts.push(`  بصفتي: ${s.asA} — أريد: ${s.iWant} — حتى: ${s.soThat}`);
+      }
+      const relatedAc = acByStory.get(s.id) ?? [];
+      for (const ac of relatedAc) {
+        const title = ac.title ? ` — ${ac.title}` : "";
+        parts.push(
+          `  • AC${title}: Given ${ac.givenClause} / When ${ac.whenClause} / Then ${ac.thenClause}`
+        );
+        for (const and of ac.andConditions) {
+          if (and.trim()) parts.push(`      And ${and}`);
+        }
+      }
+    }
+  } else if (ctx.acceptanceCriteria.length > 0) {
+    // AC بدون قصة أب (نادر) — نعرضها كمعايير قائمة.
+    parts.push("\n### معايير القبول (Acceptance Criteria)");
+    for (const ac of ctx.acceptanceCriteria) {
+      const title = ac.title ? ` — ${ac.title}` : "";
+      parts.push(
+        `- Given ${ac.givenClause} / When ${ac.whenClause} / Then ${ac.thenClause}${title}`
+      );
+    }
+  }
+
+  parts.push(
+    "\n**ملاحظة:** لأي عنصر موجود فوق، انقله كما هو في القسم المقابل من PRD (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements). ممنوع إعادة اختراع عنصر موجود."
+  );
+
+  return parts.join("\n");
+}
 
 /**
  * Unified Prompt Framework (pilot — PRD): يسجّل Prompt Readiness Score +
@@ -68,8 +249,41 @@ export type GenerationResult =
   | { status: "success" }
   | { status: "started" }
   | { status: "insufficient_brain"; message: string }
+  | { status: "missing_requirements"; message: string }
   | { status: "already_generating" }
   | { status: "error"; message: string; code: string };
+
+/**
+ * يقرر ما إذا كان المشروع في Product Mode + Workflow v2 (الجيت الجديد
+ * يُطبَّق عليه فقط). المشاريع v1 مش بتتأثر — Backwards compat.
+ */
+export async function isProductModeV2Project(
+  supabase: SupabaseClient,
+  projectId: string,
+  actorId?: string
+): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from("projects")
+      .select("workflow_version")
+      .eq("id", projectId)
+      .maybeSingle();
+    const version = (data as { workflow_version?: string | null } | null)?.workflow_version;
+    if (version !== "v2") return false;
+    return await isFeatureEnabled("product_mode", actorId ?? null, supabase);
+  } catch (err) {
+    console.error(`[PRDGeneration] product_mode check failed for ${projectId}:`, err);
+    return false;
+  }
+}
+
+/** رسائل الجيت الجديدة — مُصدَّرة عشان الأكشن يقدر يرجّعها زي ما هي. */
+export const PRD_GATE_MESSAGES = {
+  missingRequirements:
+    "لا يمكن توليد PRD قبل إدخال متطلبات المنتج. افتح تبويب «تعريف المنتج» أولاً.",
+  missingStoriesWarning:
+    "لا توجد قصص مستخدم مُهيكلة — سيولّد الـ AI stories من Brain كـ fallback.",
+} as const;
 
 /** أي Lock بحالة "generating" أقدم من كده يُعتبر معلّق (Job مات) ويُعاد المحاولة فوقه. */
 const STALE_LOCK_MS = 6 * 60_000;
@@ -138,9 +352,27 @@ export class PRDGenerationEngine {
         return;
       }
 
+      // ---- Product Mode + v2 gate — لازم يكون فيه Requirements قبل التوليد.
+      const productModeV2 = await isProductModeV2Project(supabase, projectId, actorId);
+      const structured = await getStructuredContextForPRD(projectId, supabase);
+      if (productModeV2 && structured.requirements.length === 0) {
+        await releaseLockAsFailed(supabase, projectId, PRD_GATE_MESSAGES.missingRequirements);
+        return;
+      }
+      if (productModeV2 && structured.stories.length === 0) {
+        // تحذير غير مانع — بس نسجّله في اللوج للـ traceability.
+        console.warn(`[PRDGeneration] project ${projectId}: ${PRD_GATE_MESSAGES.missingStoriesWarning}`);
+      }
+
       const acceptedRecommendations = await getAcceptedRecommendations(supabase, projectId);
       const fused = await buildFusedKnowledgeBlock(projectId, supabase);
-      const prompt = buildPRDGenerationPrompt(brain.content, acceptedRecommendations, fused.text);
+      const structuredBlock = formatStructuredContextForPrompt(structured);
+      const prompt = buildPRDGenerationPrompt(
+        brain.content,
+        acceptedRecommendations,
+        fused.text,
+        structuredBlock
+      );
       await recordPrdPromptGeneration(supabase, projectId, prompt, brain.version ?? null, acceptedRecommendations.length, actorId);
       const response = await executeAIWithRateLimitWait(AITaskType.PRD_GENERATION, prompt, {
         actorId,
@@ -209,9 +441,27 @@ export class PRDGenerationEngine {
       void created_at;
       void updated_at;
 
+      // نفس الجيت في section regeneration — لو المشروع v2 + product_mode ومفيش
+      // Requirements، منقدرش نعيد التوليد (رغم إن ده section واحد بس، لأن
+      // القرار المعماري: PRD لازم يستمد من هيكل مُهيكل، مش من Brain وحده).
+      const productModeV2 = await isProductModeV2Project(supabase, projectId, actorId);
+      const structured = await getStructuredContextForPRD(projectId, supabase);
+      if (productModeV2 && structured.requirements.length === 0) {
+        await supabase.from("prd").update({ sync_status: "idle" }).eq("project_id", projectId);
+        return { status: "missing_requirements", message: PRD_GATE_MESSAGES.missingRequirements };
+      }
+
       const acceptedRecommendations = await getAcceptedRecommendations(supabase, projectId);
       const fused = await buildFusedKnowledgeBlock(projectId, supabase);
-      const prompt = buildPRDSectionRegenerationPrompt(brain.content, sectionKey, context, acceptedRecommendations, fused.text);
+      const structuredBlock = formatStructuredContextForPrompt(structured);
+      const prompt = buildPRDSectionRegenerationPrompt(
+        brain.content,
+        sectionKey,
+        context,
+        acceptedRecommendations,
+        fused.text,
+        structuredBlock
+      );
       const response = await AIService.execute(AITaskType.PRD_GENERATION, prompt, {
         actorId,
         projectId,

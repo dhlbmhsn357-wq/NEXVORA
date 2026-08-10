@@ -123,6 +123,9 @@ export default function PRDPanel({
     if (result.status === "insufficient_brain") {
       setMessage(result.message);
       setGenerating(false);
+    } else if (result.status === "missing_requirements") {
+      setMessage(result.message);
+      setGenerating(false);
     } else if (result.status === "already_generating") {
       setMessage("فيه توليد شغال بالفعل، استنى يخلص.");
     }

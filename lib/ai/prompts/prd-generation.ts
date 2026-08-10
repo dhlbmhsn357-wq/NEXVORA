@@ -35,10 +35,14 @@ const STRICT_RULES = `قواعد صارمة:
 export function buildPRDGenerationPrompt(
   brain: BrainContent,
   acceptedRecommendations: ProjectRecommendation[] = [],
-  fusedContext = ""
+  fusedContext = "",
+  structuredBlock = ""
 ): string {
-  return `أنت Product Manager محترف بتكتب أول مسودة لـ Product Requirements Document (PRD) اعتمادًا على المعرفة المجمّعة في Project Brain + التوصيات الذكية المقبولة الموجودة تحت. المسودة دي نقطة بداية للمراجعة البشرية، مش قرار نهائي.
-
+  const structuredSection = structuredBlock
+    ? `\n## STRUCTURED DATA (PRIMARY SOURCE)\n${structuredBlock}\n\n> للأقسام \`user_stories\`, \`acceptance_criteria\`, \`functional_requirements\`, \`non_functional_requirements\` — لو فيه عناصر في البيانات المُهيكلة فوق، اعتبرها **المصدر الأساسي** ولا تخترع بدائل. Brain + التوصيات مصادر داعمة فقط لباقي الأقسام.\n`
+    : "";
+  return `أنت Product Manager محترف بتكتب أول مسودة لـ Product Requirements Document (PRD) اعتمادًا على المعرفة المجمّعة في Project Brain + التوصيات الذكية المقبولة + البيانات المُهيكلة (Requirements/Stories/AC) الموجودة تحت. المسودة دي نقطة بداية للمراجعة البشرية، مش قرار نهائي.
+${structuredSection}
 ${formatBrainV2ForPrompt(brain)}
 
 ## التوصيات الذكية المقبولة (لازم تنعكس في المستند)
@@ -75,10 +79,14 @@ export function buildPRDSectionRegenerationPrompt(
   sectionKey: PRDSectionKey,
   currentPRDContext: Record<string, unknown>,
   acceptedRecommendations: ProjectRecommendation[] = [],
-  fusedContext = ""
+  fusedContext = "",
+  structuredBlock = ""
 ): string {
-  return `أنت Product Manager محترف بتعيد كتابة قسم واحد بس من PRD موجود، اعتمادًا على Project Brain + التوصيات الذكية المقبولة وباقي أقسام المستند الحالية (كسياق بس، متعدّلش فيها).
-
+  const structuredSection = structuredBlock
+    ? `\n## STRUCTURED DATA (PRIMARY SOURCE)\n${structuredBlock}\n\n> لو القسم المطلوب من الأقسام المُهيكلة (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements) استخدم البيانات فوق كمصدر أساسي، ولا تخترع عناصر بديلة.\n`
+    : "";
+  return `أنت Product Manager محترف بتعيد كتابة قسم واحد بس من PRD موجود، اعتمادًا على Project Brain + التوصيات الذكية المقبولة + البيانات المُهيكلة وباقي أقسام المستند الحالية (كسياق بس، متعدّلش فيها).
+${structuredSection}
 ${formatBrainV2ForPrompt(brain)}
 
 ## التوصيات الذكية المقبولة (لازم تنعكس في القسم لو مرتبطة بيه)
