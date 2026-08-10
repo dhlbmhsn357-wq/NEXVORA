@@ -247,8 +247,10 @@ export async function buildContextPackMarkdown(projectId: string): Promise<Conte
   line(md, "استُبعدت الحقول التالية أمنيًا: `ai_task_model_config`, `commercial*`, `handoff_partners`, `raw_prompt`, `sync_status`, `private_notes`, والأبحاث المصنّفة `internal`/`confidential`.");
   blank(md);
 
+  // Prepend UTF-8 BOM (U+FEFF) so Windows apps render the Arabic correctly
+  // instead of guessing a codepage and showing mojibake (e.g. `ط...`).
   return {
-    md: md.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n",
+    md: "﻿" + md.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n",
     missing,
     pinnedPrdVersion: prd?.version ?? null,
     pinnedBrainVersion: brain?.version ?? null,

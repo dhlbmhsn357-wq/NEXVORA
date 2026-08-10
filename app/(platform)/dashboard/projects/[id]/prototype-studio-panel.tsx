@@ -520,7 +520,8 @@ function BuildBriefSection({
           id: res.data.artifactId, projectId, artifactType: "build_brief",
           version: res.data.version, status: "draft", contentMd: "",
           metadata: { pinned_prd_version: null, pinned_brain_version: null,
-            pinned_config_updated_at: null, chatgpt_session_ref: null, source_details: null },
+            pinned_config_updated_at: null, chatgpt_session_ref: null, source_details: null,
+            brief_source: "chatgpt" },
           source: "chatgpt", createdBy: null, createdAt: new Date().toISOString(),
           approvedBy: null, approvedAt: null, notes: "",
         });
@@ -632,25 +633,25 @@ function CodexBuildSection({
   const [pack, setPack] = useState<PrototypeStudioArtifactRow | null>(initialPack);
   const [preview, setPreview] = useState(initialPack?.contentMd ?? "");
   const [pending, startTransition] = useTransition();
-
-  if (!approvedBrief) {
-    return (
-      <section className="rounded-xl border border-dashed border-[var(--v-border)] p-8 text-center text-sm text-[var(--v-text-secondary)]">
-        يجب اعتماد Build Brief أولًا (خطوة 4) قبل توليد Codex Build Pack.
-      </section>
-    );
-  }
+  const initialAuto =
+    initialPack?.metadata?.brief_source === "auto" || (!approvedBrief && !!initialPack);
+  const [briefSource, setBriefSource] = useState<"approved" | "auto" | null>(
+    initialPack ? (initialAuto ? "auto" : "approved") : null,
+  );
+  const willBeAuto = briefSource === "auto" || (!approvedBrief && briefSource === null);
 
   function doGenerate() {
     startTransition(async () => {
       const res = await generateCodexBuildPackAction(projectId);
       if (res.ok && res.data) {
         setPreview(res.data.markdown);
+        setBriefSource(res.data.briefSource);
         setPack({
           id: res.data.artifactId, projectId, artifactType: "codex_build_pack",
           version: res.data.version, status: "active", contentMd: res.data.markdown,
           metadata: { pinned_prd_version: null, pinned_brain_version: null,
-            pinned_config_updated_at: null, chatgpt_session_ref: null, source_details: null },
+            pinned_config_updated_at: null, chatgpt_session_ref: null, source_details: null,
+            brief_source: res.data.briefSource === "approved" ? "chatgpt" : "auto" },
           source: "system", createdBy: null, createdAt: new Date().toISOString(),
           approvedBy: null, approvedAt: null, notes: "",
         });
@@ -678,10 +679,19 @@ function CodexBuildSection({
     <section className="rounded-xl border border-[var(--v-border)] bg-[var(--v-surface)] p-4 flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h3 className="font-bold">Codex Build Pack</h3>
-        {pack && <Badge>v{pack.version}</Badge>}
+        {pack && <Badge>v{pack.version}{briefSource === "auto" ? " · brief=auto" : ""}</Badge>}
       </div>
+
+      {willBeAuto && (
+        <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs">
+          <div className="font-bold mb-1">تنبيه: Build Brief سيتم توليده تلقائيًا</div>
+          لا يوجد Build Brief معتمَد من ChatGPT — سيتم توليد Brief مبدئي من إعدادات Studio
+          (النطاق + التدفّقات + الاتجاه البصري). أنشئ نسخة معتمَدة من خطوة 4 للحصول على جودة أفضل.
+        </div>
+      )}
+
       <p className="text-xs text-[var(--v-text-secondary)]">
-        تجميع محلّي: Context Pack + Approved Build Brief + Engineering Constitution + Codex Starter - بدون أي API.
+        الحزمة تحتوي: دستور بروتوتايب + Build Brief (معتمَد أو مُولّد من الإعدادات) + Context Pack + تعليمات Codex. حجم قصير ومركّز.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="primary" onClick={doGenerate} disabled={pending}>توليد Codex Build Pack</Button>

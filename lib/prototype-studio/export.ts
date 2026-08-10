@@ -6,7 +6,10 @@
  */
 
 export function downloadMarkdown(filename: string, content: string): void {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  // Prepend UTF-8 BOM (U+FEFF) so Windows apps (Notepad, Word) detect UTF-8
+  // and render Arabic correctly instead of showing mojibake.
+  const withBom = content.startsWith("﻿") ? content : "﻿" + content;
+  const blob = new Blob([withBom], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

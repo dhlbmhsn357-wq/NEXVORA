@@ -49,6 +49,7 @@ function art(over: Partial<PrototypeStudioArtifactRow>): PrototypeStudioArtifact
     contentMd: "", metadata: {
       pinned_prd_version: null, pinned_brain_version: null,
       pinned_config_updated_at: null, chatgpt_session_ref: null, source_details: null,
+      brief_source: null,
     },
     source: "system", createdBy: null, createdAt: NOW,
     approvedBy: null, approvedAt: null, notes: "",

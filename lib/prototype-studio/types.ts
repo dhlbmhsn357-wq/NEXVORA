@@ -80,12 +80,21 @@ export type ArtifactStatus = (typeof ARTIFACT_STATUSES)[number];
 export const ARTIFACT_SOURCES = ["system", "chatgpt", "manual", "import"] as const;
 export type ArtifactSource = (typeof ARTIFACT_SOURCES)[number];
 
+export const BRIEF_SOURCES = ["chatgpt", "auto", "manual", "import"] as const;
+export type BriefSource = (typeof BRIEF_SOURCES)[number];
+
 export interface ArtifactMetadata {
   pinned_prd_version: number | null;
   pinned_brain_version: number | null;
   pinned_config_updated_at: string | null;
   chatgpt_session_ref: string | null;
   source_details: string | null;
+  /**
+   * For build_brief artifacts: distinguishes ChatGPT-approved briefs from
+   * auto-generated fallbacks sourced from Studio config. `null` for other
+   * artifact types.
+   */
+  brief_source: BriefSource | null;
 }
 
 export const DEFAULT_ARTIFACT_METADATA: ArtifactMetadata = {
@@ -94,6 +103,7 @@ export const DEFAULT_ARTIFACT_METADATA: ArtifactMetadata = {
   pinned_config_updated_at: null,
   chatgpt_session_ref: null,
   source_details: null,
+  brief_source: null,
 };
 
 export interface PrototypeStudioArtifactRow {
