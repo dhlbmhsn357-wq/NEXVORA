@@ -74,6 +74,10 @@ const TASK_TIMEOUT_MS: Partial<Record<AITaskType, number>> = {
   // Criteria/Missing Features/Risks) مع Evidence لكل عنصر، وسياق الدخل
   // نفسه كبير (كود مشروع كامل من GitHub) — بياخد وقت تفكير أطول.
   [AITaskType.PROTOTYPE_REVIEW]: 110_000,
+  // PRD generation: 18 قسم بمحتوى مفصّل + Evidence من Brain + Requirements؛
+  // JSON output كبير، الـ 30 ثانية الافتراضية بتفشل. يعمل عبر after()
+  // (background job)، فمش محدود بـ 60s Vercel Hobby limit على الـ action نفسه.
+  [AITaskType.PRD_GENERATION]: 110_000,
   // نفس فئة Prototype Review بالظبط — سياق كود Repository (ولو تدريجي
   // بيبقى أصغر مع الوقت) + مطلوب Findings مفصّلة بدليل حرفي لكل واحد.
   [AITaskType.STATIC_REVIEW_CATEGORY]: 110_000,
