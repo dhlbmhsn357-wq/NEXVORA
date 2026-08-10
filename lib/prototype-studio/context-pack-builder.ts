@@ -115,12 +115,33 @@ function renderPrd(prd: PRD | null, md: string[], missing: string[]) {
 export interface ContextPackResult {
   md: string;
   missing: string[];
+  excludedDrafts: {
+    requirements: number;
+    stories: number;
+    acceptanceCriteria: number;
+  };
   pinnedPrdVersion: number | null;
   pinnedBrainVersion: number | null;
   pinnedConfigUpdatedAt: string | null;
 }
 
-export async function buildContextPackMarkdown(projectId: string): Promise<ContextPackResult> {
+export interface BuildContextPackOptions {
+  /**
+   * When false (default), drafts and non-approved items are excluded from
+   * their sections and listed under a separate "Excluded / Pending Review"
+   * section. When true, Owner override is in effect — all items included
+   * with a warning banner.
+   */
+  includeDrafts?: boolean;
+  /** Reason for override, printed in the banner when includeDrafts=true. */
+  overrideReason?: string;
+}
+
+export async function buildContextPackMarkdown(
+  projectId: string,
+  options: BuildContextPackOptions = {},
+): Promise<ContextPackResult> {
+  const includeDrafts = options.includeDrafts === true;
   const supabase = await createClient();
   const missing: string[] = [];
 
@@ -142,10 +163,30 @@ export async function buildContextPackMarkdown(projectId: string): Promise<Conte
 
   const publicMarket = filterConfidentialResearch(marketRaw);
 
+  // Filter drafts / non-approved items unless Owner override is active.
+  const approvedRequirements = includeDrafts
+    ? requirements
+    : requirements.filter((r) => r.status === "approved" || r.status === "in_progress" || r.status === "done");
+  const approvedStories = includeDrafts
+    ? stories
+    : stories.filter((s) => s.status === "approved" || s.status === "in_dev" || s.status === "done");
+  const approvedAcs = includeDrafts
+    ? acs
+    : acs.filter((a) => a.status === "approved" || a.status === "verified");
+  const excludedDrafts = {
+    requirements: requirements.length - approvedRequirements.length,
+    stories: stories.length - approvedStories.length,
+    acceptanceCriteria: acs.length - approvedAcs.length,
+  };
+
   const md: string[] = [];
   heading(md, 1, "Prototype Studio — Context Pack");
   line(md, `_تم التوليد آليًا (بدون AI) من مصادر NEXVORA — مراجعة بشرية مطلوبة قبل الاستخدام._`);
   blank(md);
+  if (includeDrafts) {
+    line(md, `> ⚠️ **Owner Override نشط** — تم تضمين المسودات وغير المعتمدة${options.overrideReason ? ` (السبب: ${options.overrideReason})` : ""}.`);
+    blank(md);
+  }
 
   renderConfig(cfg, md);
 
@@ -192,25 +233,26 @@ export async function buildContextPackMarkdown(projectId: string): Promise<Conte
   }
 
   heading(md, 2, "Requirements");
-  if (requirements.length === 0) {
+  const displayRequirements = approvedRequirements;
+  if (displayRequirements.length === 0) {
     line(md, `${MISSING_TAG} لم يتم تعريف متطلّبات`);
     missing.push("Requirements");
     blank(md);
   } else {
-    for (const r of requirements) {
+    for (const r of displayRequirements) {
       line(md, `- [${r.priority}] **${r.title}** — ${r.description || "—"}`);
     }
     blank(md);
   }
 
   heading(md, 2, "User Stories + Acceptance Criteria");
-  if (stories.length === 0) {
+  if (approvedStories.length === 0) {
     line(md, `${MISSING_TAG} لا توجد user stories`);
     missing.push("User Stories");
     blank(md);
   } else {
-    for (const s of stories) {
-      const linkedAcs = acs.filter((a) => a.userStoryId === s.id);
+    for (const s of approvedStories) {
+      const linkedAcs = approvedAcs.filter((a) => a.userStoryId === s.id);
       line(md, `- **${s.title}** — كـ${s.asA ? ` ${s.asA}` : ""}${s.iWant ? `، أريد ${s.iWant}` : ""}`);
       for (const a of linkedAcs) line(md, `  - AC (${a.title}): Given ${a.givenClause}; When ${a.whenClause}; Then ${a.thenClause}`);
     }
@@ -249,6 +291,15 @@ export async function buildContextPackMarkdown(projectId: string): Promise<Conte
   if (cfg.designReferences.length === 0) missing.push("Design References");
   blank(md);
 
+  if (!includeDrafts && (excludedDrafts.requirements > 0 || excludedDrafts.stories > 0 || excludedDrafts.acceptanceCriteria > 0)) {
+    heading(md, 2, "Excluded / Pending Review");
+    line(md, `_تم استبعاد العناصر غير المعتمدة (drafts) لضمان جودة الـ prototype._`);
+    if (excludedDrafts.requirements > 0) line(md, `- Requirements مستبعدة: ${excludedDrafts.requirements}`);
+    if (excludedDrafts.stories > 0) line(md, `- User Stories مستبعدة: ${excludedDrafts.stories}`);
+    if (excludedDrafts.acceptanceCriteria > 0) line(md, `- Acceptance Criteria مستبعدة: ${excludedDrafts.acceptanceCriteria}`);
+    blank(md);
+  }
+
   heading(md, 2, "Deny-List Notice");
   line(md, "استُبعدت الحقول التالية أمنيًا: `ai_task_model_config`, `commercial*`, `handoff_partners`, `raw_prompt`, `sync_status`, `private_notes`, والأبحاث المصنّفة `internal`/`confidential`.");
   blank(md);
@@ -258,6 +309,7 @@ export async function buildContextPackMarkdown(projectId: string): Promise<Conte
   return {
     md: "﻿" + md.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n",
     missing,
+    excludedDrafts,
     pinnedPrdVersion: prd?.version ?? null,
     pinnedBrainVersion: brain?.version ?? null,
     pinnedConfigUpdatedAt: cfg.updatedAt,

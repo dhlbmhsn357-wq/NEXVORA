@@ -11,6 +11,15 @@ import type { WorkflowV2ChecklistItemState } from "@/lib/workflow-v2";
 import { READINESS_METRICS_ORDERED, getReadinessKeyForStage } from "./registry";
 import type { ReadinessMetricKey } from "./types";
 
+export interface ComputedReadinessItem {
+  itemKey: string;
+  label: string;
+  description: string;
+  isMandatory: boolean;
+  status: "completed" | "skipped" | "in_progress" | "blocked" | "not_started";
+  weight: number;
+}
+
 export interface ComputedReadiness {
   metric: ReadinessMetricKey;
   percentage: number;
@@ -20,6 +29,7 @@ export interface ComputedReadiness {
     optionalTotal: number;
     optionalCompleted: number;
   };
+  items: ComputedReadinessItem[];
 }
 
 /**
@@ -47,6 +57,7 @@ export function computeReadinessForStage(
   let mandatoryCompleted = 0;
   let optionalTotal = 0;
   let optionalCompleted = 0;
+  const itemsOut: ComputedReadinessItem[] = [];
 
   for (const item of items) {
     const state = stateByKey.get(item.itemKey) ?? "not_started";
@@ -58,6 +69,15 @@ export function computeReadinessForStage(
       optionalTotal++;
       if (done) optionalCompleted++;
     }
+    itemsOut.push({
+      itemKey: item.itemKey,
+      label: item.displayName,
+      description: item.description,
+      isMandatory: item.isMandatory,
+      status: state,
+      // Weight — mandatory items share 80% pie, optional share 20% pie.
+      weight: item.isMandatory ? 80 : 20,
+    });
   }
 
   let percentage: number;
@@ -79,6 +99,7 @@ export function computeReadinessForStage(
     metric,
     percentage,
     breakdown: { mandatoryTotal, mandatoryCompleted, optionalTotal, optionalCompleted },
+    items: itemsOut,
   };
 }
 

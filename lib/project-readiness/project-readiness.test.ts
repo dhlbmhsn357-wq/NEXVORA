@@ -129,9 +129,9 @@ describe("project-readiness / compute", () => {
 
   it("computeOverallReadiness = متوسط المقاييس", () => {
     const results = [
-      { metric: "discovery_completeness" as const, percentage: 100, breakdown: {mandatoryTotal:0,mandatoryCompleted:0,optionalTotal:0,optionalCompleted:0} },
-      { metric: "problem_validation" as const, percentage: 50, breakdown: {mandatoryTotal:0,mandatoryCompleted:0,optionalTotal:0,optionalCompleted:0} },
-      { metric: "product_definition_ready" as const, percentage: 0, breakdown: {mandatoryTotal:0,mandatoryCompleted:0,optionalTotal:0,optionalCompleted:0} },
+      { metric: "discovery_completeness" as const, percentage: 100, breakdown: {mandatoryTotal:0,mandatoryCompleted:0,optionalTotal:0,optionalCompleted:0}, items: [] },
+      { metric: "problem_validation" as const, percentage: 50, breakdown: {mandatoryTotal:0,mandatoryCompleted:0,optionalTotal:0,optionalCompleted:0}, items: [] },
+      { metric: "product_definition_ready" as const, percentage: 0, breakdown: {mandatoryTotal:0,mandatoryCompleted:0,optionalTotal:0,optionalCompleted:0}, items: [] },
     ];
     expect(computeOverallReadiness(results)).toBe(50);
     expect(computeOverallReadiness([])).toBe(0);
