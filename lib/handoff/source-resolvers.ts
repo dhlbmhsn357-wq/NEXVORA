@@ -48,38 +48,81 @@ function empty(itemKey: string, sourceType: string, status: ResolvedStatus, reas
 }
 
 // ---------------------------------------------------------------------------
-// problem_brief — من آخر Brain معتمَد (Executive Summary)
+// problem_brief — Brain approved → Discovery Analysis → أول problem_validation
+// (سلسلة fallback: نجرّب مصدرًا أعمق كل مرة قبل ما نقول missing)
 // ---------------------------------------------------------------------------
 export async function resolveProblemBrief(
   supabase: SupabaseClient, projectId: string,
 ): Promise<ResolvedSource> {
   try {
+    // 1) أفضل مصدر: Brain executive_summary
     const brain = await getLatestApprovedBrain(supabase, projectId);
-    if (!brain) return empty("problem_brief", "brain", "not_approved", "لا يوجد Brain معتمَد.");
-    const content = brain.content as unknown as Record<string, { value?: unknown }>;
-    const exec = content?.executive_summary?.value;
-    const scope = content?.project_scope?.value as Record<string, unknown> | undefined;
-    let text = "";
-    if (typeof exec === "string" && exec.trim()) text = exec.trim();
-    if (!text && scope) {
-      const inScope = Array.isArray(scope.in_scope) ? (scope.in_scope as string[]).join("\n- ") : "";
-      if (inScope) text = inScope;
+    if (brain) {
+      const content = brain.content as unknown as Record<string, { value?: unknown }>;
+      const exec = content?.executive_summary?.value;
+      const problem = (content?.problem_definition?.value ?? content?.problem_statement?.value) as unknown;
+      const scope = content?.project_scope?.value as Record<string, unknown> | undefined;
+      let text = "";
+      if (typeof exec === "string" && exec.trim()) text = exec.trim();
+      if (!text && typeof problem === "string" && problem.trim()) text = problem.trim();
+      if (!text && scope) {
+        const inScope = Array.isArray(scope.in_scope) ? (scope.in_scope as string[]).join("\n- ") : "";
+        if (inScope) text = inScope;
+      }
+      if (text) {
+        return {
+          itemKey: "problem_brief", sourceType: "brain",
+          sourceVersion: String(brain.version),
+          sourceHash: createHash("sha256").update(text).digest("hex").slice(0, 32),
+          contentUrl: null, contentText: text.slice(0, 2000),
+          contentRefType: "brain_document", contentRefId: brain.id,
+          status: "ready", reason: `Brain v${brain.version} معتمَد.`,
+        };
+      }
     }
-    if (!text) return empty("problem_brief", "brain", "missing", "الملخّص التنفيذي في الـ Brain فارغ.");
-    return {
-      itemKey: "problem_brief",
-      sourceType: "brain",
-      sourceVersion: String(brain.version),
-      sourceHash: createHash("sha256").update(text).digest("hex").slice(0, 32),
-      contentUrl: null,
-      contentText: text.slice(0, 2000),
-      contentRefType: "brain_document",
-      contentRefId: brain.id,
-      status: "ready",
-      reason: `Brain v${brain.version} معتمَد.`,
-    };
+
+    // 2) Fallback: أحدث Discovery Analysis (يحتوي 17 قسم منها problem_statement)
+    const { data: analysisRow } = await supabase
+      .from("discovery_analyses").select("id, content, created_at")
+      .eq("project_id", projectId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (analysisRow) {
+      const c = (analysisRow.content ?? {}) as Record<string, unknown>;
+      const ps = (c.problem_statement ?? c.problem_definition ?? c.executive_summary) as unknown;
+      const psText = typeof ps === "string" ? ps : (ps as Record<string, unknown>)?.value as string | undefined;
+      if (psText && psText.trim()) {
+        const text = psText.trim();
+        return {
+          itemKey: "problem_brief", sourceType: "discovery_analysis",
+          sourceVersion: analysisRow.created_at as string,
+          sourceHash: createHash("sha256").update(text).digest("hex").slice(0, 32),
+          contentUrl: null, contentText: text.slice(0, 2000),
+          contentRefType: "discovery_analysis", contentRefId: analysisRow.id as string,
+          status: "ready", reason: "من Discovery Analysis (Brain غير معتمَد بعد).",
+        };
+      }
+    }
+
+    // 3) Fallback أخير: أول Problem Validation item
+    const { data: pv } = await supabase
+      .from("problem_validation_items").select("id, title, pain_point, updated_at")
+      .eq("project_id", projectId).order("created_at", { ascending: true }).limit(1).maybeSingle();
+    if (pv && (pv.title || pv.pain_point)) {
+      const text = `${pv.title ?? ""}\n\n${pv.pain_point ?? ""}`.trim();
+      return {
+        itemKey: "problem_brief", sourceType: "problem_validation",
+        sourceVersion: pv.updated_at as string,
+        sourceHash: createHash("sha256").update(text).digest("hex").slice(0, 32),
+        contentUrl: null, contentText: text.slice(0, 2000),
+        contentRefType: "problem_validation_item", contentRefId: pv.id as string,
+        status: "ready", reason: "من Problem Validation (fallback أخير).",
+      };
+    }
+
+    return empty("problem_brief", "brain", "missing",
+      brain ? "الملخّص التنفيذي فارغ ولا يوجد Discovery Analysis أو Problem Validation." :
+        "لا يوجد Brain معتمَد ولا Discovery Analysis ولا Problem Validation.");
   } catch (e) {
-    return empty("problem_brief", "brain", "missing", e instanceof Error ? e.message : "تعذّر الوصول للـ Brain.");
+    return empty("problem_brief", "brain", "missing", e instanceof Error ? e.message : "تعذّر الوصول للمصادر.");
   }
 }
 
@@ -187,27 +230,52 @@ export async function resolveAcceptanceCriteria(
 }
 
 // ---------------------------------------------------------------------------
-// prototype_link — projects.staging_url
+// prototype_link — staging_url → production_url → Prototype Studio artifact
+// (سلسلة fallback: لو staging_url فارغ، جرّب production_url ثم Studio pack)
 // ---------------------------------------------------------------------------
 export async function resolvePrototypeLink(
   supabase: SupabaseClient, projectId: string,
 ): Promise<ResolvedSource> {
   try {
-    const { data } = await supabase.from("projects").select("staging_url").eq("id", projectId).maybeSingle();
-    const url = (data?.staging_url as string | null | undefined)?.trim();
-    if (!url) return empty("prototype_link", "staging_url", "missing", "لا يوجد staging_url على المشروع.");
-    return {
-      itemKey: "prototype_link",
-      sourceType: "staging_url",
-      sourceVersion: null,
-      sourceHash: createHash("sha256").update(url).digest("hex").slice(0, 32),
-      contentUrl: url,
-      contentText: "",
-      contentRefType: "project",
-      contentRefId: projectId,
-      status: "ready",
-      reason: "رابط Prototype/Staging مضبوط.",
-    };
+    // 1) staging_url أو production_url
+    const { data: proj } = await supabase.from("projects")
+      .select("staging_url, production_url").eq("id", projectId).maybeSingle();
+    const staging = (proj?.staging_url as string | null | undefined)?.trim();
+    const production = (proj?.production_url as string | null | undefined)?.trim();
+    const url = staging || production;
+    if (url) {
+      return {
+        itemKey: "prototype_link", sourceType: staging ? "staging_url" : "production_url",
+        sourceVersion: null,
+        sourceHash: createHash("sha256").update(url).digest("hex").slice(0, 32),
+        contentUrl: url, contentText: "",
+        contentRefType: "project", contentRefId: projectId,
+        status: "ready",
+        reason: staging ? "رابط Staging مضبوط." : "رابط Production مضبوط (staging غير موجود).",
+      };
+    }
+
+    // 2) Fallback: أحدث Codex Build Pack من Prototype Studio (يعني في نموذج جاهز حتى لو لسه ما اتنشرش)
+    const { data: artifact } = await supabase.from("prototype_studio_artifacts")
+      .select("id, version, created_at, status")
+      .eq("project_id", projectId).eq("artifact_type", "codex_build_pack")
+      .in("status", ["active", "approved"])
+      .order("version", { ascending: false }).limit(1).maybeSingle();
+    if (artifact) {
+      const artUrl = `/dashboard/projects/${projectId}?tab=prototypeStudio&section=build`;
+      return {
+        itemKey: "prototype_link", sourceType: "prototype_studio",
+        sourceVersion: `pack:v${artifact.version}`,
+        sourceHash: createHash("sha256").update(`pack:${artifact.id}`).digest("hex").slice(0, 32),
+        contentUrl: artUrl, contentText: `Codex Build Pack v${artifact.version} (نموذج جاهز للتنفيذ).`,
+        contentRefType: "prototype_studio_artifact", contentRefId: artifact.id as string,
+        status: "ready",
+        reason: `Codex Build Pack v${artifact.version} موجود (لا يوجد رابط نشر بعد).`,
+      };
+    }
+
+    return empty("prototype_link", "staging_url", "missing",
+      "لا يوجد staging_url أو production_url ولا Codex Build Pack مُولّد.");
   } catch (e) {
     return empty("prototype_link", "staging_url", "missing", e instanceof Error ? e.message : "تعذّر قراءة المشروع.");
   }
