@@ -9,7 +9,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { listItems } from "./service";
+import { listItems, assertPackageMutable } from "./service";
 import { resolveAllSources, type ResolvedSource } from "./source-resolvers";
 import { MANDATORY_HANDOFF_KEYS } from "./types";
 import type { HandoffItemRow } from "./types";
@@ -88,6 +88,8 @@ export interface AssemblyResult {
 export async function applyAssembly(
   supabase: SupabaseClient, projectId: string, packageId: string, userId: string | null,
 ): Promise<AssemblyResult> {
+  // 0111 — refuse assembly on finalized/superseded packages
+  await assertPackageMutable(supabase, { packageId });
   const previews = await previewAssembly(supabase, projectId, packageId);
   const svc = createServiceClient();
   const now = new Date().toISOString();

@@ -3,6 +3,7 @@
  */
 import "server-only";
 import { randomBytes } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type {
@@ -127,11 +128,46 @@ export interface HandoffItemPatch {
   isMandatory?: boolean;
 }
 
+/**
+ * 0111 — يرفض أي كتابة على حزمة نُهيت (finalized/superseded).
+ * يُستدعى في كل mutation قبل الكتابة. Defense-in-depth مع DB trigger.
+ * يقبل packageId مباشرة أو يستنتجها من itemId.
+ */
+export async function assertPackageMutable(
+  supabase: SupabaseClient,
+  ref: { packageId?: string; itemId?: string },
+): Promise<void> {
+  let packageId = ref.packageId ?? null;
+  if (!packageId && ref.itemId) {
+    const { data, error } = await supabase
+      .from("handoff_items")
+      .select("package_id")
+      .eq("id", ref.itemId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("عنصر التسليم غير موجود.");
+    packageId = data.package_id as string;
+  }
+  if (!packageId) throw new Error("assertPackageMutable: يلزم packageId أو itemId.");
+  const { data, error } = await supabase
+    .from("handoff_packages")
+    .select("status")
+    .eq("id", packageId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("الحزمة غير موجودة.");
+  const status = data.status as string;
+  if (status === "finalized" || status === "superseded") {
+    throw new Error("هذه نسخة تسليم نهائية وثابتة. أنشئ نسخة جديدة لإجراء تعديلات.");
+  }
+}
+
 /** upsert (package_id, item_key) — يدعم إضافة عناصر اختيارية جديدة. */
 export async function upsertItem(
   packageId: string, projectId: string, itemKey: string, patch: HandoffItemPatch,
 ): Promise<HandoffItemRow> {
   const svc = createServiceClient();
+  await assertPackageMutable(svc as unknown as SupabaseClient, { packageId });
   const def = HANDOFF_ITEM_REGISTRY.find((d) => d.key === itemKey);
   const isMandatory = patch.isMandatory ?? def?.isMandatory ?? false;
 
@@ -164,6 +200,7 @@ export async function setManualOverride(
   itemId: string, override: boolean, reason: string,
 ): Promise<HandoffItemRow> {
   const svc = createServiceClient();
+  await assertPackageMutable(svc as unknown as SupabaseClient, { itemId });
   const { data, error } = await svc.from("handoff_items")
     .update({ is_manual_override: override, override_reason: reason })
     .eq("id", itemId).select("*").single();
@@ -175,6 +212,8 @@ export async function finalizePackage(
   packageId: string, finalizedBy: string | null,
 ): Promise<HandoffPackageRow> {
   const svc = createServiceClient();
+  // 0111 — guard: refuse if already finalized/superseded (idempotency handled at caller)
+  await assertPackageMutable(svc as unknown as SupabaseClient, { packageId });
   const { data, error } = await svc.from("handoff_packages").update({
     status: "finalized",
     finalized_at: new Date().toISOString(),
@@ -207,6 +246,19 @@ export async function freezePackage(
   packageId: string, userId: string | null,
 ): Promise<HandoffPackageSnapshotRow> {
   const svc = createServiceClient();
+  // 0111 — Idempotency: لو مُجمَّدة بالفعل، أعِد آخر snapshot موجود.
+  const { data: existing, error: exErr } = await svc.from("handoff_packages")
+    .select("status, version").eq("id", packageId).maybeSingle();
+  if (exErr) throw exErr;
+  if (!existing) throw new Error("الحزمة غير موجودة.");
+  if (existing.status === "finalized" || existing.status === "superseded") {
+    const { data: snap, error: sErr } = await svc.from("handoff_package_snapshots")
+      .select("*").eq("package_id", packageId).eq("version", existing.version)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (sErr) throw sErr;
+    if (snap) return mapSnapshot(snap as DbSnapshot);
+    // fall-through: finalized بدون snapshot — نكمّل العملية العادية
+  }
   const { data: pkgData, error: pErr } = await svc.from("handoff_packages")
     .select("*").eq("id", packageId).single();
   if (pErr) throw pErr;
@@ -238,11 +290,12 @@ export async function freezePackage(
   }).select("*").single();
   if (sErr) throw sErr;
 
-  await svc.from("handoff_packages").update({
+  const { error: updErr } = await svc.from("handoff_packages").update({
     status: "finalized",
     finalized_at: new Date().toISOString(),
     finalized_by: userId,
   }).eq("id", packageId);
+  if (updErr) throw updErr;
 
   return mapSnapshot(snap as DbSnapshot);
 }
