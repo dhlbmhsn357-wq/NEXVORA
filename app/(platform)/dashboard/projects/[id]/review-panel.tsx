@@ -180,11 +180,27 @@ export default function ReviewPanel({
       )}
 
       {!hasReport && !isProcessing && (
-        <EmptyState
-          icon={<ClipboardCheck size={28} />}
-          title="لسه مفيش مراجعة لهذا المشروع"
-          description="لازم PRD معتمد جاهز أولاً، وبعدين حط رابط الـ Repository واضغط Run Review."
-        />
+        <div>
+          <EmptyState
+            icon={<ClipboardCheck size={28} />}
+            title="أكمل النموذج الأولي ودليل التقييم قبل بدء المراجعة"
+            description="لازم PRD معتمد + Prototype Studio جاهز + دليل التقييم متاح، وبعدين حط رابط الـ Repository واضغط Run Review."
+          />
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            <a
+              className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+              href={`/dashboard/projects/${projectId}?tab=prototypeStudio`}
+            >
+              الذهاب إلى Prototype Studio
+            </a>
+            <a
+              className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+              href={`/dashboard/projects/${projectId}?tab=evaluation`}
+            >
+              الذهاب إلى دليل التقييم
+            </a>
+          </div>
+        </div>
       )}
 
       {hasReport && review && (

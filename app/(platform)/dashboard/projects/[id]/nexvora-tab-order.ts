@@ -16,6 +16,13 @@
  * الوضع الممتد  = 9 phases (بإضافة execution خلف الفلاغ) — +3 top-level tabs.
  * قبل الـ Consolidation كانوا 34 tab، بعدها ~17 top-level (الباقي بقى subtabs).
  *
+ * Reorder 2026-Q3:
+ *  • docs: evaluation قبل prototypeReview (المراجعة تعتمد على دليل التقييم).
+ *  • prototypePrompt اتشال من phases (Legacy) — لسه شغّال عبر deep-link
+ *    (?tab=prototypePrompt) بس هيظهر في phase "أخرى".
+ *  • approval → «عرض واعتماد العميل» ويحتوي clientDelivery + approvals.
+ *  • delivery → «التسليم التقني» ويحتوي handoff فقط.
+ *
  * Security note: Extended tabs محجوبة تمامًا لما الفلاغ off — server-side
  * redirect في page.tsx يرفض ?tab=<execution-key> ويعيد التوجيه للـ overview،
  * وكل server action مرتبط محمي بـ `requireExtendedTechnical()`. الفلترة في
@@ -89,7 +96,7 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "docs",
     label: "المستندات والنموذج",
-    tabs: [e("prd"), e("prototypeStudio"), a("prototypePrompt"), e("prototypeReview"), e("evaluation")],
+    tabs: [e("prd"), e("prototypeStudio"), e("evaluation"), e("prototypeReview")],
   },
   {
     key: "ops",
@@ -106,14 +113,14 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   },
   {
     key: "approval",
-    label: "اعتماد العميل",
-    tabs: [e("approvals")],
+    label: "عرض واعتماد العميل",
+    tabs: [e("clientDelivery"), e("approvals")],
   },
   {
     key: "delivery",
-    label: "تسليم العميل",
+    label: "التسليم التقني",
     // Consolidation UX 2026: developerHandoff + partners اتدمجوا داخل handoff (subtabs).
-    tabs: [e("clientDelivery"), e("handoff")],
+    tabs: [e("handoff")],
   },
   {
     key: "execution",
@@ -166,6 +173,18 @@ export const EXTENDED_TAB_KEYS: ReadonlySet<string> = new Set<string>(
 /** يرجّع true لو الـ key ينتمي لأي تبويبة Extended Technical Delivery. */
 export function isExtendedTechnicalTabKey(key: string): boolean {
   return EXTENDED_TAB_KEYS.has(key);
+}
+
+/**
+ * مفاتيح تبويبات قديمة (Legacy) — مخفية من كل UI الأساسي (phase pills،
+ * Quick Jump، Workflow Nav)، وتفتح فقط عبر deep-link مباشر (?tab=<key>).
+ * الهدف: عدم كسر الروابط القديمة مع تنظيف الواجهة من الأدوات المستبدلة.
+ */
+export const LEGACY_TAB_KEYS: ReadonlySet<string> = new Set<string>(["prototypePrompt"]);
+
+/** يرجّع true لو الـ key تبويبة قديمة (Legacy) — للاستهلاك في UI + banners. */
+export function isLegacyTabKey(key: string): boolean {
+  return LEGACY_TAB_KEYS.has(key);
 }
 
 /** كل الأكواد المُصنَّفة (للاستعلام السريع). */

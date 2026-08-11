@@ -180,14 +180,34 @@ export default function PresentationPanel({
       <div>
         <EmptyState
           icon={<MonitorPlay size={28} />}
-          title="لسه مفيش عرض للعميل لهذا المشروع"
-          description="محتاج Project Brain وPRD جاهزين أولاً."
+          title="لا يمكن تجهيز العرض التنفيذي بعد"
+          description="أكمل المخرجات المطلوبة أولًا: Project Brain معتمد + PRD متاح + (مفضّل) Prototype Review."
           primaryAction={{
             label: isGenerating ? "جاري التوليد…" : "Generate Client Presentation",
             onClick: handleGenerateClick,
             loading: isGenerating,
           }}
         />
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <a
+            className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+            href={`/dashboard/projects/${projectId}?tab=projectBrain`}
+          >
+            الذهاب إلى Project Brain
+          </a>
+          <a
+            className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+            href={`/dashboard/projects/${projectId}?tab=prd`}
+          >
+            الذهاب إلى PRD
+          </a>
+          <a
+            className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+            href={`/dashboard/projects/${projectId}?tab=prototypeReview`}
+          >
+            الذهاب إلى مراجعة النموذج
+          </a>
+        </div>
         {displayMessage && <p className="mt-3 text-center text-xs text-[var(--v-amber)]">{displayMessage}</p>}
         {isGenerating && (
           <p className="mt-2 text-center text-xs text-[var(--v-text-muted)]">

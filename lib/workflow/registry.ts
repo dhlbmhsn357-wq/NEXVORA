@@ -244,7 +244,7 @@ export const STAGE_REGISTRY: StageDefinition[] = [
   {
     id: "clientDelivery",
     slug: "client-delivery",
-    displayName: "Client Presentation & Executive Delivery",
+    displayName: "العرض التنفيذي للعميل",
     description: "عرض تنفيذي احترافي جاهز للعميل — يُجمَّع تلقائيًّا من كل المراحل (اكتشاف/اجتماعات/قرارات/Brain/PRD/توصيات) بلا أي تفاصيل تقنية. تصدير PDF/PPTX/HTML تفاعلي.",
     icon: "Presentation",
     order: 14.5,

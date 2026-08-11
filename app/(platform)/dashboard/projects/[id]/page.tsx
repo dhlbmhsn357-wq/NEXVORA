@@ -1106,15 +1106,24 @@ export default async function ProjectDetailPage({
       )
     ),
     prototypePrompt: (
-      <PrototypePromptPanel
-        projectId={project.id}
-        projectName={project.name}
-        prompt={prototypePrompt}
-        currentPrdVersion={prd?.version ?? null}
-        currentBrainVersion={brainV2ForGeneration?.version ?? null}
-        pipelinePlan={pipelinePlan}
-        pipelineStages={pipelineStages ?? []}
-      />
+      <div>
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <strong>أداة قديمة (Legacy):</strong> استخدم{" "}
+          <a href={`/dashboard/projects/${project.id}?tab=prototypeStudio`} className="underline">
+            Prototype Studio
+          </a>{" "}
+          للمشاريع الجديدة. تم الإبقاء على هذه اللوحة للحفاظ على الروابط المرجعية فقط.
+        </div>
+        <PrototypePromptPanel
+          projectId={project.id}
+          projectName={project.name}
+          prompt={prototypePrompt}
+          currentPrdVersion={prd?.version ?? null}
+          currentBrainVersion={brainV2ForGeneration?.version ?? null}
+          pipelinePlan={pipelinePlan}
+          pipelineStages={pipelineStages ?? []}
+        />
+      </div>
     ),
     prototypeReview: (
       <ReviewPanel projectId={project.id} projectName={project.name} review={review} currentPrdVersion={prd?.version ?? null} />

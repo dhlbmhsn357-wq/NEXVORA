@@ -122,7 +122,32 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
       <Card>
         <Header title={`السيناريوهات (${scenarios.length})`} action={canWrite ? <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreating(true)}>سيناريو جديد</Button> : null} />
         {scenarios.length === 0 ? (
-          <EmptyState title="لا سيناريوهات بعد" description="ابدأ بسيناريو تقييم أول." />
+          <div>
+            <EmptyState
+              title="لا سيناريوهات بعد"
+              description={
+                stories.length === 0 && flows.length === 0
+                  ? "سيناريوهات التقييم تُبنى على قصص المستخدم ومساراته. أنشئ قصة أو مسارًا أولًا."
+                  : "ابدأ بسيناريو تقييم أول (يمكنك ربطه بقصة أو مسار)."
+              }
+            />
+            {(stories.length === 0 && flows.length === 0) && (
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <a
+                  className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+                  href={`/dashboard/projects/${projectId}?tab=stories`}
+                >
+                  الذهاب إلى قصص المستخدم
+                </a>
+                <a
+                  className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+                  href={`/dashboard/projects/${projectId}?tab=definition`}
+                >
+                  الذهاب إلى تعريف المنتج
+                </a>
+              </div>
+            )}
+          </div>
         ) : (
           <ul className="divide-y divide-[var(--v-border)]">
             {scenarios.map((s) => {

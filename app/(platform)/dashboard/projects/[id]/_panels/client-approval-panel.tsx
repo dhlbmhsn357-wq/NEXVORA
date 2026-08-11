@@ -73,7 +73,32 @@ export default function ClientApprovalPanel({ projectId, approvals, baseUrl, can
           <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreating(true)}>رابط جديد</Button>
         ) : null} />
         {approvals.length === 0 ? (
-          <EmptyState title="لا روابط اعتماد بعد" description="أنشئ رابطًا عامًا للعميل لاعتماد الـ PRD أو العرض." />
+          <div>
+            <EmptyState
+              title="لا يوجد مخرَج جاهز للاعتماد حتى الآن"
+              description="جهّز PRD أو العرض التنفيذي أو العرض التجاري أولًا، ثم أنشئ رابط اعتماد للعميل."
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+                href={`/dashboard/projects/${projectId}?tab=prd`}
+              >
+                الذهاب إلى PRD
+              </a>
+              <a
+                className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+                href={`/dashboard/projects/${projectId}?tab=clientDelivery`}
+              >
+                تجهيز العرض التنفيذي
+              </a>
+              <a
+                className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-3 py-1.5 text-xs text-[var(--v-text-secondary)] hover:border-[var(--v-primary)] hover:text-[var(--v-primary)]"
+                href={`/dashboard/projects/${projectId}?tab=commercial&section=proposals`}
+              >
+                الذهاب إلى العرض التجاري
+              </a>
+            </div>
+          </div>
         ) : (
           <ul className="divide-y divide-[var(--v-border)]">
             {approvals.map((a) => {
