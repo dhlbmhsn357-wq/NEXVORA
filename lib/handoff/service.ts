@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type {
   HandoffPackageRow, HandoffItemRow, HandoffPackageStatus, HandoffItemStatus,
+  HandoffPackageSnapshotRow,
   ExternalPartnerRow, PartnerRole, PartnerStatus,
   HandoffQuestionRow, HandoffQuestionStatus, HandoffQuestionPriority,
   HandoffDeliveryRow, HandoffDeliveryStatus,
@@ -181,6 +182,78 @@ export async function finalizePackage(
   }).eq("id", packageId).select("*").single();
   if (error) throw error;
   return mapPackage(data as DbPackage);
+}
+
+// ---------------------------------------------------------------------------
+// 0110 — Package Snapshots (Formal Delivery / Freeze)
+// ---------------------------------------------------------------------------
+type DbSnapshot = {
+  id: string; package_id: string; project_id: string; version: number;
+  payload: unknown; created_at: string; created_by: string | null;
+};
+function mapSnapshot(r: DbSnapshot): HandoffPackageSnapshotRow {
+  return {
+    id: r.id, packageId: r.package_id, projectId: r.project_id,
+    version: r.version, payload: r.payload,
+    createdAt: r.created_at, createdBy: r.created_by,
+  };
+}
+
+/**
+ * يجمّد الحزمة: يبني payload كامل ثابت (كل الحقول + resolved)، ينشئ سطر snapshot،
+ * ويحدّث الحزمة إلى finalized. يُستخدم مع UI "تسليم رسمي".
+ */
+export async function freezePackage(
+  packageId: string, userId: string | null,
+): Promise<HandoffPackageSnapshotRow> {
+  const svc = createServiceClient();
+  const { data: pkgData, error: pErr } = await svc.from("handoff_packages")
+    .select("*").eq("id", packageId).single();
+  if (pErr) throw pErr;
+  const pkg = mapPackage(pkgData as DbPackage);
+
+  const { data: itemRows, error: iErr } = await svc.from("handoff_items")
+    .select("*").eq("package_id", packageId).order("item_key", { ascending: true });
+  if (iErr) throw iErr;
+  const items = (itemRows as DbItem[]).map(mapItem);
+
+  const payload = {
+    frozenAt: new Date().toISOString(),
+    frozenBy: userId,
+    package: pkg,
+    items,
+    summary: {
+      totalItems: items.length,
+      completed: items.filter((i) => i.status === "completed").length,
+      manualOverrides: items.filter((i) => i.isManualOverride).length,
+    },
+  };
+
+  const { data: snap, error: sErr } = await svc.from("handoff_package_snapshots").insert({
+    package_id: packageId,
+    project_id: pkg.projectId,
+    version: pkg.version,
+    payload,
+    created_by: userId,
+  }).select("*").single();
+  if (sErr) throw sErr;
+
+  await svc.from("handoff_packages").update({
+    status: "finalized",
+    finalized_at: new Date().toISOString(),
+    finalized_by: userId,
+  }).eq("id", packageId);
+
+  return mapSnapshot(snap as DbSnapshot);
+}
+
+export async function listSnapshots(packageId: string): Promise<HandoffPackageSnapshotRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("handoff_package_snapshots").select("*").eq("package_id", packageId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as DbSnapshot[]).map(mapSnapshot);
 }
 
 // ---------------------------------------------------------------------------

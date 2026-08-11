@@ -18,20 +18,41 @@ export interface HandoffReadiness {
   overallScore: number;         // mandatory 80% + optional 20%
   ready: boolean;               // كل الإلزاميات مكتملة
   missingMandatory: HandoffItemDef[];
+  /** 0110 — عناصر تلقائية تغيّر مصدرها بعد التجميع. */
+  stale: number;
 }
 
 /**
- * الجاهزية = كل الـ 7 إلزامية مكتمَلة. الاختياريات تحسّن النقاط لكن لا تمنع التسليم.
+ * الجاهزية = كل الـ 7 إلزامية مكتمَلة + غير stale + (auto أو manual override).
+ * الاختياريات تحسّن النقاط لكن لا تمنع التسليم.
+ * @param currentHashes خريطة اختيارية itemKey→hash الحالية للمصدر لكشف الـ stale.
  */
-export function deriveHandoffReadiness(items: readonly HandoffItemRow[]): HandoffReadiness {
+export function deriveHandoffReadiness(
+  items: readonly HandoffItemRow[],
+  currentHashes?: ReadonlyMap<string, string | null>,
+): HandoffReadiness {
   const byKey = new Map(items.map((i) => [i.itemKey, i]));
   const mandatoryDefs = HANDOFF_ITEM_REGISTRY.filter((d) => d.isMandatory);
   const optionalDefs  = HANDOFF_ITEM_REGISTRY.filter((d) => !d.isMandatory);
 
+  const isStale = (row: HandoffItemRow): boolean => {
+    if (!currentHashes) return false;
+    return isItemStale(row, currentHashes.get(row.itemKey) ?? null);
+  };
+
   const isDone = (key: string) => {
     const row = byKey.get(key);
-    return row ? (row.status === "completed" || row.status === "skipped") : false;
+    if (!row) return false;
+    if (row.status === "skipped") return true;
+    if (row.status !== "completed") return false;
+    // 0110 — auto-linked أو manual override وغير stale
+    const linked = row.sourceType !== null || row.isManualOverride;
+    if (!linked) return true; // legacy manual (pre-0110): يبقى صالح
+    if (isStale(row)) return false;
+    return true;
   };
+  let staleCount = 0;
+  for (const [, row] of byKey) if (isStale(row)) staleCount++;
 
   const mandatoryCompleted = mandatoryDefs.filter((d) => isDone(d.key)).length;
   const optionalCompleted  = optionalDefs.filter((d) => isDone(d.key)).length;
@@ -51,6 +72,7 @@ export function deriveHandoffReadiness(items: readonly HandoffItemRow[]): Handof
     overallScore,
     ready: mandatoryCompleted === mandatoryDefs.length,
     missingMandatory,
+    stale: staleCount,
   };
 }
 

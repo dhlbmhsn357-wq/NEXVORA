@@ -3,7 +3,7 @@
 /** NEXVORA Handoff Package Panel (P12) */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, PackageCheck, Printer } from "lucide-react";
+import { CheckCircle2, PackageCheck, Printer, Sparkles, Lock, AlertTriangle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -29,7 +29,10 @@ import {
   createPackageAction, updateItemAction, finalizePackageAction,
   createQuestionAction, answerQuestionAction, updateQuestionStatusAction,
   createDeliveryAction, updateDeliveryStatusAction,
+  previewAssemblyAction, applyAssemblyAction,
+  freezePackageAction,
 } from "../handoff-actions";
+import type { AssemblyPreview } from "@/lib/handoff/assembler";
 
 export interface HandoffPanelProps {
   projectId: string;
@@ -56,6 +59,9 @@ export default function HandoffPanel({
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<HandoffItemDef | null>(null);
   const [subtab, setSubtab] = useState<SubTab>("items");
+  const [preview, setPreview] = useState<AssemblyPreview[] | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [frozenSnap, setFrozenSnap] = useState<{ snapshotId: string; version: number } | null>(null);
 
   const readiness = useMemo(() => deriveHandoffReadiness(items), [items]);
   const effStatus = latestPackage ? effectivePackageStatus(latestPackage.status, readiness) : "draft";
@@ -72,12 +78,43 @@ export default function HandoffPanel({
     });
   }
 
+  async function openPreview() {
+    if (!latestPackage) return;
+    setPreviewLoading(true);
+    const res = await previewAssemblyAction(projectId, latestPackage.id);
+    setPreviewLoading(false);
+    if (!res.ok) { toast.error(res.message); return; }
+    setPreview(res.data ?? []);
+  }
+  function applyAndClose() {
+    if (!latestPackage) return;
+    startTransition(async () => {
+      const res = await applyAssemblyAction(projectId, latestPackage.id);
+      if (!res.ok) { toast.error(res.message); return; }
+      const d = res.data;
+      toast.success(`تم التجميع: تحديث ${d?.updated ?? 0} · تخطّي ${d?.skipped ?? 0}${d && d.failed > 0 ? ` · فشل ${d.failed}` : ""}`);
+      setPreview(null);
+      router.refresh();
+    });
+  }
+  function doFreeze() {
+    if (!latestPackage) return;
+    if (!confirm("تسليم رسمي: سيُنشأ Snapshot ثابت للحزمة. متابعة؟")) return;
+    startTransition(async () => {
+      const res = await freezePackageAction(projectId, latestPackage.id);
+      if (!res.ok) { toast.error(res.message); return; }
+      toast.success(`تم تجميد النسخة v${res.data?.version ?? "?"}`);
+      setFrozenSnap(res.data ?? null);
+      router.refresh();
+    });
+  }
+
   if (!latestPackage) {
     return (
       <Card>
         <EmptyState
           title="لا حزمة تسليم بعد"
-          description="ابدأ حزمة تسليم جديدة — سيتم بذر الـ 7 عناصر الإلزامية تلقائيًا."
+          description="ابدأ حزمة تسليم جديدة — سيتم بذر الـ 7 عناصر الإلزامية تلقائيًا، ويمكنك بعدها تجميعها تلقائيًا من مخرجات المشروع."
           primaryAction={canWrite ? {
             label: "حزمة جديدة",
             onClick: () => run(() => createPackageAction(projectId).then((r) => r.ok ? { ok: true } : r), "تم إنشاء الحزمة"),
@@ -119,16 +156,40 @@ export default function HandoffPanel({
           </Button>
         </div>
         {canWrite && (
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="primary" icon={<Sparkles size={14} />}
+              disabled={previewLoading || effStatus === "finalized"}
+              onClick={openPreview}
+            >
+              {previewLoading ? "جارٍ الفحص..." : "تجميع الحزمة من المشروع"}
+            </Button>
             <Button variant="ghost" onClick={() => run(() => createPackageAction(projectId).then((r) => r.ok ? { ok: true } : r), "تم إنشاء نسخة جديدة")}>نسخة جديدة</Button>
             <Button
-              variant="primary" icon={<PackageCheck size={14} />}
+              variant="primary" icon={<Lock size={14} />}
               disabled={!readiness.ready || effStatus === "finalized"}
-              onClick={() => { if (!confirm("تأكيد تسليم هذه الحزمة؟")) return; run(() => finalizePackageAction(projectId, latestPackage.id), "تم التسليم"); }}
+              onClick={doFreeze}
             >
-              {effStatus === "finalized" ? "مُسلَّمة" : "تسليم رسمي"}
+              {effStatus === "finalized" ? "مُسلَّمة (مُجمَّدة)" : "تسليم رسمي"}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={!readiness.ready || effStatus === "finalized"}
+              onClick={() => { if (!confirm("تأكيد تسليم هذه الحزمة (بدون تجميد Snapshot)؟")) return; run(() => finalizePackageAction(projectId, latestPackage.id), "تم التسليم"); }}
+            >
+              <PackageCheck size={14} /> تسليم بلا تجميد
             </Button>
           </div>
+        )}
+        {frozenSnap && (
+          <p className="mt-2 text-xs text-[var(--v-green)]">
+            تم إنشاء Snapshot v{frozenSnap.version} (id: {frozenSnap.snapshotId.slice(0, 8)}…)
+          </p>
+        )}
+        {readiness.stale > 0 && (
+          <p className="mt-2 text-xs text-[var(--v-amber)] flex items-center gap-1">
+            <AlertTriangle size={12} /> {readiness.stale} عنصر تلقائي تغيّر مصدره — أعد التجميع.
+          </p>
         )}
       </Card>
 
@@ -200,8 +261,79 @@ export default function HandoffPanel({
           setEditing(null);
         }}
       />
+      <PreviewModal
+        open={preview !== null}
+        previews={preview ?? []}
+        onClose={() => setPreview(null)}
+        onConfirm={applyAndClose}
+        pending={pending}
+      />
       {pending && <span className="sr-only">جارٍ الحفظ...</span>}
     </div>
+  );
+}
+
+function PreviewModal({
+  open, previews, onClose, onConfirm, pending,
+}: {
+  open: boolean; previews: AssemblyPreview[];
+  onClose: () => void; onConfirm: () => void; pending: boolean;
+}) {
+  const actionLabel: Record<AssemblyPreview["action"], string> = {
+    will_link: "سيُربط تلقائيًا",
+    already_linked_same: "مُربوط أصلًا",
+    stale_will_update: "قديم — سيُحدَّث",
+    skipped_manual: "تم تخطّيه (Manual Override)",
+    cannot_resolve: "لا يمكن حلّه",
+  };
+  const actionTone: Record<AssemblyPreview["action"], BadgeTone> = {
+    will_link: "success",
+    already_linked_same: "neutral",
+    stale_will_update: "warning",
+    skipped_manual: "info",
+    cannot_resolve: "danger",
+  };
+  const applicable = previews.filter((p) => p.action === "will_link" || p.action === "stale_will_update").length;
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-2xl">
+      <div className="space-y-4 p-6">
+        <h2 className="text-lg font-semibold text-[var(--v-text)]">فحص المخرجات وتجميع الحزمة</h2>
+        <p className="text-xs text-[var(--v-text-secondary)]">
+          سيتم قراءة المصادر المعتمَدة داخل المشروع فقط (مسوّدات لا تُحسب) وربطها بعناصر الحزمة.
+          العناصر ذات Manual Override لا تُلمس.
+        </p>
+        <div className="max-h-[50vh] overflow-y-auto rounded-[var(--v-radius-md)] border border-[var(--v-border)]">
+          <ul className="divide-y divide-[var(--v-border)]">
+            {previews.map((p) => {
+              const def = HANDOFF_ITEM_REGISTRY.find((d) => d.key === p.itemKey);
+              return (
+                <li key={p.itemKey} className="flex flex-col gap-1 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-[var(--v-text)]">{def?.label ?? p.itemKey}</span>
+                    <Badge tone={actionTone[p.action]}>{actionLabel[p.action]}</Badge>
+                    <Badge tone="neutral">مصدر: {p.resolved.sourceType}</Badge>
+                  </div>
+                  <p className="text-[11px] text-[var(--v-text-subtle)]">
+                    الحالة الحالية: {p.currentStatus} · مصدر: {p.resolved.status} · {p.resolved.reason}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-[var(--v-text-secondary)]">
+            سيُطبَّق على {applicable} عنصر.
+          </span>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={pending}>إلغاء</Button>
+            <Button variant="primary" onClick={onConfirm} disabled={pending || applicable === 0}>
+              {pending ? "جارٍ التطبيق..." : "تأكيد التجميع"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -226,6 +358,12 @@ function ItemsList({ defs, itemsByKey, onEdit, canWrite }: {
                 <Badge tone="neutral">{CATEGORY_LABELS[d.category]}</Badge>
                 <Badge tone={tone}>{HANDOFF_ITEM_STATUS_LABELS[status]}</Badge>
                 {d.isMandatory && <Badge tone="danger">إلزامي</Badge>}
+                {row?.sourceType && !row.isManualOverride && (
+                  <Badge tone="info">
+                    Auto · {row.sourceType}{row.sourceVersion ? ` v${row.sourceVersion.replace(/^listhash:/, "L:")}` : ""}
+                  </Badge>
+                )}
+                {row?.isManualOverride && <Badge tone="warning">Manual Override</Badge>}
               </div>
               <p className="text-[11px] text-[var(--v-text-subtle)]">{d.description}</p>
               {row?.contentUrl && (

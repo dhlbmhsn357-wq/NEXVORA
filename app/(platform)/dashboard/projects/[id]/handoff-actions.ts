@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
 import {
-  createPackage, upsertItem, finalizePackage, setManualOverride,
+  createPackage, upsertItem, finalizePackage, setManualOverride, freezePackage,
   createQuestion, answerQuestion, updateQuestionStatus, getQuestion,
   createDelivery, updateDeliveryStatus,
   type HandoffItemPatch, type CreateQuestionInput, type CreateDeliveryInput,
@@ -121,6 +121,18 @@ export async function finalizePackageAction(projectId: string, packageId: string
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التسليم." }; }
+}
+
+/** 0110 — تسليم رسمي: يجمّد الحزمة في snapshot ثابت. */
+export async function freezePackageAction(
+  projectId: string, packageId: string,
+): Promise<Result<{ snapshotId: string; version: number }>> {
+  const g = await guard(); if (!g.ok) return g;
+  try {
+    const snap = await freezePackage(packageId, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { snapshotId: snap.id, version: snap.version } };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التجميد." }; }
 }
 
 // ============================================================================
