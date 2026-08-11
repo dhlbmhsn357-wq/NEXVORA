@@ -8,8 +8,9 @@ import {
   regeneratePRDSection,
   editPRDSection,
   getPRDVersions,
+  approvePRDAction,
 } from "./prd-actions";
-import { FileText } from "lucide-react";
+import { FileText, CheckCircle2 } from "lucide-react";
 import { formatPRDAsMarkdown, downloadMarkdown } from "@/lib/prd/export";
 import { toast } from "@/components/ui/Toaster";
 import RegenerateConfirmDialog from "@/components/ui/RegenerateConfirmDialog";
@@ -79,6 +80,7 @@ export default function PRDPanel({
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [compareA, setCompareA] = useState<number | null>(null);
   const [compareB, setCompareB] = useState<number | null>(null);
+  const [approving, setApproving] = useState(false);
 
   const isGenerating =
     prd?.sync_status === "generating" ||
@@ -197,6 +199,25 @@ export default function PRDPanel({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {prd.status === "draft" && (
+            <Button
+              variant="primary"
+              size="md"
+              icon={<CheckCircle2 size={16} />}
+              loading={approving}
+              disabled={isGenerating || approving}
+              onClick={async () => {
+                if (!confirm("بعد الاعتماد لن تستطيع تعديل هذه النسخة. سيُنشأ نسخة جديدة تلقائيًا لأي تعديل لاحق. متأكد؟")) return;
+                setApproving(true);
+                const res = await approvePRDAction(projectId);
+                setApproving(false);
+                if (res.ok) { toast.success("تم اعتماد PRD."); router.refresh(); }
+                else toast.error(res.message);
+              }}
+            >
+              اعتمد PRD
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleGenerateClick} loading={isGenerating}>
             Re-Generate
           </Button>

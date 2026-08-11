@@ -94,6 +94,34 @@ export async function editPRDSection(
   return { ok: true };
 }
 
+/**
+ * اعتماد PRD — يحوّل status من draft إلى approved.
+ * Quick Approve (UX): كل تعديل لاحق هيبني نسخة جديدة تلقائيًا عن طريق
+ * versioning system، مافيش داعي لأي عمل إضافي هنا.
+ */
+export async function approvePRDAction(
+  projectId: string
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const svc = createServiceClient();
+  const actorId = await getActorId();
+  const { data: prd, error: readErr } = await svc
+    .from("prds")
+    .select("id,status")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (readErr) return { ok: false, message: readErr.message };
+  if (!prd) return { ok: false, message: "لا يوجد PRD لهذا المشروع." };
+  if (prd.status === "approved") return { ok: true };
+  const { error } = await svc
+    .from("prds")
+    .update({ status: "approved", updated_at: new Date().toISOString() })
+    .eq("id", prd.id);
+  if (error) return { ok: false, message: error.message };
+  void actorId;
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { ok: true };
+}
+
 export async function getPRDVersions(projectId: string): Promise<PRDVersion[]> {
   const supabase = await createClient();
   const { data } = await supabase

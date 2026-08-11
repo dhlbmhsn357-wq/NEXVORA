@@ -3,7 +3,7 @@
 /** NEXVORA Handoff Package Panel (P12) */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, PackageCheck, Printer, Sparkles, Lock, AlertTriangle } from "lucide-react";
+import { CheckCircle2, PackageCheck, Printer, Sparkles, Lock, AlertTriangle, ArrowUpRight } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -288,6 +288,7 @@ export default function HandoffPanel({
         }}
       />
       <PreviewModal
+        projectId={projectId}
         open={preview !== null}
         previews={preview ?? []}
         onClose={() => setPreview(null)}
@@ -299,9 +300,21 @@ export default function HandoffPanel({
   );
 }
 
+/** يربط item_key بتبويب المحرِّر المناسب داخل صفحة المشروع. */
+const RESOLVE_TAB_BY_ITEM: Record<string, string> = {
+  problem_brief: "projectBrain",
+  scope_mvp: "definition",
+  user_stories: "stories",
+  acceptance_criteria: "stories",
+  prototype_link: "prototypeStudio",
+  prd_final: "prd",
+  product_evaluation_guide: "evaluation",
+};
+
 function PreviewModal({
-  open, previews, onClose, onConfirm, pending,
+  projectId, open, previews, onClose, onConfirm, pending,
 }: {
+  projectId: string;
   open: boolean; previews: AssemblyPreview[];
   onClose: () => void; onConfirm: () => void; pending: boolean;
 }) {
@@ -332,12 +345,24 @@ function PreviewModal({
           <ul className="divide-y divide-[var(--v-border)]">
             {previews.map((p) => {
               const def = HANDOFF_ITEM_REGISTRY.find((d) => d.key === p.itemKey);
+              const isBlocker = p.action !== "will_link" && p.action !== "already_linked_same";
+              const tab = RESOLVE_TAB_BY_ITEM[p.itemKey];
               return (
                 <li key={p.itemKey} className="flex flex-col gap-1 p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-[var(--v-text)]">{def?.label ?? p.itemKey}</span>
                     <Badge tone={actionTone[p.action]}>{actionLabel[p.action]}</Badge>
                     <Badge tone="neutral">مصدر: {p.resolved.sourceType}</Badge>
+                    {isBlocker && tab && (
+                      <a
+                        href={`/dashboard/projects/${projectId}?tab=${tab}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="ms-auto inline-flex items-center gap-1 rounded-[var(--v-radius-sm)] border border-[var(--v-primary)] px-2 py-0.5 text-[11px] font-medium text-[var(--v-primary)] hover:bg-[var(--v-primary-tint)]"
+                      >
+                        حلّ الآن <ArrowUpRight size={11} />
+                      </a>
+                    )}
                   </div>
                   <p className="text-[11px] text-[var(--v-text-subtle)]">
                     الحالة الحالية: {p.currentStatus} · مصدر: {p.resolved.status} · {p.resolved.reason}

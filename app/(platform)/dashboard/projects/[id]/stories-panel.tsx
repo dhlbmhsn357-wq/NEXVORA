@@ -8,7 +8,7 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, BookOpen, Target } from "lucide-react";
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, BookOpen, Target, CheckCheck } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -96,6 +96,51 @@ export default function StoriesPanel(props: StoriesPanelProps) {
     });
   }
 
+  // Quick Approve: عدّ المسوّدات + اعتماد جماعي (Stories/AC).
+  const draftStories = useMemo(
+    () => stories.filter((s) => s.status === "draft" || s.status === "in_review"),
+    [stories],
+  );
+  const draftAcs = useMemo(
+    () => acs.filter((a) => a.status === "draft"),
+    [acs],
+  );
+
+  function approveStory(id: string) {
+    runAction(() => updateStoryAction(projectId, id, { status: "approved" }), "تم الاعتماد");
+  }
+  function approveAc(id: string) {
+    runAction(() => updateAcAction(projectId, id, { status: "approved" }), "تم الاعتماد");
+  }
+  function bulkApproveDraftStories() {
+    if (draftStories.length === 0) return;
+    if (!confirm(`سيتم اعتماد ${draftStories.length} قصة. متأكد؟`)) return;
+    startTransition(async () => {
+      let ok = 0, fail = 0;
+      for (const s of draftStories) {
+        const res = await updateStoryAction(projectId, s.id, { status: "approved" });
+        if (res.ok) ok++; else fail++;
+      }
+      if (fail === 0) toast.success(`تم اعتماد ${ok} قصة.`);
+      else toast.error(`اعتُمد ${ok} · فشل ${fail}`);
+      router.refresh();
+    });
+  }
+  function bulkApproveDraftAcs() {
+    if (draftAcs.length === 0) return;
+    if (!confirm(`سيتم اعتماد ${draftAcs.length} معيار قبول. متأكد؟`)) return;
+    startTransition(async () => {
+      let ok = 0, fail = 0;
+      for (const a of draftAcs) {
+        const res = await updateAcAction(projectId, a.id, { status: "approved" });
+        if (res.ok) ok++; else fail++;
+      }
+      if (fail === 0) toast.success(`تم اعتماد ${ok} معيار.`);
+      else toast.error(`اعتُمد ${ok} · فشل ${fail}`);
+      router.refresh();
+    });
+  }
+
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -139,6 +184,11 @@ export default function StoriesPanel(props: StoriesPanelProps) {
                   : `عرض القصص غير المغطّاة (${sSum.total - acSum.storiesWithAcCount})`}
               </Button>
             )}
+            {canWrite && draftAcs.length > 0 && (
+              <Button size="sm" variant="success" icon={<CheckCheck size={14} />} onClick={bulkApproveDraftAcs} disabled={pending}>
+                اعتمد كل مسودات AC ({draftAcs.length})
+              </Button>
+            )}
           </div>
         </div>
       </Card>
@@ -162,7 +212,19 @@ export default function StoriesPanel(props: StoriesPanelProps) {
 
       {/* Stories grouped by status */}
       <Card>
-        <SectionHeader title={`القصص (${stories.length})`} action={canWrite ? <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreatingStory(true)}>قصة جديدة</Button> : null} />
+        <SectionHeader title={`القصص (${stories.length})`} action={canWrite ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {draftStories.length > 0 && (
+              <>
+                <span className="text-[11px] text-[var(--v-text-subtle)]">{draftStories.length} قصة مسوّدة</span>
+                <Button size="sm" variant="success" icon={<CheckCheck size={14} />} onClick={bulkApproveDraftStories} disabled={pending}>
+                  اعتمد كل المسودات ({draftStories.length})
+                </Button>
+              </>
+            )}
+            <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreatingStory(true)}>قصة جديدة</Button>
+          </div>
+        ) : null} />
         {stories.length === 0 ? (
           <EmptyState title="لا قصص بعد" description={canWrite ? "ابدأ بأول قصة مبنيّة على متطلب من P6." : "لم تُسجَّل قصص بعد."} />
         ) : (
@@ -207,6 +269,10 @@ export default function StoriesPanel(props: StoriesPanelProps) {
                               </Button>
                               {canWrite && (
                                 <>
+                                  {(s.status === "draft" || s.status === "in_review") && (
+                                    <Button size="sm" variant="success" icon={<CheckCircle2 size={14} />}
+                                      onClick={() => approveStory(s.id)} disabled={pending}>اعتمد</Button>
+                                  )}
                                   <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditingStory(s)}>تعديل</Button>
                                   <Button size="sm" variant="ghost" icon={<Trash2 size={14} />}
                                     onClick={() => { if (!confirm(`حذف "${s.title}"؟`)) return; runAction(() => deleteStoryAction(projectId, s.id), "تم الحذف"); }}>حذف</Button>
@@ -257,6 +323,10 @@ export default function StoriesPanel(props: StoriesPanelProps) {
                                           </div>
                                           {canWrite && (
                                             <div className="flex shrink-0 gap-1">
+                                              {a.status === "draft" && (
+                                                <Button size="sm" variant="success" icon={<CheckCircle2 size={12} />}
+                                                  onClick={() => approveAc(a.id)} disabled={pending}>اعتمد</Button>
+                                              )}
                                               <Button size="sm" variant="ghost" icon={<Pencil size={12} />} onClick={() => setEditingAc(a)}>تعديل</Button>
                                               <Button size="sm" variant="ghost" icon={<Trash2 size={12} />}
                                                 onClick={() => { if (!confirm("حذف المعيار؟")) return; runAction(() => deleteAcAction(projectId, a.id), "تم الحذف"); }}>حذف</Button>

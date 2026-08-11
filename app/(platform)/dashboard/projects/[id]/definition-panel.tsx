@@ -8,7 +8,7 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Star, GitBranch, ListChecks, Target } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, GitBranch, ListChecks, Target, CheckCircle2, CheckCheck } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -83,6 +83,29 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
       const res = await fn();
       if (res.ok) { toast.success(okMsg); router.refresh(); }
       else toast.error(res.message);
+    });
+  }
+
+  // Quick Approve — متطلبات
+  const mustUnapproved = useMemo(
+    () => requirements.filter((r) => r.priority === "must" && r.status !== "approved" && r.status !== "done"),
+    [requirements],
+  );
+  function approveReq(id: string) {
+    runAction(() => updateRequirementAction(projectId, id, { status: "approved" }), "تم الاعتماد");
+  }
+  function bulkApproveMust() {
+    if (mustUnapproved.length === 0) return;
+    if (!confirm(`سيتم اعتماد ${mustUnapproved.length} متطلب Must. متأكد؟`)) return;
+    startTransition(async () => {
+      let ok = 0, fail = 0;
+      for (const r of mustUnapproved) {
+        const res = await updateRequirementAction(projectId, r.id, { status: "approved" });
+        if (res.ok) ok++; else fail++;
+      }
+      if (fail === 0) toast.success(`تم اعتماد ${ok} متطلب.`);
+      else toast.error(`اعتُمد ${ok} · فشل ${fail}`);
+      router.refresh();
     });
   }
 
@@ -184,7 +207,16 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
 
       {/* Requirements (grouped by MoSCoW) */}
       <Card>
-        <SectionHeader title={`المتطلبات (${requirements.length})`} action={canWrite ? <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreatingReq(true)}>متطلب جديد</Button> : null} />
+        <SectionHeader title={`المتطلبات (${requirements.length})`} action={canWrite ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {mustUnapproved.length > 0 && (
+              <Button size="sm" variant="success" icon={<CheckCheck size={14} />} onClick={bulkApproveMust} disabled={pending}>
+                اعتمد كل متطلبات Must غير المعتمدة ({mustUnapproved.length})
+              </Button>
+            )}
+            <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreatingReq(true)}>متطلب جديد</Button>
+          </div>
+        ) : null} />
         {requirements.length === 0 ? (
           <EmptyState title="لا متطلبات بعد" description={canWrite ? "أضف أوّل متطلب — Must/Should/Could/Won't." : "لم تُسجَّل متطلبات بعد."} />
         ) : (
@@ -213,6 +245,10 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
                         </div>
                         {canWrite && (
                           <div className="flex shrink-0 gap-1">
+                            {r.status !== "approved" && r.status !== "done" && (
+                              <Button size="sm" variant="success" icon={<CheckCircle2 size={14} />}
+                                onClick={() => approveReq(r.id)} disabled={pending}>اعتمد</Button>
+                            )}
                             <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditingReq(r)}>تعديل</Button>
                             <Button size="sm" variant="ghost" icon={<Trash2 size={14} />}
                               onClick={() => { if (!confirm(`حذف "${r.title}"؟`)) return; runAction(() => deleteRequirementAction(projectId, r.id), "تم الحذف"); }}>حذف</Button>
