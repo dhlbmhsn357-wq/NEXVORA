@@ -36,6 +36,10 @@ type DbItem = {
   content_ref_type: string | null; content_ref_id: string | null;
   notes: string; completed_at: string | null; completed_by: string | null;
   created_at: string; updated_at: string;
+  // 0110
+  source_type?: string | null; source_version?: string | null; source_hash?: string | null;
+  assembled_at?: string | null; assembled_by?: string | null;
+  is_manual_override?: boolean; override_reason?: string;
 };
 function mapItem(r: DbItem): HandoffItemRow {
   return {
@@ -45,6 +49,13 @@ function mapItem(r: DbItem): HandoffItemRow {
     contentRefType: r.content_ref_type, contentRefId: r.content_ref_id,
     notes: r.notes, completedAt: r.completed_at, completedBy: r.completed_by,
     createdAt: r.created_at, updatedAt: r.updated_at,
+    sourceType: r.source_type ?? null,
+    sourceVersion: r.source_version ?? null,
+    sourceHash: r.source_hash ?? null,
+    assembledAt: r.assembled_at ?? null,
+    assembledBy: r.assembled_by ?? null,
+    isManualOverride: r.is_manual_override ?? false,
+    overrideReason: r.override_reason ?? "",
   };
 }
 

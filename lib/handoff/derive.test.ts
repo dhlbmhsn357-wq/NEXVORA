@@ -15,6 +15,8 @@ function item(key: string, status: HandoffItemRow["status"] = "completed"): Hand
     isMandatory: MANDATORY_HANDOFF_KEYS.includes(key), status,
     contentUrl: null, contentText: "", contentRefType: null, contentRefId: null,
     notes: "", completedAt: NOW, completedBy: null, createdAt: NOW, updatedAt: NOW,
+    sourceType: null, sourceVersion: null, sourceHash: null,
+    assembledAt: null, assembledBy: null, isManualOverride: false, overrideReason: "",
   };
 }
 function partner(over: Partial<ExternalPartnerRow>): ExternalPartnerRow {

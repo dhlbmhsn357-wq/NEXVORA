@@ -100,6 +100,25 @@ export interface HandoffItemRow {
   completedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  // 0110 — auto-assembly source linking
+  sourceType: string | null;
+  sourceVersion: string | null;
+  sourceHash: string | null;
+  assembledAt: string | null;
+  assembledBy: string | null;
+  isManualOverride: boolean;
+  overrideReason: string;
+}
+
+// --------- Handoff Package Snapshots (0110) ---------
+export interface HandoffPackageSnapshotRow {
+  id: string;
+  packageId: string;
+  projectId: string;
+  version: number;
+  payload: unknown;
+  createdAt: string;
+  createdBy: string | null;
 }
 
 // --------- Partners ---------
