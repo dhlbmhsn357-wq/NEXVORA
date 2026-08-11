@@ -99,6 +99,15 @@ export function ensureMandatoryKeys() {
   return MANDATORY_HANDOFF_KEYS;
 }
 
+/** 0110 — عنصر تلقائي يعتبر Stale لو الـ hash المسجّل ما يطابقش الحالي. */
+export function isItemStale(
+  item: Pick<HandoffItemRow, "sourceHash" | "isManualOverride">,
+  currentSourceHash: string | null,
+): boolean {
+  if (item.isManualOverride) return false;
+  return item.sourceHash !== null && currentSourceHash !== null && item.sourceHash !== currentSourceHash;
+}
+
 // ---------- Handoff Questions (0107) ----------
 export interface QuestionsSummary {
   total: number;

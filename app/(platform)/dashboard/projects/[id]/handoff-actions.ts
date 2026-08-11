@@ -3,11 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
 import {
-  createPackage, upsertItem, finalizePackage,
+  createPackage, upsertItem, finalizePackage, setManualOverride,
   createQuestion, answerQuestion, updateQuestionStatus, getQuestion,
   createDelivery, updateDeliveryStatus,
   type HandoffItemPatch, type CreateQuestionInput, type CreateDeliveryInput,
 } from "@/lib/handoff/service";
+import {
+  previewAssemblyForProject, applyAssemblyForProject,
+  type AssemblyPreview, type AssemblyResult,
+} from "@/lib/handoff/assembler";
 import {
   HANDOFF_ITEM_STATUSES, HANDOFF_ITEM_REGISTRY,
   HANDOFF_QUESTION_STATUSES, HANDOFF_QUESTION_PRIORITIES,
@@ -60,6 +64,53 @@ export async function updateItemAction(projectId: string, packageId: string, ite
     const row = await upsertItem(packageId, projectId, itemKey, patch);
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true, data: { id: row.id } };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." }; }
+}
+
+// ============================================================================
+// Auto-assembly (0110)
+// ============================================================================
+export async function previewAssemblyAction(
+  projectId: string, packageId: string,
+): Promise<Result<AssemblyPreview[]>> {
+  const g = await guard(); if (!g.ok) return g;
+  try {
+    const previews = await previewAssemblyForProject(projectId, packageId);
+    return { ok: true, data: previews };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التحضير." }; }
+}
+
+export async function applyAssemblyAction(
+  projectId: string, packageId: string,
+): Promise<Result<AssemblyResult>> {
+  const g = await guard(); if (!g.ok) return g;
+  try {
+    const res = await applyAssemblyForProject(projectId, packageId, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: res };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التجميع." }; }
+}
+
+export async function manualOverrideItemAction(
+  projectId: string, itemId: string, reason: string,
+): Promise<Result> {
+  const g = await guard(); if (!g.ok) return g;
+  try {
+    await setManualOverride(itemId, true, reason?.trim() ?? "");
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." }; }
+}
+
+export async function clearManualOverrideAction(
+  projectId: string, itemId: string,
+): Promise<Result> {
+  const g = await requireRole(["owner", "admin"]);
+  if (!g.ok) return { ok: false, message: g.message ?? "غير مصرَّح" };
+  try {
+    await setManualOverride(itemId, false, "");
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." }; }
 }
 

@@ -158,6 +158,18 @@ export async function upsertItem(
   return mapItem(data as DbItem);
 }
 
+/** 0110 — يضبط علم الـ manual override على عنصر (يمنع الـ assembler من تغييره). */
+export async function setManualOverride(
+  itemId: string, override: boolean, reason: string,
+): Promise<HandoffItemRow> {
+  const svc = createServiceClient();
+  const { data, error } = await svc.from("handoff_items")
+    .update({ is_manual_override: override, override_reason: reason })
+    .eq("id", itemId).select("*").single();
+  if (error) throw error;
+  return mapItem(data as DbItem);
+}
+
 export async function finalizePackage(
   packageId: string, finalizedBy: string | null,
 ): Promise<HandoffPackageRow> {
