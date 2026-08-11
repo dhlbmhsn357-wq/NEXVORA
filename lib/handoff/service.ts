@@ -281,6 +281,34 @@ export async function freezePackage(
     },
   };
 
+  // 0111 — Try atomic RPC first. Falls back to two-step insert+update
+  // if the migration hasn't been applied yet (Postgres error 42883 = undefined_function).
+  try {
+    const { data: rpcData, error: rpcErr } = await svc.rpc("handoff_freeze_package", {
+      p_package_id: packageId,
+      p_user: userId,
+      p_payload: payload,
+    });
+    if (rpcErr) {
+      // Postgres "undefined_function" — pre-migration environment. Fall through to legacy path.
+      const code = (rpcErr as { code?: string }).code;
+      if (code !== "42883" && code !== "PGRST202") throw rpcErr;
+    } else {
+      const rows = (rpcData ?? []) as { snapshot_id: string }[];
+      const first = rows[0];
+      if (!first) throw new Error("لم يتم إنشاء snapshot.");
+      const { data: snap, error: snapErr } = await svc.from("handoff_package_snapshots")
+        .select("*").eq("id", first.snapshot_id).single();
+      if (snapErr) throw snapErr;
+      return mapSnapshot(snap as DbSnapshot);
+    }
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code !== "42883" && code !== "PGRST202") throw e;
+    // else: fall through to legacy path below
+  }
+
+  // Legacy fallback (pre-migration 0111) — non-atomic insert + update.
   const { data: snap, error: sErr } = await svc.from("handoff_package_snapshots").insert({
     package_id: packageId,
     project_id: pkg.projectId,

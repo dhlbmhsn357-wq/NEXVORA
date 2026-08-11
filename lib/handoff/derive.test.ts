@@ -56,6 +56,42 @@ describe("deriveHandoffReadiness", () => {
     expect(r.ready).toBe(false);
     expect(r.missingMandatory.length).toBe(1);
   });
+
+  it("0111 — stale detection: item's sourceHash != currentHash marks stale + fails readiness", () => {
+    const items = MANDATORY_HANDOFF_KEYS.map((k) => {
+      const it = item(k);
+      // simulate assembled item with known source hash
+      it.sourceType = "brain";
+      it.sourceHash = "hash-old";
+      return it;
+    });
+    // one item is stale: current hash differs
+    const hashes = new Map<string, string | null>(
+      MANDATORY_HANDOFF_KEYS.map((k) => [k, "hash-old"]),
+    );
+    hashes.set(MANDATORY_HANDOFF_KEYS[0], "hash-new");
+    const r = deriveHandoffReadiness(items, hashes);
+    expect(r.stale).toBe(1);
+    // stale item is not counted as done → ready=false
+    expect(r.ready).toBe(false);
+    expect(r.mandatoryCompleted).toBe(MANDATORY_HANDOFF_KEYS.length - 1);
+  });
+
+  it("0111 — manual override items are never stale", () => {
+    const items = MANDATORY_HANDOFF_KEYS.map((k) => {
+      const it = item(k);
+      it.sourceType = "brain";
+      it.sourceHash = "hash-old";
+      it.isManualOverride = true;
+      return it;
+    });
+    const hashes = new Map<string, string | null>(
+      MANDATORY_HANDOFF_KEYS.map((k) => [k, "hash-new"]),
+    );
+    const r = deriveHandoffReadiness(items, hashes);
+    expect(r.stale).toBe(0);
+    expect(r.ready).toBe(true);
+  });
 });
 
 describe("effectivePackageStatus", () => {
