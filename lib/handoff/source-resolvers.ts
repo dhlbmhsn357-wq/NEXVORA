@@ -93,7 +93,30 @@ export async function resolveProblemBrief(
       }
     }
 
-    // 3) Fallback أخير: أول Problem Validation item
+    // 3) Fallback أخير: أول Problem Validation item — نفضّل عنصر "متحقَّق"
+    //    (origin=verified_real + information_class IN fact/verified/decision +
+    //    strength≥50). لو مفيش، نرجع لأول عنصر أي (السلوك السابق) ونعلّم السبب.
+    const { data: verifiedPv } = await supabase
+      .from("problem_validation_items")
+      .select("id, title, pain_point, updated_at")
+      .eq("project_id", projectId)
+      .eq("origin", "verified_real")
+      .in("information_class", ["fact", "verified", "decision"])
+      .gte("strength", 50)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (verifiedPv && (verifiedPv.title || verifiedPv.pain_point)) {
+      const text = `${verifiedPv.title ?? ""}\n\n${verifiedPv.pain_point ?? ""}`.trim();
+      return {
+        itemKey: "problem_brief", sourceType: "problem_validation",
+        sourceVersion: verifiedPv.updated_at as string,
+        sourceHash: createSourceHash(text),
+        contentUrl: null, contentText: text.slice(0, 2000),
+        contentRefType: "problem_validation_item", contentRefId: verifiedPv.id as string,
+        status: "ready", reason: "من Problem Validation متحقَّق (fallback).",
+      };
+    }
     const { data: pv } = await supabase
       .from("problem_validation_items").select("id, title, pain_point, updated_at")
       .eq("project_id", projectId).order("created_at", { ascending: true }).limit(1).maybeSingle();
@@ -105,7 +128,7 @@ export async function resolveProblemBrief(
         sourceHash: createSourceHash(text),
         contentUrl: null, contentText: text.slice(0, 2000),
         contentRefType: "problem_validation_item", contentRefId: pv.id as string,
-        status: "ready", reason: "من Problem Validation (fallback أخير).",
+        status: "ready", reason: "من Problem Validation (fallback أخير — بدون تحقق نهائي).",
       };
     }
 

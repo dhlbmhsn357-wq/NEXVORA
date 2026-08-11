@@ -30,12 +30,14 @@ describe("auto-derive / fully populated", () => {
       smartRecommendationsResolvedCount: 5,
       smartRecommendationsPendingCount: 0,
       problemValidationCount: 4,
+      verifiedProblemValidationCount: 3,
       personasCount: 3,
       userFlowsCount: 2,
       requirementsCount: 8,
       storiesCount: 5,
       acceptanceCriteriaCount: 12,
       marketResearchCount: 2,
+      verifiedMarketResearchCount: 2,
       competitorResearchCount: 3,
       contractsCount: 1,
       studioConfigExists: true,
@@ -99,6 +101,48 @@ describe("auto-derive / handoff mandatory completion", () => {
     expect(eg.status).toBe("completed");
     const pd = handoff.find((i) => i.itemKey === "package_delivered")!;
     expect(pd.status).toBe("completed");
+  });
+});
+
+describe("auto-derive / evidence-quality gating (0106+0109)", () => {
+  it("raw problemValidationCount>0 لكن verified=0 → problem_validation & customer_interviews غير مكتملة", () => {
+    const states = autoDeriveChecklistStates({
+      problemValidationCount: 3,
+      verifiedProblemValidationCount: 0,
+    });
+    const av = states.analysis_and_validation!;
+    const dv = states.discovery_and_research!;
+    expect(av.find((i) => i.itemKey === "problem_validation")!.status).toBe("not_started");
+    expect(dv.find((i) => i.itemKey === "customer_interviews")!.status).toBe("not_started");
+  });
+
+  it("verifiedProblemValidationCount≥1 → problem_validation & customer_interviews مكتملة", () => {
+    const states = autoDeriveChecklistStates({
+      problemValidationCount: 3,
+      verifiedProblemValidationCount: 1,
+    });
+    const av = states.analysis_and_validation!;
+    const dv = states.discovery_and_research!;
+    expect(av.find((i) => i.itemKey === "problem_validation")!.status).toBe("completed");
+    expect(dv.find((i) => i.itemKey === "customer_interviews")!.status).toBe("completed");
+  });
+
+  it("raw marketResearchCount>0 لكن verified=0 → market_research غير مكتمل", () => {
+    const states = autoDeriveChecklistStates({
+      marketResearchCount: 5,
+      verifiedMarketResearchCount: 0,
+    });
+    const dr = states.discovery_and_research!;
+    expect(dr.find((i) => i.itemKey === "market_research")!.status).toBe("not_started");
+  });
+
+  it("verifiedMarketResearchCount≥1 → market_research مكتمل", () => {
+    const states = autoDeriveChecklistStates({
+      marketResearchCount: 5,
+      verifiedMarketResearchCount: 2,
+    });
+    const dr = states.discovery_and_research!;
+    expect(dr.find((i) => i.itemKey === "market_research")!.status).toBe("completed");
   });
 });
 

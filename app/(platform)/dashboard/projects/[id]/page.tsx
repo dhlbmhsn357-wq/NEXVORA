@@ -646,6 +646,23 @@ export default async function ProjectDetailPage({
   const handoffMandatoryCompletedCount = handoffItemsRows.filter(
     (i) => i.isMandatory && (i.status === "completed" || i.status === "skipped")
   ).length;
+  // Evidence quality gates (0106+0109): only items marked as high-quality
+  // information class (fact/verified/decision) AND origin=verified_real AND
+  // sufficient confidence/strength count toward readiness. Old items with
+  // null fields default to "not verified" (safe default).
+  const HIGH_QUALITY_INFO_CLASSES = new Set(["fact", "verified", "decision"]);
+  const verifiedMarketResearchCount = (marketResearchItems ?? []).filter(
+    (i) =>
+      i.origin === "verified_real"
+      && HIGH_QUALITY_INFO_CLASSES.has(i.informationClass ?? "")
+      && (i.confidence ?? 0) >= 50
+  ).length;
+  const verifiedProblemValidationCount = (problemValidationItems ?? []).filter(
+    (i) =>
+      i.origin === "verified_real"
+      && HIGH_QUALITY_INFO_CLASSES.has(i.informationClass ?? "")
+      && (i.strength ?? 0) >= 50
+  ).length;
   const derivedReadinessInput = workflowV2Enabled
     ? {
         project: {
@@ -673,12 +690,14 @@ export default async function ProjectDetailPage({
           (r) => r.status === "suggested" || r.status === "needs_discussion"
         ).length,
         problemValidationCount: problemValidationItems.length,
+        verifiedProblemValidationCount,
         personasCount: definitionPersonas.length,
         userFlowsCount: definitionFlows.length,
         requirementsCount: definitionRequirements.length,
         storiesCount: storiesRows.length,
         acceptanceCriteriaCount: acceptanceCriteriaRows.length,
         marketResearchCount: marketResearchItems.length,
+        verifiedMarketResearchCount,
         competitorResearchCount: 0,
         contractsCount: commercialContracts.length,
         studioConfigExists:

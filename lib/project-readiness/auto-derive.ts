@@ -43,12 +43,16 @@ export interface DerivedReadinessInput {
   smartRecommendationsResolvedCount?: number;
   smartRecommendationsPendingCount?: number;
   problemValidationCount?: number;
+  /** subset of problemValidationCount considered "verified" (origin=verified_real + high-quality class + strength≥50) */
+  verifiedProblemValidationCount?: number;
   personasCount?: number;
   userFlowsCount?: number;
   requirementsCount?: number;
   storiesCount?: number;
   acceptanceCriteriaCount?: number;
   marketResearchCount?: number;
+  /** subset of marketResearchCount considered "verified" (origin=verified_real + high-quality class + confidence≥50) */
+  verifiedMarketResearchCount?: number;
   competitorResearchCount?: number;
   contractsCount?: number;
   studioConfigExists?: boolean;
@@ -113,11 +117,11 @@ export function autoDeriveChecklistStates(
     brainReviewApproved,
     smartRecommendationsResolvedCount = 0,
     smartRecommendationsPendingCount = 0,
-    problemValidationCount = 0,
+    verifiedProblemValidationCount = 0,
     personasCount = 0,
     userFlowsCount = 0,
     requirementsCount = 0,
-    marketResearchCount = 0,
+    verifiedMarketResearchCount = 0,
     competitorResearchCount = 0,
     contractsCount = 0,
     studioConfigExists,
@@ -162,10 +166,14 @@ export function autoDeriveChecklistStates(
     d.set("discovery_submitted", discoverySubmittedCount >= 1);
     d.set("meeting_prep_generated", meetingPrepCount >= 1);
     d.set("discovery_meeting_held", meetingsCount >= 1);
-    d.set("market_research", marketResearchCount >= 1);
+    // NOTE: raw *Count fields kept for backwards compat but readiness gates
+    // now require the "verified" subset (origin=verified_real + high-quality
+    // information_class + confidence/strength≥50). Old items with null quality
+    // fields default to "not verified" (safe default — user must classify).
+    d.set("market_research", verifiedMarketResearchCount >= 1);
     d.set("competitor_research", competitorResearchCount >= 1);
     // proxy: interviews table غير موجودة — نعتبر problem_validation دليل.
-    d.set("customer_interviews", problemValidationCount >= 1);
+    d.set("customer_interviews", verifiedProblemValidationCount >= 1);
     out.discovery_and_research = fillMissingItems("discovery_and_research", d);
   }
 
@@ -180,7 +188,7 @@ export function autoDeriveChecklistStates(
       "smart_recommendations",
       smartRecommendationsPendingCount === 0 && smartRecommendationsResolvedCount >= 1
     );
-    d.set("problem_validation", problemValidationCount >= 1);
+    d.set("problem_validation", verifiedProblemValidationCount >= 1);
     // مقبول إمّا صراحة (brainReviewApproved) أو ضمنيًا (brainDoc.status='approved')
     d.set(
       "brain_review_approved",
