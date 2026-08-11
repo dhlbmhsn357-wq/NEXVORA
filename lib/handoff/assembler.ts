@@ -147,3 +147,25 @@ export async function applyAssemblyForProject(projectId: string, packageId: stri
   const supabase = await createClient();
   return applyAssembly(supabase as unknown as SupabaseClient, projectId, packageId, userId);
 }
+
+/**
+ * 0111 — Server-side stale detection helper.
+ * Returns a map itemKey → current sourceHash (only for items whose source is
+ * currently resolvable/ready). Used by panels to detect drift since last assemble.
+ */
+export async function computeCurrentHashesMap(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<Map<string, string>> {
+  const sources = await resolveAllSources(supabase, projectId);
+  const map = new Map<string, string>();
+  for (const s of sources) {
+    if (s.status === "ready" && s.sourceHash) map.set(s.itemKey, s.sourceHash);
+  }
+  return map;
+}
+
+export async function computeCurrentHashesMapForProject(projectId: string): Promise<Map<string, string>> {
+  const supabase = await createClient();
+  return computeCurrentHashesMap(supabase as unknown as SupabaseClient, projectId);
+}

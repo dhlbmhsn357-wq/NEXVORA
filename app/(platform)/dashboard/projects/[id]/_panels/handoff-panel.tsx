@@ -24,7 +24,7 @@ import {
   type HandoffDeliveryRow, type HandoffDeliveryStatus,
   type ExternalPartnerRow,
 } from "@/lib/handoff/types";
-import { deriveHandoffReadiness, effectivePackageStatus, summarizeQuestions } from "@/lib/handoff/derive";
+import { deriveHandoffReadiness, effectivePackageStatus, summarizeQuestions, isItemStale } from "@/lib/handoff/derive";
 import {
   createPackageAction, updateItemAction, finalizePackageAction,
   createQuestionAction, answerQuestionAction, updateQuestionStatusAction,
@@ -43,6 +43,8 @@ export interface HandoffPanelProps {
   questions?: HandoffQuestionRow[];
   deliveries?: HandoffDeliveryRow[];
   partners?: ExternalPartnerRow[];
+  /** 0111 — server-computed current source hashes (itemKey → hash) for stale detection. */
+  currentHashes?: Record<string, string>;
 }
 
 type SubTab = "items" | "questions" | "deliveries";
@@ -54,6 +56,7 @@ const CATEGORY_LABELS: Record<HandoffItemDef["category"], string> = {
 export default function HandoffPanel({
   projectId, packages, items, latestPackage, canWrite,
   questions = [], deliveries = [], partners = [],
+  currentHashes = {},
 }: HandoffPanelProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -63,7 +66,22 @@ export default function HandoffPanel({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [frozenSnap, setFrozenSnap] = useState<{ snapshotId: string; version: number } | null>(null);
 
-  const readiness = useMemo(() => deriveHandoffReadiness(items), [items]);
+  const currentHashesMap = useMemo(
+    () => new Map<string, string | null>(Object.entries(currentHashes)),
+    [currentHashes],
+  );
+  const readiness = useMemo(() => deriveHandoffReadiness(items, currentHashesMap), [items, currentHashesMap]);
+  const staleItems = useMemo(() => {
+    const affected: string[] = [];
+    for (const row of items) {
+      const cur = currentHashesMap.get(row.itemKey) ?? null;
+      if (isItemStale(row, cur)) {
+        const def = HANDOFF_ITEM_REGISTRY.find((d) => d.key === row.itemKey);
+        affected.push(def?.label ?? row.itemKey);
+      }
+    }
+    return affected;
+  }, [items, currentHashesMap]);
   const effStatus = latestPackage ? effectivePackageStatus(latestPackage.status, readiness) : "draft";
   const itemsByKey = useMemo(() => new Map(items.map((i) => [i.itemKey, i])), [items]);
 
@@ -167,14 +185,14 @@ export default function HandoffPanel({
             <Button variant="ghost" onClick={() => run(() => createPackageAction(projectId).then((r) => r.ok ? { ok: true } : r), "تم إنشاء نسخة جديدة")}>نسخة جديدة</Button>
             <Button
               variant="primary" icon={<Lock size={14} />}
-              disabled={!readiness.ready || effStatus === "finalized"}
+              disabled={!readiness.ready || effStatus === "finalized" || readiness.stale > 0}
               onClick={doFreeze}
             >
               {effStatus === "finalized" ? "مُسلَّمة (مُجمَّدة)" : "تسليم رسمي"}
             </Button>
             <Button
               variant="ghost"
-              disabled={!readiness.ready || effStatus === "finalized"}
+              disabled={!readiness.ready || effStatus === "finalized" || readiness.stale > 0}
               onClick={() => { if (!confirm("تأكيد تسليم هذه الحزمة (بدون تجميد Snapshot)؟")) return; run(() => finalizePackageAction(projectId, latestPackage.id), "تم التسليم"); }}
             >
               <PackageCheck size={14} /> تسليم بلا تجميد
@@ -187,9 +205,17 @@ export default function HandoffPanel({
           </p>
         )}
         {readiness.stale > 0 && (
-          <p className="mt-2 text-xs text-[var(--v-amber)] flex items-center gap-1">
-            <AlertTriangle size={12} /> {readiness.stale} عنصر تلقائي تغيّر مصدره — أعد التجميع.
-          </p>
+          <div className="mt-3 rounded-[var(--v-radius-sm)] border border-[var(--v-amber)] bg-[var(--v-amber)]/10 p-2">
+            <p className="text-xs text-[var(--v-amber)] flex items-center gap-1">
+              <AlertTriangle size={12} />
+              تغيّرت بعض مخرجات المشروع بعد آخر تجميع. أعد تجميع الحزمة قبل التسليم الرسمي.
+            </p>
+            {staleItems.length > 0 && (
+              <p className="mt-1 text-[11px] text-[var(--v-text-secondary)]">
+                العناصر المتأثّرة: {staleItems.join(" · ")}
+              </p>
+            )}
+          </div>
         )}
       </Card>
 
@@ -204,11 +230,11 @@ export default function HandoffPanel({
         <>
           <Card>
             <Header title={`العناصر الإلزامية (${mandatoryDefs.length})`} />
-            <ItemsList defs={mandatoryDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} />
+            <ItemsList defs={mandatoryDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} currentHashes={currentHashesMap} />
           </Card>
           <Card>
             <Header title={`العناصر الاختيارية (${optionalDefs.length})`} />
-            <ItemsList defs={optionalDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} />
+            <ItemsList defs={optionalDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} currentHashes={currentHashesMap} />
           </Card>
         </>
       )}
@@ -337,11 +363,12 @@ function PreviewModal({
   );
 }
 
-function ItemsList({ defs, itemsByKey, onEdit, canWrite }: {
+function ItemsList({ defs, itemsByKey, onEdit, canWrite, currentHashes }: {
   defs: readonly HandoffItemDef[];
   itemsByKey: Map<string, HandoffItemRow>;
   onEdit: (def: HandoffItemDef) => void;
   canWrite: boolean;
+  currentHashes: Map<string, string | null>;
 }) {
   return (
     <ul className="divide-y divide-[var(--v-border)]">
@@ -349,6 +376,9 @@ function ItemsList({ defs, itemsByKey, onEdit, canWrite }: {
         const row = itemsByKey.get(d.key);
         const status = row?.status ?? "pending";
         const tone: BadgeTone = status === "completed" ? "success" : status === "in_progress" ? "info" : status === "skipped" ? "neutral" : "warning";
+        const stale = row ? isItemStale(row, currentHashes.get(d.key) ?? null) : false;
+        const isManual = row?.isManualOverride ?? false;
+        const isAuto = !!row?.sourceType && !isManual;
         return (
           <li key={d.key} className="flex items-start justify-between gap-3 py-2">
             <div className="min-w-0 flex-1">
@@ -358,12 +388,13 @@ function ItemsList({ defs, itemsByKey, onEdit, canWrite }: {
                 <Badge tone="neutral">{CATEGORY_LABELS[d.category]}</Badge>
                 <Badge tone={tone}>{HANDOFF_ITEM_STATUS_LABELS[status]}</Badge>
                 {d.isMandatory && <Badge tone="danger">إلزامي</Badge>}
-                {row?.sourceType && !row.isManualOverride && (
-                  <Badge tone="info">
-                    Auto · {row.sourceType}{row.sourceVersion ? ` v${row.sourceVersion.replace(/^listhash:/, "L:")}` : ""}
+                {stale && <Badge tone="danger">قديم — أعد التجميع</Badge>}
+                {isManual && <Badge tone="warning">تعديل يدوي</Badge>}
+                {isAuto && !stale && (
+                  <Badge tone="success">
+                    Auto · {row?.sourceType}{row?.sourceVersion ? ` v${row.sourceVersion.replace(/^listhash:/, "L:")}` : ""}
                   </Badge>
                 )}
-                {row?.isManualOverride && <Badge tone="warning">Manual Override</Badge>}
               </div>
               <p className="text-[11px] text-[var(--v-text-subtle)]">{d.description}</p>
               {row?.contentUrl && (

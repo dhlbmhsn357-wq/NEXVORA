@@ -1,11 +1,10 @@
 /**
- * NEXVORA Handoff — Source Resolvers (0110)
- * =========================================
+ * NEXVORA Handoff — Source Resolvers (0110 + 0111 hardening)
+ * ===========================================================
  * كل resolver يُرجع محتوى العنصر من مصدره المعتمَد داخل المشروع.
- * لا يعتمد على AI ولا خدمات خارجية. Deterministic hash عبر crypto.
+ * لا يعتمد على AI ولا خدمات خارجية. Deterministic hash عبر lib/handoff/hash.
  */
 import "server-only";
-import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestApprovedBrain } from "@/lib/brain-v2/service";
 import { listRequirements } from "@/lib/product-definition/service";
@@ -13,6 +12,7 @@ import { listStories, listAcceptanceCriteria } from "@/lib/user-stories/service"
 import { listScenarios } from "@/lib/evaluation/service";
 import { getOrCreatePrd } from "@/lib/prd/versioning";
 import { createClient } from "@/lib/supabase/server";
+import { createSourceHash, hashSourceList } from "./hash";
 
 export type ResolvedStatus = "ready" | "missing" | "draft_only" | "not_approved";
 
@@ -29,14 +29,6 @@ export interface ResolvedSource {
   reason: string;
 }
 
-function hashList(entries: { id: string; updatedAt: string }[]): string {
-  const sorted = entries
-    .map((e) => `${e.id}:${e.updatedAt}`)
-    .sort()
-    .join("|");
-  return createHash("sha256").update(sorted).digest("hex").slice(0, 32);
-}
-
 function empty(itemKey: string, sourceType: string, status: ResolvedStatus, reason: string): ResolvedSource {
   return {
     itemKey, sourceType,
@@ -49,7 +41,6 @@ function empty(itemKey: string, sourceType: string, status: ResolvedStatus, reas
 
 // ---------------------------------------------------------------------------
 // problem_brief — Brain approved → Discovery Analysis → أول problem_validation
-// (سلسلة fallback: نجرّب مصدرًا أعمق كل مرة قبل ما نقول missing)
 // ---------------------------------------------------------------------------
 export async function resolveProblemBrief(
   supabase: SupabaseClient, projectId: string,
@@ -73,7 +64,7 @@ export async function resolveProblemBrief(
         return {
           itemKey: "problem_brief", sourceType: "brain",
           sourceVersion: String(brain.version),
-          sourceHash: createHash("sha256").update(text).digest("hex").slice(0, 32),
+          sourceHash: createSourceHash(text),
           contentUrl: null, contentText: text.slice(0, 2000),
           contentRefType: "brain_document", contentRefId: brain.id,
           status: "ready", reason: `Brain v${brain.version} معتمَد.`,
@@ -94,7 +85,7 @@ export async function resolveProblemBrief(
         return {
           itemKey: "problem_brief", sourceType: "discovery_analysis",
           sourceVersion: analysisRow.created_at as string,
-          sourceHash: createHash("sha256").update(text).digest("hex").slice(0, 32),
+          sourceHash: createSourceHash(text),
           contentUrl: null, contentText: text.slice(0, 2000),
           contentRefType: "discovery_analysis", contentRefId: analysisRow.id as string,
           status: "ready", reason: "من Discovery Analysis (Brain غير معتمَد بعد).",
@@ -111,7 +102,7 @@ export async function resolveProblemBrief(
       return {
         itemKey: "problem_brief", sourceType: "problem_validation",
         sourceVersion: pv.updated_at as string,
-        sourceHash: createHash("sha256").update(text).digest("hex").slice(0, 32),
+        sourceHash: createSourceHash(text),
         contentUrl: null, contentText: text.slice(0, 2000),
         contentRefType: "problem_validation_item", contentRefId: pv.id as string,
         status: "ready", reason: "من Problem Validation (fallback أخير).",
@@ -127,7 +118,7 @@ export async function resolveProblemBrief(
 }
 
 // ---------------------------------------------------------------------------
-// scope_mvp — Requirements ذات priority='must'
+// scope_mvp — Requirements ذات priority='must' AND status='approved'
 // ---------------------------------------------------------------------------
 export async function resolveScopeMvp(
   _supabase: SupabaseClient, projectId: string,
@@ -135,22 +126,32 @@ export async function resolveScopeMvp(
   try {
     const reqs = await listRequirements(projectId);
     const must = reqs.filter((r) => r.priority === "must");
-    if (must.length === 0) {
-      return empty("scope_mvp", "requirements", "missing", "لا يوجد متطلبات priority=must.");
+    const approvedMust = must.filter((r) => r.status === "approved");
+    if (approvedMust.length === 0) {
+      const hasDraftMust = must.some((r) => r.status !== "approved");
+      return empty(
+        "scope_mvp", "requirements",
+        hasDraftMust ? "not_approved" : "missing",
+        hasDraftMust
+          ? `${must.length} متطلب must موجود لكن لا شيء معتمَد بعد.`
+          : "لا يوجد متطلبات priority=must معتمَدة.",
+      );
     }
-    const bullets = must.map((r) => `- ${r.code ?? ""} ${r.title}`.trim()).join("\n");
-    const hash = hashList(must.map((r) => ({ id: r.id, updatedAt: r.updatedAt })));
+    const bullets = approvedMust.map((r) => `- ${r.code ?? ""} ${r.title}`.trim()).join("\n");
+    const idsLine = approvedMust.map((r) => r.id).sort().join(",");
+    const contentText = `${approvedMust.length} متطلب MVP معتمَد:\n${bullets}\n\nIDs: ${idsLine}`.slice(0, 4000);
+    const hash = hashSourceList(approvedMust.map((r) => ({ id: r.id, updatedAt: r.updatedAt })));
     return {
       itemKey: "scope_mvp",
       sourceType: "requirements",
       sourceVersion: `listhash:${hash}`,
       sourceHash: hash,
       contentUrl: null,
-      contentText: bullets.slice(0, 4000),
+      contentText,
       contentRefType: "requirements_list",
       contentRefId: null,
       status: "ready",
-      reason: `${must.length} متطلب MVP.`,
+      reason: `${approvedMust.length} متطلب MVP معتمَد.`,
     };
   } catch (e) {
     return empty("scope_mvp", "requirements", "missing", e instanceof Error ? e.message : "تعذّر تحميل المتطلبات.");
@@ -175,7 +176,7 @@ export async function resolveUserStories(
       );
     }
     const bullets = approved.map((s) => `- ${s.code ?? ""} ${s.title}`.trim()).join("\n");
-    const hash = hashList(approved.map((s) => ({ id: s.id, updatedAt: s.updatedAt })));
+    const hash = hashSourceList(approved.map((s) => ({ id: s.id, updatedAt: s.updatedAt })));
     return {
       itemKey: "user_stories",
       sourceType: "stories",
@@ -211,7 +212,7 @@ export async function resolveAcceptanceCriteria(
       );
     }
     const bullets = approved.map((a) => `- ${a.code ?? ""} ${a.title || `${a.givenClause} / ${a.whenClause} / ${a.thenClause}`}`.trim()).join("\n");
-    const hash = hashList(approved.map((a) => ({ id: a.id, updatedAt: a.updatedAt })));
+    const hash = hashSourceList(approved.map((a) => ({ id: a.id, updatedAt: a.updatedAt })));
     return {
       itemKey: "acceptance_criteria",
       sourceType: "ac",
@@ -231,13 +232,11 @@ export async function resolveAcceptanceCriteria(
 
 // ---------------------------------------------------------------------------
 // prototype_link — staging_url → production_url → Prototype Studio artifact
-// (سلسلة fallback: لو staging_url فارغ، جرّب production_url ثم Studio pack)
 // ---------------------------------------------------------------------------
 export async function resolvePrototypeLink(
   supabase: SupabaseClient, projectId: string,
 ): Promise<ResolvedSource> {
   try {
-    // 1) staging_url أو production_url
     const { data: proj } = await supabase.from("projects")
       .select("staging_url, production_url").eq("id", projectId).maybeSingle();
     const staging = (proj?.staging_url as string | null | undefined)?.trim();
@@ -247,7 +246,7 @@ export async function resolvePrototypeLink(
       return {
         itemKey: "prototype_link", sourceType: staging ? "staging_url" : "production_url",
         sourceVersion: null,
-        sourceHash: createHash("sha256").update(url).digest("hex").slice(0, 32),
+        sourceHash: createSourceHash(url),
         contentUrl: url, contentText: "",
         contentRefType: "project", contentRefId: projectId,
         status: "ready",
@@ -255,7 +254,6 @@ export async function resolvePrototypeLink(
       };
     }
 
-    // 2) Fallback: أحدث Codex Build Pack من Prototype Studio (يعني في نموذج جاهز حتى لو لسه ما اتنشرش)
     const { data: artifact } = await supabase.from("prototype_studio_artifacts")
       .select("id, version, created_at, status")
       .eq("project_id", projectId).eq("artifact_type", "codex_build_pack")
@@ -266,7 +264,7 @@ export async function resolvePrototypeLink(
       return {
         itemKey: "prototype_link", sourceType: "prototype_studio",
         sourceVersion: `pack:v${artifact.version}`,
-        sourceHash: createHash("sha256").update(`pack:${artifact.id}`).digest("hex").slice(0, 32),
+        sourceHash: createSourceHash(`pack:${artifact.id}`),
         contentUrl: artUrl, contentText: `Codex Build Pack v${artifact.version} (نموذج جاهز للتنفيذ).`,
         contentRefType: "prototype_studio_artifact", contentRefId: artifact.id as string,
         status: "ready",
@@ -282,7 +280,7 @@ export async function resolvePrototypeLink(
 }
 
 // ---------------------------------------------------------------------------
-// prd_final — PRD.status='approved'
+// prd_final — PRD.status='approved' AND محتوى غير فارغ
 // ---------------------------------------------------------------------------
 export async function resolvePrdFinal(
   supabase: SupabaseClient, projectId: string,
@@ -296,12 +294,26 @@ export async function resolvePrdFinal(
         `PRD حالته: ${prd.status || "draft"}.`,
       );
     }
+    // Check content non-empty across the 11 PRD sections
+    const hasSubstantiveContent =
+      (prd.overview ?? "").trim().length > 0 ||
+      (prd.problem_statement ?? "").trim().length > 0 ||
+      (prd.goals?.length ?? 0) > 0 ||
+      (prd.target_users?.length ?? 0) > 0 ||
+      (prd.user_stories?.length ?? 0) > 0 ||
+      (prd.acceptance_criteria?.length ?? 0) > 0 ||
+      (prd.functional_requirements?.length ?? 0) > 0 ||
+      (prd.non_functional_requirements?.length ?? 0) > 0 ||
+      (prd.success_metrics?.length ?? 0) > 0;
+    if (!hasSubstantiveContent) {
+      return empty("prd_final", "prd", "missing", "PRD معتمَد لكن محتواه فارغ.");
+    }
     const printUrl = `/prd-print/${projectId}`;
     return {
       itemKey: "prd_final",
       sourceType: "prd",
       sourceVersion: String(prd.version),
-      sourceHash: createHash("sha256").update(`prd:${prd.id}:v${prd.version}`).digest("hex").slice(0, 32),
+      sourceHash: createSourceHash(`prd:${prd.id}:v${prd.version}`),
       contentUrl: printUrl,
       contentText: `PRD v${prd.version} — معتمَد.`,
       contentRefType: "prd",
@@ -315,29 +327,66 @@ export async function resolvePrdFinal(
 }
 
 // ---------------------------------------------------------------------------
-// product_evaluation_guide — evaluation_scenarios count>=1 (proxy)
+// product_evaluation_guide — scenarios status='approved' + completeness
+// (0109 migration أضاف عمود status على evaluation_scenarios)
 // ---------------------------------------------------------------------------
 export async function resolveProductEvaluationGuide(
-  _supabase: SupabaseClient, projectId: string,
+  supabase: SupabaseClient, projectId: string,
 ): Promise<ResolvedSource> {
   try {
     const scenarios = await listScenarios(projectId);
     if (scenarios.length === 0) {
       return empty("product_evaluation_guide", "evaluation", "missing", "لا توجد سيناريوهات تقييم.");
     }
-    const bullets = scenarios.map((s) => `- ${s.code ?? ""} ${s.title}`.trim()).join("\n");
-    const hash = hashList(scenarios.map((s) => ({ id: s.id, updatedAt: s.updatedAt })));
+    // status column isn't on the service DTO — fetch it directly (additive read)
+    const { data: statusRows, error: statusErr } = await supabase
+      .from("evaluation_scenarios")
+      .select("id, status")
+      .eq("project_id", projectId);
+    if (statusErr) throw statusErr;
+    const statusById = new Map<string, string>(
+      (statusRows ?? []).map((r) => [r.id as string, (r.status as string) ?? "draft"]),
+    );
+    const complete = scenarios.filter((s) => {
+      const st = statusById.get(s.id) ?? "draft";
+      if (st !== "approved") return false;
+      if (!s.title?.trim()) return false;
+      const hasExpected = (s.expectedResult ?? "").trim().length > 0;
+      const hasSteps = Array.isArray(s.steps) && s.steps.length > 0;
+      // 0111 hardening — require BOTH expected_result AND steps for completeness
+      return hasExpected && hasSteps;
+    });
+    if (complete.length === 0) {
+      const approvedCount = scenarios.filter((s) => (statusById.get(s.id) ?? "draft") === "approved").length;
+      const hasDraft = scenarios.some((s) => (statusById.get(s.id) ?? "draft") !== "approved");
+      // إذا فيه سيناريوهات معتمَدة لكن ناقصة → not_approved (يلزم استكمال الحقول)
+      if (approvedCount > 0) {
+        return empty(
+          "product_evaluation_guide", "evaluation", "not_approved",
+          `${approvedCount} سيناريو معتمَد لكن ناقص الحقول (expected_result أو steps).`,
+        );
+      }
+      return empty(
+        "product_evaluation_guide", "evaluation",
+        hasDraft ? "draft_only" : "missing",
+        hasDraft
+          ? `${scenarios.length} سيناريو مسودّة فقط (يلزم اعتماد).`
+          : "لا توجد سيناريوهات تقييم.",
+      );
+    }
+    const bullets = complete.map((s) => `- ${s.code ?? ""} ${s.title}`.trim()).join("\n");
+    const hash = hashSourceList(complete.map((s) => ({ id: s.id, updatedAt: s.updatedAt })));
     return {
       itemKey: "product_evaluation_guide",
       sourceType: "evaluation",
       sourceVersion: `listhash:${hash}`,
       sourceHash: hash,
       contentUrl: null,
-      contentText: `${scenarios.length} سيناريو تقييم:\n${bullets}`.slice(0, 4000),
+      contentText: `${complete.length} سيناريو تقييم معتمَد:\n${bullets}`.slice(0, 4000),
       contentRefType: "evaluation_scenarios",
       contentRefId: null,
       status: "ready",
-      reason: `${scenarios.length} سيناريو.`,
+      reason: `${complete.length} سيناريو معتمَد.`,
     };
   } catch (e) {
     return empty("product_evaluation_guide", "evaluation", "missing", e instanceof Error ? e.message : "تعذّر تحميل السيناريوهات.");

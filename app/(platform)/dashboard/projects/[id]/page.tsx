@@ -115,6 +115,7 @@ import { countCriticalOpenRisks } from "@/lib/product-decisions/derive";
 import { summarizeAssignments as summarizeStageAssignments } from "@/lib/stage-assignments/derive";
 import { listApprovals } from "@/lib/client-approval/service";
 import { listPackages as listHandoffPackages, listItems as listHandoffItems, listPartners as listHandoffPartners } from "@/lib/handoff/service";
+import { computeCurrentHashesMapForProject } from "@/lib/handoff/assembler";
 import CommercialFullPanel from "./commercial-full-panel";
 import SubTabs from "./sub-tabs";
 import DeleteProjectButton from "../../delete-project-button";
@@ -615,6 +616,10 @@ export default async function ProjectDetailPage({
         listHandoffDeliveries(latestHandoffPackage.id),
       ])
     : [[], [], []];
+  // 0111 — server-side stale detection map for handoff panel
+  const handoffCurrentHashes: Record<string, string> = latestHandoffPackage
+    ? Object.fromEntries(await computeCurrentHashesMapForProject(project.id))
+    : {};
   // Readiness overview signals (display-only)
   const overdueStagesCount = productModeEnabled
     ? summarizeStageAssignments(stageAssignmentsRows, new Date().toISOString()).overdue
@@ -1598,6 +1603,7 @@ export default async function ProjectDetailPage({
                     questions={handoffQuestionsRows}
                     deliveries={handoffDeliveriesRows}
                     partners={externalPartnersRows}
+                    currentHashes={handoffCurrentHashes}
                   />
                 ),
               },
