@@ -320,43 +320,20 @@ export default async function HandoffPackageBody({ projectId, packageId, include
                 <PrdList title="الأهداف (Goals)" items={prd.goals} />
                 <PrdList title="خارج النطاق (Out of Scope)" items={prd.out_of_scope} />
                 <PrdList title="الفئات المستهدفة (Target Users)" items={prd.target_users} />
-                {(prd.user_stories?.length ?? 0) > 0 && (
-                  <div className="break-inside-avoid">
-                    <h4 className="text-[12px] font-semibold text-[#0A1735]">قصص المستخدم (من PRD)</h4>
-                    <ul className="mt-1 list-disc space-y-0.5 pr-5 text-[12px] text-slate-700">
-                      {prd.user_stories.map((s, i) => {
-                        const title = (s as { title?: string }).title ?? "";
-                        const asA = (s as { as_a?: string; asA?: string }).as_a ?? (s as { asA?: string }).asA ?? "";
-                        const iWant = (s as { i_want?: string; iWant?: string }).i_want ?? (s as { iWant?: string }).iWant ?? "";
-                        const soThat = (s as { so_that?: string; soThat?: string }).so_that ?? (s as { soThat?: string }).soThat ?? "";
-                        return (
-                          <li key={i}>
-                            {title && <strong>{title}: </strong>}
-                            بصفتي {asA}، أريد {iWant}، لكي {soThat}.
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
-                {(prd.acceptance_criteria?.length ?? 0) > 0 && (
-                  <div className="break-inside-avoid">
-                    <h4 className="text-[12px] font-semibold text-[#0A1735]">معايير القبول (من PRD)</h4>
-                    <ul className="mt-1 space-y-1 pr-5 text-[12px] text-slate-700">
-                      {prd.acceptance_criteria.map((a, i) => {
-                        const given = (a as { given?: string }).given ?? "";
-                        const when = (a as { when?: string }).when ?? "";
-                        const then = (a as { then?: string }).then ?? "";
-                        return (
-                          <li key={i} className="rounded border border-slate-200 p-1.5">
-                            <div><strong>Given</strong> {given}</div>
-                            <div><strong>When</strong> {when}</div>
-                            <div><strong>Then</strong> {then}</div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
+                {/*
+                  User stories + AC omitted from PRD section on purpose —
+                  they have their own dedicated sections (3 قصص المستخدم
+                  و 4 معايير القبول) with full source-of-truth content
+                  (title + status + points + AC per story). Duplicating
+                  them here made the PDF longer and confused readers when
+                  the PRD subsection sometimes rendered empty placeholders.
+                */}
+                {((prd.user_stories?.length ?? 0) > 0 || (prd.acceptance_criteria?.length ?? 0) > 0) && (
+                  <p className="rounded border border-dashed border-slate-300 bg-slate-50 p-2 text-[11px] text-slate-600">
+                    قصص المستخدم ومعايير القبول موجودة بالكامل في القسمين
+                    <strong> «3) قصص المستخدم» </strong>و<strong> «4) معايير القبول» </strong>
+                    أعلاه — تم تجنّب التكرار.
+                  </p>
                 )}
                 <PrdList title="متطلبات وظيفية (Functional)" items={prd.functional_requirements} />
                 <PrdList title="متطلبات غير وظيفية (Non-Functional)" items={prd.non_functional_requirements} />
