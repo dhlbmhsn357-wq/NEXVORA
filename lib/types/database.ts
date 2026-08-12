@@ -2781,6 +2781,8 @@ export interface ProjectRecommendation {
   decided_by: string | null;
   decided_at: string | null;
   decision_reason: string | null;
+  /** مفتاح تتبّع ثابت لمصدر التوصية لو اتولّدت تلقائيًا (مثلًا من التحقّق المعماري) — يمنع التكرار عند إعادة التشغيل. NULL للتوصيات اليدوية. مضاف في 0113. */
+  source_ref: string | null;
   created_at: string;
   updated_at: string;
 }

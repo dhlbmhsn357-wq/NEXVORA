@@ -64,6 +64,9 @@ export default function ArchitectureIntelligencePanel({
           <p className="mt-1 text-xs text-[var(--v-text-secondary)]">
             المنصة بتفكّر قبل توليد الـ PRD: تحليل عابر للوحدات + نواقص معمارية + إعادة استخدام خبرة المشاريع السابقة.
           </p>
+          <p className="mt-1 text-xs text-[var(--v-text-secondary)]">
+            أي نواقص هتتحول لتوصيات في خطوة «قرارات التوصيات» — اعتمدها من هناك عشان تنضاف لمحتوى الـ Brain.
+          </p>
         </div>
         {canManage && (
           <Button onClick={run} disabled={running}>
