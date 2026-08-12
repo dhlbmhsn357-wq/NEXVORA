@@ -649,7 +649,7 @@ async function loadAcs(supabase: SupabaseClient, projectId: string): Promise<Acc
 async function loadPrd(supabase: SupabaseClient, projectId: string): Promise<PRD | null> {
   try {
     const { data } = await supabase
-      .from("prds").select("*").eq("project_id", projectId)
+      .from("prd").select("*").eq("project_id", projectId)
       .order("version", { ascending: false }).limit(1).maybeSingle();
     return (data as PRD | null) ?? null;
   } catch { return null; }
