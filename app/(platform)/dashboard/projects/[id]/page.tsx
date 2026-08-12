@@ -1529,6 +1529,7 @@ export default async function ProjectDetailPage({
             personas={definitionPersonas}
             flows={definitionFlows}
             requirements={definitionRequirements}
+            scenarios={evalScenarios}
             canWrite={canWriteCommercial}
           />
         ),

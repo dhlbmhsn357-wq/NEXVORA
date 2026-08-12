@@ -8,7 +8,7 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, CheckCircle2, XCircle, BookOpen, Target, CheckCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, CheckCircle2, XCircle, BookOpen, Target, CheckCheck, Wand2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -26,6 +26,8 @@ import {
   type StoryStatus, type RiskLevel, type AcStatus,
 } from "@/lib/user-stories/types";
 import type { PersonaRow, UserFlowRow, RequirementRow } from "@/lib/product-definition/types";
+import type { EvaluationScenarioRow } from "@/lib/evaluation/types";
+import { generateScenarioForStoryAction } from "./scenario-derivation-actions";
 import {
   summarizeStories, summarizeAcceptance, deriveStoriesReadiness,
   scoreStoryInvest, validateGherkin,
@@ -56,11 +58,12 @@ export interface StoriesPanelProps {
   personas: PersonaRow[];
   flows: UserFlowRow[];
   requirements: RequirementRow[];
+  scenarios?: EvaluationScenarioRow[];
   canWrite: boolean;
 }
 
 export default function StoriesPanel(props: StoriesPanelProps) {
-  const { projectId, stories, acs, personas, flows, requirements, canWrite } = props;
+  const { projectId, stories, acs, personas, flows, requirements, scenarios = [], canWrite } = props;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -77,6 +80,31 @@ export default function StoriesPanel(props: StoriesPanelProps) {
   const sSum = useMemo(() => summarizeStories(stories), [stories]);
   const acSum = useMemo(() => summarizeAcceptance(acs, storyIds), [acs, storyIds]);
   const readiness = useMemo(() => deriveStoriesReadiness(stories, acs), [stories, acs]);
+
+  // خريطة storyId → scenarioId لأول سيناريو مرتبط (للـ per-story wand button).
+  const scenarioByStory = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of scenarios) {
+      if (s.linkedStoryId && !map.has(s.linkedStoryId)) {
+        map.set(s.linkedStoryId, s.id);
+      }
+    }
+    return map;
+  }, [scenarios]);
+  const APPROVED_SET = useMemo(() => new Set<string>(["approved", "in_dev", "done"]), []);
+
+  function generateScenarioForStory(storyId: string) {
+    startTransition(async () => {
+      const res = await generateScenarioForStoryAction(projectId, storyId);
+      if (res.ok && res.data) {
+        if (res.data.created > 0) toast.success("تم إنشاء سيناريو مسوّدة. راجعه واعتمده.");
+        else toast.info("هذه القصة لديها سيناريو مرتبط بالفعل.");
+        router.refresh();
+      } else if (!res.ok) {
+        toast.error(res.message);
+      }
+    });
+  }
 
   const acsByStory = useMemo(() => {
     const map = new Map<string, AcceptanceCriterionRow[]>();
@@ -272,6 +300,24 @@ export default function StoriesPanel(props: StoriesPanelProps) {
                                   {(s.status === "draft" || s.status === "in_review") && (
                                     <Button size="sm" variant="success" icon={<CheckCircle2 size={14} />}
                                       onClick={() => approveStory(s.id)} disabled={pending}>اعتمد</Button>
+                                  )}
+                                  {APPROVED_SET.has(s.status) && (
+                                    scenarioByStory.has(s.id) ? (
+                                      <Button size="sm" variant="ghost" disabled title="له سيناريو تقييم مرتبط">
+                                        له سيناريو ✓
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        icon={<Wand2 size={14} />}
+                                        onClick={() => generateScenarioForStory(s.id)}
+                                        disabled={pending}
+                                        title="أنشئ سيناريو تقييم من هذه القصة"
+                                      >
+                                        سيناريو تقييم
+                                      </Button>
+                                    )
                                   )}
                                   <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditingStory(s)}>تعديل</Button>
                                   <Button size="sm" variant="ghost" icon={<Trash2 size={14} />}

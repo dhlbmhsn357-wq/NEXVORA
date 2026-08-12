@@ -5,7 +5,7 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, PlayCircle, Target, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, PlayCircle, Target, CheckCircle2, XCircle, Wand2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -29,8 +29,13 @@ import {
   createScenarioAction, updateScenarioAction, deleteScenarioAction,
   recordRunAction, deleteRunAction,
 } from "./evaluation-actions";
-import { deriveDraftsFromScenarioAction } from "./scenario-derivation-actions";
+import {
+  deriveDraftsFromScenarioAction,
+  planScenariosFromStoriesAction,
+  applyScenariosFromStoriesAction,
+} from "./scenario-derivation-actions";
 import type { ScenarioDerivedPlan } from "@/lib/scenario-derivation/service";
+import type { DerivedScenarioPlan } from "@/lib/scenario-derivation/from-story";
 
 const SEVERITY_TONE: Record<EvalSeverity, BadgeTone> = {
   low: "success", medium: "warning", high: "danger", critical: "danger",
@@ -58,6 +63,44 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
   const [runningFor, setRunningFor] = useState<EvaluationScenarioRow | null>(null);
   const [derivePreview, setDerivePreview] = useState<{ scenarioId: string; plan: ScenarioDerivedPlan } | null>(null);
   const [deriveLoadingId, setDeriveLoadingId] = useState<string | null>(null);
+  const [fromStoriesPreview, setFromStoriesPreview] = useState<DerivedScenarioPlan | null>(null);
+  const [fromStoriesLoading, setFromStoriesLoading] = useState(false);
+
+  // عدّ القصص المعتمدة اللي مالهاش سيناريو مرتبط — للعرض على الزر.
+  const missingCount = useMemo(() => {
+    const linked = new Set(
+      scenarios.map((s) => s.linkedStoryId).filter((v): v is string => typeof v === "string"),
+    );
+    const approvedSet = new Set(["approved", "in_dev", "done"]);
+    return stories.filter((s) => approvedSet.has(s.status) && !linked.has(s.id)).length;
+  }, [scenarios, stories]);
+
+  function openFromStoriesPreview() {
+    setFromStoriesLoading(true);
+    startTransition(async () => {
+      const res = await planScenariosFromStoriesAction(projectId);
+      setFromStoriesLoading(false);
+      if (res.ok && res.data) {
+        setFromStoriesPreview(res.data);
+      } else if (!res.ok) {
+        toast.error(res.message);
+      }
+    });
+  }
+
+  function confirmFromStoriesApply() {
+    if (!fromStoriesPreview) return;
+    startTransition(async () => {
+      const res = await applyScenariosFromStoriesAction(projectId);
+      if (res.ok && res.data) {
+        toast.success(`تم إنشاء ${res.data.created} سيناريو draft. راجعهم واعتمدهم.`);
+        setFromStoriesPreview(null);
+        router.refresh();
+      } else if (!res.ok) {
+        toast.error(res.message);
+      }
+    });
+  }
 
   function openDerivePreview(scenarioId: string) {
     setDeriveLoadingId(scenarioId);
@@ -120,7 +163,31 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
       </Card>
 
       <Card>
-        <Header title={`السيناريوهات (${scenarios.length})`} action={canWrite ? <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreating(true)}>سيناريو جديد</Button> : null} />
+        <Header
+          title={`السيناريوهات (${scenarios.length})`}
+          action={canWrite ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Wand2 size={14} />}
+                onClick={openFromStoriesPreview}
+                loading={fromStoriesLoading}
+                disabled={missingCount === 0 || pending}
+                title={
+                  missingCount === 0
+                    ? "كل القصص المعتمَدة لها سيناريو"
+                    : "توليد سيناريوهات تقييم مسوّدة من القصص المعتمدة"
+                }
+              >
+                {missingCount === 0
+                  ? "كل القصص المعتمَدة لها سيناريو"
+                  : `توليد سيناريوهات من القصص المعتمدة (${missingCount})`}
+              </Button>
+              <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreating(true)}>سيناريو جديد</Button>
+            </div>
+          ) : null}
+        />
         {scenarios.length === 0 ? (
           <div>
             <EmptyState
@@ -274,6 +341,60 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
                   derivePreview.plan.toCreate.stories.length === 0 &&
                   derivePreview.plan.toCreate.acs.length === 0
                 }
+              >
+                تأكيد الإنشاء
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* From-Stories Preview Modal */}
+      {fromStoriesPreview && (
+        <Modal open={true} onClose={() => setFromStoriesPreview(null)} maxWidth="max-w-lg">
+          <div className="space-y-4 p-6" dir="rtl">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--v-text)]">
+                <span className="inline-flex items-center gap-1.5"><Wand2 size={16} /> توليد سيناريوهات من القصص</span>
+              </h2>
+              <p className="mt-1 text-xs text-[var(--v-text-muted)]">
+                سيتم إنشاء <b className="text-[var(--v-primary)]">{fromStoriesPreview.toCreate.length}</b> سيناريو تقييم كمسودّات
+                مرتبطة بالقصص التالية. كل سيناريو <b>draft</b> — قابل للتعديل قبل الاعتماد.
+              </p>
+            </div>
+
+            {fromStoriesPreview.toCreate.length === 0 ? (
+              <div className="rounded-[var(--v-radius-md)] border border-dashed border-[var(--v-border)] p-3 text-center text-xs text-[var(--v-text-muted)]">
+                لا توجد قصص معتمَدة بحاجة إلى سيناريو.
+              </div>
+            ) : (
+              <ul className="max-h-80 space-y-1.5 overflow-y-auto rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3">
+                {fromStoriesPreview.toCreate.map((d) => (
+                  <li key={d.linkedStoryId} className="text-[11px] leading-relaxed">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {d.storyCode && <span className="font-mono text-[10px] text-[var(--v-text-subtle)]">{d.storyCode}</span>}
+                      <span className="font-medium text-[var(--v-text)]">{d.storyTitle}</span>
+                      <Badge tone={SEVERITY_TONE[d.suggestedSeverity]}>{EVAL_SEVERITY_LABELS[d.suggestedSeverity]}</Badge>
+                    </div>
+                    <p className="text-[var(--v-text-secondary)]">← {d.suggestedTitle} ({d.suggestedSteps.length} خطوات)</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {fromStoriesPreview.skipped.length > 0 && (
+              <p className="text-[11px] text-[var(--v-text-muted)]">
+                تم تخطّي <b>{fromStoriesPreview.skipped.length}</b> قصة (إما غير معتمدة أو لها سيناريو أصلًا).
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setFromStoriesPreview(null)} disabled={pending}>إلغاء</Button>
+              <Button
+                variant="primary"
+                onClick={confirmFromStoriesApply}
+                loading={pending}
+                disabled={fromStoriesPreview.toCreate.length === 0}
               >
                 تأكيد الإنشاء
               </Button>
