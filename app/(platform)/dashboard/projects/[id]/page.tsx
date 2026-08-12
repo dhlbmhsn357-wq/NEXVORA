@@ -45,6 +45,10 @@ import { orderTabsByNexvora, getTabCategory, getVisibleNexvoraPhases, isExtended
 import StageSelector from "./stage-selector";
 import WorkPanel from "./work-panel";
 import DeliveryLifecyclePanel from "./delivery-lifecycle-panel";
+import MilestonesPanel from "./milestones-panel";
+import TeamPanel from "./team-panel";
+import ProjectHealthStrip from "./_shared/project-health-strip";
+import { getProjectHealth, getTeamWorkload } from "@/lib/portfolio/service";
 import { listMilestones } from "@/lib/work/milestone-service";
 import { listProjectMembers } from "@/lib/work/project-members-service";
 import type { UserRole } from "@/lib/types/database";
@@ -525,6 +529,11 @@ export default async function ProjectDetailPage({
   const workflowV2Enabled = selectWorkflowUiVersion({
     workflow_version: (project as unknown as { workflow_version?: "v1" | "v2" | null }).workflow_version ?? null,
   }) === "v2" && productModeEnabled;
+  // Restructure 2026-Q4: تبويب "مراحل التسليم" (Milestones list) مخفي افتراضيًا
+  // لتفادي التكرار مع workflow_v2 stages. المؤسسات يفعّلوا الفلاغ لظهور التبويب.
+  const enterpriseDeliveryMilestonesEnabled = user
+    ? await isFeatureEnabled("enterprise_delivery_milestones", user.id)
+    : false;
 
   // Consolidation UX 2026 — إعادة توجيه deep-links القديمة إلى التبويبات المُدمجة.
   // القاعدة: مفيش حذف بيانات — الجداول والـ services زي ما هي؛ بس التبويبات تجمّعت.
@@ -536,8 +545,9 @@ export default async function ProjectDetailPage({
       partners: { tab: "handoff", section: "partners" },
       developerHandoff: { tab: "handoff", section: "document" },
       "commercial-full": { tab: "commercial", section: "proposals" },
-      tasks: { tab: "deliveryMilestones", section: "tasks" },
-      stageOwners: { tab: "deliveryMilestones", section: "owners" },
+      // Restructure 2026-Q4: tasks بقى top-level tab (بدل ما كان subtab
+      // جوّه deliveryMilestones)، وstageOwners اتنقل لتبويب team الجديد.
+      stageOwners: { tab: "team", section: "stages" },
       // Commit 2 — Brain + Meetings + Overview
       smartRecommendations: { tab: "projectBrain", section: "recommendations" },
       brainReview: { tab: "projectBrain", section: "review" },
@@ -570,6 +580,11 @@ export default async function ProjectDetailPage({
       q.set("tab", target.tab);
       if (target.section) q.set("section", target.section);
       redirect(`/dashboard/projects/${id}?${q.toString()}`);
+    }
+    // Restructure 2026-Q4: deep-link على deliveryMilestones لما الفلاغ off
+    // يتوجّه لـ tasks (أقرب بديل عملي — لوحة المهام).
+    if (currentTabParam === "deliveryMilestones" && !enterpriseDeliveryMilestonesEnabled) {
+      redirect(`/dashboard/projects/${id}?tab=tasks`);
     }
   }
   const [
@@ -728,6 +743,24 @@ export default async function ProjectDetailPage({
     : 0;
   const allUsersForWork = ((allUsersRes.data ?? []) as { id: string; full_name: string | null; email: string | null }[]).map((u) => ({ id: u.id, name: u.full_name || u.email || "مستخدم" }));
   const workMembersForBoard = workMembers.map((m) => ({ user_id: m.user_id, name: m.name }));
+
+  // ProjectHealthStrip data (Restructure 2026-Q4)
+  // ==============================================
+  // نحسب على الخادم عشان الشريط يظهر مع أول render — ما نتّكلش على
+  // client fetch يعمل flicker على كل تبديل تبويب. الشريط بيتّرندر مرة
+  // فوق layout المشروع فيبقى مشترك بين كل الـ tabs بلا re-fetch.
+  const [healthResult, workloadResult] = await Promise.all([
+    getProjectHealth(project.id),
+    getTeamWorkload(project.id),
+  ]);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const delayedMilestonesCount = workMilestones.filter(
+    (m) =>
+      !!m.planned_date &&
+      m.planned_date < todayIso &&
+      m.approval_status !== "approved" &&
+      m.approval_status !== "client_approved",
+  ).length;
   const milestonesSummary = workMilestones.length > 0
     ? {
         total: workMilestones.length,
@@ -1471,16 +1504,23 @@ export default async function ProjectDetailPage({
           stage.id === "productionMonitoringPrompt" ||
           stage.id === "productionMonitoringReview"
         )) return null;
+        // Restructure 2026-Q4: في v2، تبويب deliveryMilestones ما يبانش خالص
+        //  إلا لما flag enterprise_delivery_milestones مفعّل. لما يبان،
+        //  بيبقى slim (بس MilestonesPanel) — الملّاك انتقلوا لـ team،
+        //  والمهام لـ tasks، والصحة للـ ProjectHealthStrip.
+        if (workflowV2Enabled && stage.id === "deliveryMilestones" && !enterpriseDeliveryMilestonesEnabled) {
+          return null;
+        }
         const content = stage.id === "deliveryMilestones"
           ? (workflowV2Enabled
               ? (
-                  <SubTabs
-                    ariaLabel="أقسام التسليم"
-                    sections={[
-                      { key: "", label: "المراحل", content: deliveryMilestonesContent },
-                      { key: "tasks", label: "لوحة المهام", content: tasksTabContent },
-                      ...(stageOwnersContent ? [{ key: "owners", label: "مسؤولو المراحل", content: stageOwnersContent }] : []),
-                    ]}
+                  // Slim mode: فقط قائمة المراحل (بدون ownership/tasks/workload).
+                  <MilestonesPanel
+                    projectId={project.id}
+                    role={currentUserRole}
+                    milestones={workMilestones}
+                    members={workMembers}
+                    allUsers={allUsersForWork}
                   />
                 )
               : deliveryMilestonesContent)
@@ -1488,8 +1528,41 @@ export default async function ProjectDetailPage({
         return { key: stage.id, label: stage.displayName, content };
       })
       .filter((x): x is WorkflowNavItem => x !== null),
-    // "المهام" tab القديم يفضل ظاهر بس لما v2 مطفّى (في v2 اتدمج داخل deliveryMilestones).
-    ...(workflowV2Enabled ? [] : [{ key: "tasks", label: "المهام", content: tasksTabContent }]),
+    // Restructure 2026-Q4: "المهام" بقى top-level دايمًا (v1 + v2). قبل كده
+    // في v2 كان subtab جوّه deliveryMilestones — بس ده كان "junk drawer".
+    { key: "tasks", label: "المهام", content: tasksTabContent },
+    // Restructure 2026-Q4: تبويب team (الفريق والملكية) — يظهر في v2 فقط
+    // (فيه ownership + membership + capacity المستعادين من deliveryMilestones).
+    ...(workflowV2Enabled
+      ? [
+          {
+            key: "team",
+            label: "الفريق والملكية",
+            content: (
+              <SubTabs
+                ariaLabel="أقسام الفريق والملكية"
+                sections={[
+                  {
+                    key: "",
+                    label: "الملكية والفريق",
+                    content: (
+                      <TeamPanel
+                        projectId={project.id}
+                        role={currentUserRole}
+                        members={workMembers}
+                        allUsers={allUsersForWork}
+                      />
+                    ),
+                  },
+                  ...(stageOwnersContent
+                    ? [{ key: "stages", label: "مسؤولو المراحل", content: stageOwnersContent }]
+                    : []),
+                ]}
+              />
+            ),
+          },
+        ]
+      : []),
     // تبويبات NEXVORA — يظهروا بس لو product_mode مفعّل (NEXVORA Core).
     // "البحث والتحقق" قبل "تجاري" لأنه أساس تعريف المنتج (P5 → P6+).
     ...(workflowV2Enabled ? [
@@ -1828,6 +1901,19 @@ export default async function ProjectDetailPage({
         ))}
       </div>
       )}
+
+      {/* Restructure 2026-Q4 — ProjectHealthStrip:
+          شريط علوي دائم يعرض الصحة والمخاطر على كل تبويب، بدون الحاجة
+          للدخول لتبويب "التسليم" فقط عشان تشوف الحالة. sticky عشان يفضل
+          ظاهر حتى مع scroll طويل داخل تبويب. الرسم مرة واحدة على مستوى
+          الصفحة (خارج content الـ tab) عشان ما يعملش re-mount مع switch. */}
+      <ProjectHealthStrip
+        projectId={project.id}
+        health={healthResult}
+        workload={workloadResult}
+        delayedMilestonesCount={delayedMilestonesCount}
+        hasDeliveryMilestonesTab={workflowV2Enabled && enterpriseDeliveryMilestonesEnabled}
+      />
 
       {/* NEXVORA Phase Anchors — قفزة سريعة بين المجموعات الثمانية
           (يظهر فقط لما product_mode مفعّل، عدد التبويبات في كل phase مكتوب بجانب اسمها). */}

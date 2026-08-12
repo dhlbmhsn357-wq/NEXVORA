@@ -66,9 +66,12 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
     key: "discovery",
     label: "الاكتشاف",
     // Consolidation UX 2026:
-    //  • stageOwners اتدمج داخل deliveryMilestones (subtab)
+    //  • stageOwners اتدمج داخل deliveryMilestones (subtab) — ثم بعدها
+    //    اتنقل لتبويب team مستقل (Restructure 2026-Q4).
     //  • overview اتفكّك: محتواه اتنقل لـ analysis + projectBrain
-    tabs: [e("discovery"), e("analysis"), e("research")],
+    // Restructure 2026-Q4: team في أول موقع لأنه إعداد أساسي (ملكية + فريق)
+    //  بيتحدد مرة واحدة في بداية المشروع، ما بيتغيّرش يوميًا.
+    tabs: [e("team"), e("discovery"), e("analysis"), e("research")],
   },
   {
     key: "meetings",
@@ -101,11 +104,19 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
   {
     key: "ops",
     label: "التجاري والإدارة",
-    // Consolidation UX 2026: commercial-full اتدمج داخل commercial (subtab)،
-    // وtasks اتدمج داخل deliveryMilestones (subtab).
+    // Consolidation UX 2026: commercial-full اتدمج داخل commercial (subtab).
+    // Restructure 2026-Q4:
+    //   • tasks اتترقّى لـ top-level tab (بدل subtab جوّه deliveryMilestones)
+    //   • deliveryMilestones اتنقل خلف flag enterprise_delivery_milestones —
+    //     مكرّرة مع workflow_v2 stages للمشاريع الصغيرة. لما الفلاغ off،
+    //     التبويب ما يبانش خالص (مع deep-link redirect لـ tasks).
+    //     لما الفلاغ on، بيرجع كتبويب slim فيه المراحل بس (بدون ملّاك/مهام/صحة).
+    //   • الصحة + المخاطر انتقلت للـ ProjectHealthStrip الدائم فوق التبويبات.
+    //   • الملكية + الفريق انتقلوا لتبويب team تحت phase discovery.
     tabs: [
       e("commercial"),                      // تجاري (يحوي subtabs: دورة الحياة + العروض والباقات)
-      e("deliveryMilestones"),              // (يحوي subtabs: المراحل + المهام + المسؤولون)
+      e("tasks"),                           // لوحة المهام — أساسية بعد الترقية
+      a("deliveryMilestones"),              // فقط مع flag enterprise_delivery_milestones (advanced)
       a("support"),                         // طلبات الدعم
       a("organizationalIntelligence"),      // الذكاء التنظيمي (advanced — مرجع)
       a("activity"),                        // Activity — سجل عابر

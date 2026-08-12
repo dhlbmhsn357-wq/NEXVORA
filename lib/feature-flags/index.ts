@@ -29,6 +29,11 @@ export const KNOWN_FLAGS = [
   "product_mode",
   "extended_technical_delivery",
   "prototype_studio",
+  // Restructure 2026-Q4: يعرض تبويب "مراحل التسليم" (Milestones list) كتبويب
+  // منفصل. للمشاريع الصغيرة/الفردية اللي بتعتمد على workflow_v2 stages،
+  // المراحل مكرّرة فمخفية افتراضيًا. المؤسسات اللي بتدير مراحل رسمية
+  // (بعقد/اعتماد عميل) تفعّل الفلاغ.
+  "enterprise_delivery_milestones",
 ] as const;
 
 export type KnownFlagName = (typeof KNOWN_FLAGS)[number];
