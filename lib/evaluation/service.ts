@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type {
   EvaluationScenarioRow, EvaluationRunRow, EvalStep,
-  EvalCategory, EvalSeverity, EvalRunResult,
+  EvalCategory, EvalSeverity, EvalRunResult, EvalScenarioStatus,
 } from "./types";
 import { generateAndInsertWithRetry } from "@/lib/coding/code-service";
 
@@ -15,6 +15,7 @@ type DbScen = {
   category: EvalCategory; severity: EvalSeverity; preconditions: string;
   steps: EvalStep[]; expected_result: string;
   linked_story_id: string | null; linked_flow_id: string | null; tags: string[];
+  status?: EvalScenarioStatus | null;
   created_at: string; updated_at: string; created_by: string | null;
 };
 function mapScen(r: DbScen): EvaluationScenarioRow {
@@ -24,6 +25,7 @@ function mapScen(r: DbScen): EvaluationScenarioRow {
     steps: Array.isArray(r.steps) ? r.steps : [],
     expectedResult: r.expected_result,
     linkedStoryId: r.linked_story_id, linkedFlowId: r.linked_flow_id, tags: r.tags ?? [],
+    status: (r.status ?? "draft") as EvalScenarioStatus,
     createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
   };
 }
@@ -105,6 +107,32 @@ export async function deleteScenario(id: string): Promise<void> {
   const svc = createServiceClient();
   const { error } = await svc.from("evaluation_scenarios").delete().eq("id", id);
   if (error) throw error;
+}
+
+/**
+ * اعتماد سيناريو واحد. Idempotent — إذا كان معتمَدًا يبقى معتمَدًا.
+ * يُحدّث updated_at حتى يُبطل كاش Handoff (sourceHash يعتمد عليه).
+ */
+export async function approveScenario(id: string): Promise<EvaluationScenarioRow> {
+  const svc = createServiceClient();
+  const { data, error } = await svc.from("evaluation_scenarios")
+    .update({ status: "approved", updated_at: new Date().toISOString() })
+    .eq("id", id).select("*").single();
+  if (error) throw error;
+  return mapScen(data as DbScen);
+}
+
+/**
+ * اعتماد كل مسودات المشروع دفعة واحدة. يعيد عدد الصفوف المتأثّرة.
+ * Idempotent — الصفوف المعتمَدة أصلًا لن تُلمَس.
+ */
+export async function approveDraftScenarios(projectId: string): Promise<number> {
+  const svc = createServiceClient();
+  const { data, error } = await svc.from("evaluation_scenarios")
+    .update({ status: "approved", updated_at: new Date().toISOString() })
+    .eq("project_id", projectId).eq("status", "draft").select("id");
+  if (error) throw error;
+  return Array.isArray(data) ? data.length : 0;
 }
 
 // ---------- Runs ----------

@@ -5,7 +5,7 @@
  */
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, PlayCircle, Target, CheckCircle2, XCircle, Wand2 } from "lucide-react";
+import { Plus, Pencil, Trash2, PlayCircle, Target, CheckCircle2, XCircle, Wand2, CheckCheck } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -19,14 +19,17 @@ import {
   NEW_EVAL_CATEGORIES, EVAL_CATEGORY_LABELS,
   EVAL_SEVERITIES, EVAL_SEVERITY_LABELS,
   EVAL_RUN_RESULTS, EVAL_RUN_RESULT_LABELS,
+  EVAL_SCENARIO_STATUS_LABELS,
   type EvaluationScenarioRow, type EvaluationRunRow,
   type EvalCategory, type EvalSeverity, type EvalRunResult, type EvalStep,
+  type EvalScenarioStatus,
 } from "@/lib/evaluation/types";
 import type { UserStoryRow } from "@/lib/user-stories/types";
 import type { UserFlowRow } from "@/lib/product-definition/types";
 import { latestRunByScenario, summarizeEvaluation, deriveEvaluationReadiness } from "@/lib/evaluation/derive";
 import {
   createScenarioAction, updateScenarioAction, deleteScenarioAction,
+  approveScenarioAction, approveAllDraftScenariosAction,
   recordRunAction, deleteRunAction,
 } from "./evaluation-actions";
 import {
@@ -42,6 +45,9 @@ const SEVERITY_TONE: Record<EvalSeverity, BadgeTone> = {
 };
 const RESULT_TONE: Record<EvalRunResult, BadgeTone> = {
   pass: "success", fail: "danger", blocked: "warning", skipped: "neutral",
+};
+const STATUS_TONE: Record<EvalScenarioStatus, BadgeTone> = {
+  draft: "warning", approved: "success", needs_review: "info",
 };
 
 export interface EvaluationPanelProps {
@@ -131,6 +137,29 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
     });
   }
 
+  // عدد المسودات — لتفعيل زر "اعتمد كل المسودات (N)".
+  const draftCount = useMemo(
+    () => scenarios.filter((s) => (s.status ?? "draft") === "draft").length,
+    [scenarios],
+  );
+
+  function approveOne(id: string) {
+    run(() => approveScenarioAction(id, projectId), "تم الاعتماد");
+  }
+  function bulkApproveDrafts() {
+    if (draftCount === 0) return;
+    if (!confirm(`سيتم اعتماد ${draftCount} سيناريو مسوّدة. متأكد؟`)) return;
+    startTransition(async () => {
+      const res = await approveAllDraftScenariosAction(projectId);
+      if (res.ok) {
+        toast.success(`تم اعتماد ${res.data?.approved ?? 0} سيناريو.`);
+        router.refresh();
+      } else {
+        toast.error(res.message);
+      }
+    });
+  }
+
   const summary = useMemo(() => summarizeEvaluation(scenarios, runs), [scenarios, runs]);
   const readiness = useMemo(() => deriveEvaluationReadiness(scenarios, runs), [scenarios, runs]);
   const latestRun = useMemo(() => latestRunByScenario(runs), [runs]);
@@ -167,6 +196,20 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
           title={`السيناريوهات (${scenarios.length})`}
           action={canWrite ? (
             <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="success"
+                icon={<CheckCheck size={14} />}
+                onClick={bulkApproveDrafts}
+                disabled={draftCount === 0 || pending}
+                title={
+                  draftCount === 0
+                    ? "لا توجد مسودات للاعتماد"
+                    : "اعتماد كل سيناريوهات المسوّدة دفعة واحدة"
+                }
+              >
+                اعتمد كل المسودات ({draftCount})
+              </Button>
               <Button
                 size="sm"
                 variant="secondary"
@@ -219,12 +262,14 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
           <ul className="divide-y divide-[var(--v-border)]">
             {scenarios.map((s) => {
               const last = latestRun.get(s.id);
+              const status: EvalScenarioStatus = (s.status ?? "draft") as EvalScenarioStatus;
               return (
                 <li key={s.id} className="flex items-start justify-between gap-3 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       {s.code && <span className="font-mono text-[11px] text-[var(--v-text-subtle)]">{s.code}</span>}
                       <p className="font-medium text-[var(--v-text)]">{s.title}</p>
+                      <Badge tone={STATUS_TONE[status]}>{EVAL_SCENARIO_STATUS_LABELS[status]}</Badge>
                       <Badge tone="info">{EVAL_CATEGORY_LABELS[s.category]}</Badge>
                       <Badge tone={SEVERITY_TONE[s.severity]}>{EVAL_SEVERITY_LABELS[s.severity]}</Badge>
                       {last ? (
@@ -239,6 +284,25 @@ export default function EvaluationPanel(props: EvaluationPanelProps) {
                   </div>
                   {canWrite && (
                     <div className="flex shrink-0 flex-wrap gap-1">
+                      {status === "draft" ? (
+                        <Button
+                          size="sm"
+                          variant="success"
+                          icon={<CheckCircle2 size={14} />}
+                          onClick={() => approveOne(s.id)}
+                          disabled={pending}
+                          title="اعتماد السيناريو — يفتح دليل التقييم في Handoff"
+                        >
+                          اعتمد
+                        </Button>
+                      ) : status === "approved" ? (
+                        <span
+                          className="inline-flex h-8 items-center gap-1 rounded-[var(--v-radius-md)] border border-[var(--v-green)]/30 bg-[var(--v-green)]/10 px-2 text-[11px] text-[var(--v-green)]"
+                          title="السيناريو معتمَد"
+                        >
+                          <CheckCircle2 size={12} /> معتمَد
+                        </span>
+                      ) : null}
                       <Button size="sm" variant="ghost" icon={<PlayCircle size={14} />} onClick={() => setRunningFor(s)}>تشغيل</Button>
                       <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditing(s)}>تعديل</Button>
                       <Button

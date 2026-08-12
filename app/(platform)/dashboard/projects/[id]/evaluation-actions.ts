@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
 import {
   createScenario, updateScenario, deleteScenario,
+  approveScenario, approveDraftScenarios,
   createRun, deleteRun,
   type ScenarioInput, type RunInput,
 } from "@/lib/evaluation/service";
@@ -97,6 +98,34 @@ export async function updateScenarioAction(projectId: string, id: string, patch:
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." }; }
+}
+
+/**
+ * اعتماد سيناريو واحد. Idempotent — الاعتماد الثاني يمرّ بلا تغيير.
+ */
+export async function approveScenarioAction(
+  scenarioId: string, projectId: string,
+): Promise<Result> {
+  const g = await guard(); if (!g.ok) return g;
+  try {
+    await approveScenario(scenarioId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل الاعتماد." }; }
+}
+
+/**
+ * اعتماد كل مسودات المشروع. يعيد عدد الصفوف اللي اتحدّثت فعليًا.
+ */
+export async function approveAllDraftScenariosAction(
+  projectId: string,
+): Promise<Result<{ approved: number }>> {
+  const g = await guard(); if (!g.ok) return g;
+  try {
+    const approved = await approveDraftScenarios(projectId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { approved } };
+  } catch (e) { return { ok: false, message: e instanceof Error ? e.message : "فشل الاعتماد الجماعي." }; }
 }
 
 export async function deleteScenarioAction(projectId: string, id: string): Promise<Result> {

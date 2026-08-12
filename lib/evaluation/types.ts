@@ -34,6 +34,19 @@ export const EVAL_SEVERITY_LABELS: Record<EvalSeverity, string> = {
   low: "منخفضة", medium: "متوسطة", high: "عالية", critical: "حرجة",
 };
 
+/**
+ * حالة سيناريو التقييم (0109 migration).
+ * القيمة الافتراضية في DB هي 'draft'؛ الاعتماد يجعلها 'approved' حتى يقبلها
+ * محلّل Handoff (source-resolvers.ts) ضمن مصادر product_evaluation_guide.
+ */
+export type EvalScenarioStatus = "draft" | "approved" | "needs_review";
+export const EVAL_SCENARIO_STATUSES: readonly EvalScenarioStatus[] = [
+  "draft", "approved", "needs_review",
+] as const;
+export const EVAL_SCENARIO_STATUS_LABELS: Record<EvalScenarioStatus, string> = {
+  draft: "مسوّدة", approved: "معتمَد", needs_review: "بحاجة مراجعة",
+};
+
 export type EvalRunResult = "pass" | "fail" | "blocked" | "skipped";
 export const EVAL_RUN_RESULTS: readonly EvalRunResult[] = ["pass", "fail", "blocked", "skipped"] as const;
 export const EVAL_RUN_RESULT_LABELS: Record<EvalRunResult, string> = {
@@ -59,6 +72,11 @@ export interface EvaluationScenarioRow {
   linkedStoryId: string | null;
   linkedFlowId: string | null;
   tags: string[];
+  /**
+   * حالة السيناريو. اختيارية للتوافق مع بيانات قبل migration 0109.
+   * القيمة الفعلية دائمًا موجودة بعد 0109 (default 'draft').
+   */
+  status?: EvalScenarioStatus;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
