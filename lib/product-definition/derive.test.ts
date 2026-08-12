@@ -13,7 +13,7 @@ function persona(over: Partial<PersonaRow>): PersonaRow {
   return {
     id: "p", projectId: "prj", name: "n", role: "", segment: "SMB",
     jobsToBeDone: "", goals: "", pains: "", channels: [],
-    techSavviness: 50, notes: "", isPrimary: false,
+    techSavviness: 50, notes: "", isPrimary: false, sourceBrainItemKey: null,
     createdAt: NOW, updatedAt: NOW, createdBy: null,
     ...over,
   };
@@ -32,7 +32,7 @@ function req(over: Partial<RequirementRow>): RequirementRow {
     id: "r", projectId: "prj", code: null, title: "t", description: "",
     requirementType: "functional", priority: "should", status: "draft",
     rationale: "", acceptanceHint: "", effortEstimate: "",
-    linkedPersonaId: "some-persona", linkedFlowId: null, tags: [],
+    linkedPersonaId: "some-persona", linkedFlowId: null, tags: [], sourceBrainItemKey: null,
     createdAt: NOW, updatedAt: NOW, createdBy: null,
     ...over,
   };

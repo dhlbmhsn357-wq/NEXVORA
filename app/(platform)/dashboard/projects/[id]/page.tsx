@@ -1053,18 +1053,26 @@ export default async function ProjectDetailPage({
                 key: "review",
                 label: "الاعتماد النهائي",
                 content: (
-                  <BrainReviewPanel
-                    projectId={project.id}
-                    document={brainV2Reviewable}
-                    confidenceThreshold={brainSettings.confidence_threshold_percent}
-                    isAdmin={isAdmin}
-                    recommendations={recommendations}
-                    reviewObjects={brainReviewV2State.objects}
-                    reviewDependencies={brainReviewV2State.dependencies}
-                    reviewComments={brainReviewV2State.comments}
-                    latestValidationReport={brainReviewV2State.latestValidationReport}
-                    reviewEvents={brainReviewV2State.events}
-                  />
+                  <div className="space-y-3">
+                    <BrainReviewPanel
+                      projectId={project.id}
+                      document={brainV2Reviewable}
+                      confidenceThreshold={brainSettings.confidence_threshold_percent}
+                      isAdmin={isAdmin}
+                      recommendations={recommendations}
+                      reviewObjects={brainReviewV2State.objects}
+                      reviewDependencies={brainReviewV2State.dependencies}
+                      reviewComments={brainReviewV2State.comments}
+                      latestValidationReport={brainReviewV2State.latestValidationReport}
+                      reviewEvents={brainReviewV2State.events}
+                    />
+                    <p className="rounded-[var(--v-radius-md)] border border-dashed border-[var(--v-border)] bg-[var(--v-surface)] px-3 py-2 text-xs text-[var(--v-text-muted)]">
+                      بعد الاعتماد، استورد المتطلبات وأصحاب المصلحة المعتمدين إلى{" "}
+                      <a className="font-medium text-[var(--v-primary)] hover:underline" href={`/dashboard/projects/${project.id}?tab=definition`}>
+                        «تعريف المنتج» ←
+                      </a>
+                    </p>
+                  </div>
                 ),
               },
             ]}

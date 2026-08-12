@@ -23,6 +23,8 @@ export interface PersonaRow {
   techSavviness: number;   // 0..100
   notes: string;
   isPrimary: boolean;
+  /** مفتاح عنصر Brain المصدر (`section_key::item_key`) لو الـ persona دي مستوردة من Project Brain — null لو أُنشئت يدويًا. */
+  sourceBrainItemKey: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
@@ -104,6 +106,8 @@ export interface RequirementRow {
   linkedPersonaId: string | null;
   linkedFlowId: string | null;
   tags: string[];
+  /** مفتاح عنصر Brain المصدر (`section_key::item_key`) لو المتطلب ده مستورد من Project Brain — null لو أُنشئ يدويًا. */
+  sourceBrainItemKey: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;

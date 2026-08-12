@@ -6,9 +6,9 @@
  * تبويب "تعريف المنتج" — يظهر داخل صفحة المشروع لما product_mode مفعّل.
  * ثلاث أقسام: Personas / User Flows / Requirements (MoSCoW).
  */
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Star, GitBranch, ListChecks, Target, CheckCircle2, CheckCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, Star, GitBranch, ListChecks, Target, CheckCircle2, CheckCheck, Download, Brain } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -34,7 +34,9 @@ import {
   createPersonaAction, updatePersonaAction, deletePersonaAction,
   createFlowAction, updateFlowAction, deleteFlowAction,
   createRequirementAction, updateRequirementAction, deleteRequirementAction,
+  planImportFromBrainAction, applyImportFromBrainAction,
 } from "./definition-actions";
+import type { BrainImportPlan } from "@/lib/product-definition/import-from-brain";
 
 // ---------------------------------------------------------------------------
 // Tones
@@ -69,6 +71,44 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
   const [creatingFlow, setCreatingFlow] = useState(false);
   const [editingReq, setEditingReq] = useState<RequirementRow | null>(null);
   const [creatingReq, setCreatingReq] = useState(false);
+
+  // استيراد من Project Brain المعتمد
+  const [brainPlan, setBrainPlan] = useState<BrainImportPlan | null>(null);
+  const [brainPlanLoading, setBrainPlanLoading] = useState(false);
+  const [brainPreviewOpen, setBrainPreviewOpen] = useState(false);
+
+  const refreshBrainPlan = useCallback(() => {
+    setBrainPlanLoading(true);
+    startTransition(async () => {
+      const res = await planImportFromBrainAction(projectId);
+      setBrainPlanLoading(false);
+      if (res.ok && res.data) setBrainPlan(res.data);
+    });
+  }, [projectId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- تحميل أولي لخطة الاستيراد، مش مزامنة state خارجي.
+    refreshBrainPlan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  const brainAvailableCount = brainPlan
+    ? brainPlan.personasToCreate.length + brainPlan.requirementsToCreate.length
+    : 0;
+
+  function confirmBrainImport() {
+    startTransition(async () => {
+      const res = await applyImportFromBrainAction(projectId);
+      if (res.ok && res.data) {
+        toast.success(`تم استيراد ${res.data.personasCreated} persona و${res.data.requirementsCreated} متطلب كمسودّات — راجعها واعتمدها.`);
+        setBrainPreviewOpen(false);
+        router.refresh();
+        refreshBrainPlan();
+      } else if (!res.ok) {
+        toast.error(res.message);
+      }
+    });
+  }
 
   const pSum = useMemo(() => summarizePersonas(personas), [personas]);
   const fSum = useMemo(() => summarizeFlows(flows), [flows]);
@@ -118,6 +158,33 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
         <StatTile icon={<ListChecks size={16} />} label="متطلبات" value={`${rSum.total}`} sub={`Must ${rSum.mustRatio}%`} tone={rSum.mustRatio > 60 ? "warning" : undefined} />
         <StatTile icon={<Target size={16} />} label="جاهزية التعريف" value={`${readiness.score}%`} tone={readiness.ready ? "success" : readiness.score >= 40 ? "warning" : "danger"} />
       </div>
+
+      {/* Import from Project Brain */}
+      {canWrite && (
+        <div className="flex items-center justify-between gap-3 rounded-[var(--v-radius-lg)] border border-dashed border-[var(--v-border)] bg-[var(--v-surface)] px-4 py-3">
+          <div className="flex items-center gap-2 text-xs text-[var(--v-text-muted)]">
+            <Brain size={14} className="text-[var(--v-primary)]" />
+            {brainPlan?.reason ? (
+              <span>{brainPlan.reason}</span>
+            ) : brainAvailableCount === 0 && !brainPlanLoading ? (
+              <span>كل عناصر الـ Brain المعتمدة مستوردة بالفعل.</span>
+            ) : (
+              <span>يمكنك استيراد شرائح المستخدمين والمتطلبات المعتمدة من Project Brain مباشرة كمسوّدات.</span>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Download size={14} />}
+            loading={brainPlanLoading}
+            disabled={brainPlanLoading || brainAvailableCount === 0}
+            onClick={() => setBrainPreviewOpen(true)}
+            title={brainAvailableCount === 0 ? "لا توجد عناصر Brain جديدة للاستيراد" : "معاينة الاستيراد من الـ Brain المعتمد"}
+          >
+            استورد من الـ Brain المعتمد {brainAvailableCount > 0 ? `(${brainAvailableCount} عنصر متاح)` : ""}
+          </Button>
+        </div>
+      )}
 
       {/* Readiness checklist */}
       <Card>
@@ -301,6 +368,49 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
           setCreatingReq(false); setEditingReq(null);
         }}
       />
+      {/* Brain Import Preview Modal */}
+      {brainPreviewOpen && (
+        <Modal open={true} onClose={() => setBrainPreviewOpen(false)} maxWidth="max-w-lg">
+          <div className="space-y-4 p-6" dir="rtl">
+            <div>
+              <h2 className="text-lg font-semibold text-[var(--v-text)]">
+                <span className="inline-flex items-center gap-1.5"><Brain size={16} /> استيراد من الـ Brain المعتمد</span>
+              </h2>
+              <p className="mt-1 text-xs text-[var(--v-text-muted)]">
+                سيتم إنشاء العناصر التالية كمسوّدات (draft) فقط — راجعها وعدّلها ثم اعتمدها يدويًا كالمعتاد.
+              </p>
+            </div>
+
+            <BrainImportPreviewSection
+              title={`شرائح المستخدمين (${brainPlan?.personasToCreate.length ?? 0})`}
+              items={(brainPlan?.personasToCreate ?? []).map((p) => `${p.name}${p.role ? ` — ${p.role}` : ""}`)}
+            />
+            <BrainImportPreviewSection
+              title={`المتطلبات (${brainPlan?.requirementsToCreate.length ?? 0})`}
+              items={(brainPlan?.requirementsToCreate ?? []).map((r) => r.title)}
+            />
+
+            {(brainPlan?.alreadyImportedCount ?? 0) > 0 && (
+              <p className="text-[11px] text-[var(--v-text-muted)]">
+                تم تخطّي <b>{brainPlan?.alreadyImportedCount}</b> عنصر مستورَد بالفعل.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="ghost" onClick={() => setBrainPreviewOpen(false)} disabled={pending}>إلغاء</Button>
+              <Button
+                variant="primary"
+                onClick={confirmBrainImport}
+                loading={pending}
+                disabled={brainAvailableCount === 0}
+              >
+                تأكيد الاستيراد
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {pending && <span className="sr-only">جارٍ الحفظ...</span>}
     </div>
   );
@@ -334,6 +444,24 @@ function ReadinessCheck({ ok, label, actual }: { ok: boolean; label: string; act
       <span className={ok ? "text-[var(--v-text)]" : "text-[var(--v-text-secondary)]"}>{label}</span>
       <Badge tone={ok ? "success" : "danger"}>{actual}</Badge>
     </li>
+  );
+}
+function BrainImportPreviewSection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold text-[var(--v-text)]">{title}</p>
+      {items.length === 0 ? (
+        <p className="rounded-[var(--v-radius-md)] border border-dashed border-[var(--v-border)] p-2 text-center text-[11px] text-[var(--v-text-muted)]">
+          لا عناصر جديدة.
+        </p>
+      ) : (
+        <ul className="max-h-40 space-y-1 overflow-y-auto rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-2">
+          {items.map((it, i) => (
+            <li key={i} className="truncate text-[11px] text-[var(--v-text-secondary)]">• {it}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 function Field({ label, span = 1, children }: { label: string; span?: 1 | 2; children: React.ReactNode }) {

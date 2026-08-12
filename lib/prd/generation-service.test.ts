@@ -174,6 +174,7 @@ describe("formatStructuredContextForPrompt", () => {
           description: "SSO عبر Google", requirementType: "functional",
           priority: "must", status: "approved", rationale: "", acceptanceHint: "",
           effortEstimate: "", linkedPersonaId: null, linkedFlowId: null, tags: [],
+          sourceBrainItemKey: null,
           createdAt: "", updatedAt: "", createdBy: null,
         },
       ],

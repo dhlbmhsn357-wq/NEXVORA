@@ -20,6 +20,7 @@ type DbPersona = {
   id: string; project_id: string; name: string; role: string; segment: string;
   jobs_to_be_done: string; goals: string; pains: string; channels: string[];
   tech_savviness: number; notes: string; is_primary: boolean;
+  source_brain_item_key: string | null;
   created_at: string; updated_at: string; created_by: string | null;
 };
 function mapPersona(r: DbPersona): PersonaRow {
@@ -27,6 +28,7 @@ function mapPersona(r: DbPersona): PersonaRow {
     id: r.id, projectId: r.project_id, name: r.name, role: r.role, segment: r.segment,
     jobsToBeDone: r.jobs_to_be_done, goals: r.goals, pains: r.pains, channels: r.channels ?? [],
     techSavviness: r.tech_savviness, notes: r.notes, isPrimary: r.is_primary,
+    sourceBrainItemKey: r.source_brain_item_key ?? null,
     createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
   };
 }
@@ -52,6 +54,7 @@ type DbReq = {
   requirement_type: RequirementType; priority: MoscowPriority; status: RequirementStatus;
   rationale: string; acceptance_hint: string; effort_estimate: string;
   linked_persona_id: string | null; linked_flow_id: string | null; tags: string[];
+  source_brain_item_key: string | null;
   created_at: string; updated_at: string; created_by: string | null;
 };
 function mapReq(r: DbReq): RequirementRow {
@@ -60,6 +63,7 @@ function mapReq(r: DbReq): RequirementRow {
     requirementType: r.requirement_type, priority: r.priority, status: r.status,
     rationale: r.rationale, acceptanceHint: r.acceptance_hint, effortEstimate: r.effort_estimate,
     linkedPersonaId: r.linked_persona_id, linkedFlowId: r.linked_flow_id, tags: r.tags ?? [],
+    sourceBrainItemKey: r.source_brain_item_key ?? null,
     createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
   };
 }
@@ -81,6 +85,8 @@ export interface PersonaInput {
   name: string; role?: string; segment?: string;
   jobsToBeDone?: string; goals?: string; pains?: string;
   channels?: string[]; techSavviness?: number; notes?: string; isPrimary?: boolean;
+  /** يُمرَّر فقط عند الاستيراد من Project Brain — يمنع إعادة استيراد نفس العنصر. */
+  sourceBrainItemKey?: string | null;
 }
 
 export async function createPersona(
@@ -93,6 +99,7 @@ export async function createPersona(
     goals: input.goals ?? "", pains: input.pains ?? "",
     channels: input.channels ?? [], tech_savviness: input.techSavviness ?? 50,
     notes: input.notes ?? "", is_primary: input.isPrimary ?? false,
+    source_brain_item_key: input.sourceBrainItemKey ?? null,
     created_by: createdBy,
   }).select("*").single();
   if (error) throw error;
@@ -197,6 +204,8 @@ export interface RequirementInput {
   requirementType?: RequirementType; priority?: MoscowPriority; status?: RequirementStatus;
   rationale?: string; acceptanceHint?: string; effortEstimate?: string;
   linkedPersonaId?: string | null; linkedFlowId?: string | null; tags?: string[];
+  /** يُمرَّر فقط عند الاستيراد من Project Brain — يمنع إعادة استيراد نفس العنصر. */
+  sourceBrainItemKey?: string | null;
 }
 
 export async function createRequirement(
@@ -214,6 +223,7 @@ export async function createRequirement(
     linked_persona_id: input.linkedPersonaId ?? null,
     linked_flow_id: input.linkedFlowId ?? null,
     tags: input.tags ?? [],
+    source_brain_item_key: input.sourceBrainItemKey ?? null,
     created_by: createdBy,
   });
   if (input.code) {

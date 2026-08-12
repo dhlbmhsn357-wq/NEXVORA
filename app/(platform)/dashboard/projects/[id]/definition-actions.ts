@@ -20,6 +20,10 @@ import {
   FLOW_TYPES, MOSCOW_PRIORITIES, REQUIREMENT_STATUSES, REQUIREMENT_TYPES,
   type FlowType, type MoscowPriority, type RequirementStatus, type RequirementType, type FlowStep,
 } from "@/lib/product-definition/types";
+import {
+  planImportFromBrain, applyImportFromBrain,
+  type BrainImportPlan,
+} from "@/lib/product-definition/import-from-brain";
 
 type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; message: string };
 
@@ -328,5 +332,34 @@ export async function deleteRequirementAction(projectId: string, id: string): Pr
     return { ok: true };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "فشل الحذف." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Import from Project Brain (approved stakeholders → personas,
+// functional/non_functional requirements → requirements)
+// ---------------------------------------------------------------------------
+export async function planImportFromBrainAction(projectId: string): Promise<ActionResult<BrainImportPlan>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    const plan = await planImportFromBrain(projectId);
+    return { ok: true, data: plan };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل بناء خطة الاستيراد." };
+  }
+}
+
+export async function applyImportFromBrainAction(
+  projectId: string,
+): Promise<ActionResult<{ personasCreated: number; requirementsCreated: number }>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    const res = await applyImportFromBrain(projectId, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: res };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الاستيراد." };
   }
 }

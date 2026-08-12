@@ -11,7 +11,7 @@ function req(id: string, over: Partial<RequirementRow> = {}): RequirementRow {
     id, projectId: "p", code: null, title: `Req ${id}`, description: "",
     requirementType: "functional", priority: "should", status: "approved",
     rationale: "", acceptanceHint: "", effortEstimate: "",
-    linkedPersonaId: null, linkedFlowId: null, tags: [],
+    linkedPersonaId: null, linkedFlowId: null, tags: [], sourceBrainItemKey: null,
     createdAt: NOW, updatedAt: NOW, createdBy: null, ...over,
   };
 }
