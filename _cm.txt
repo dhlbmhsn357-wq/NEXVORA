@@ -1,6 +1,0 @@
-﻿Fix PRD approve action: table name is prd not prds
-
-Bug: approvePRDAction queried public.prds - table does not exist.
-Fix: use correct singular name prd (as defined in 0010_prd.sql)
-
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
