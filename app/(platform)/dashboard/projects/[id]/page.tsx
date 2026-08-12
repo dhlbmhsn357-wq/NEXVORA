@@ -1003,15 +1003,15 @@ export default async function ProjectDetailPage({
               label: "التوصيات",
               content: (
                 <div className="space-y-5">
+                  <ArchitectureIntelligencePanel
+                    projectId={project.id}
+                    initialReport={architectureReport}
+                    canManage={isAdmin}
+                  />
                   <SmartRecommendationsPanel
                     projectId={project.id}
                     recommendations={recommendations}
                     dependencies={recommendationDependencies}
-                    canManage={isAdmin}
-                  />
-                  <ArchitectureIntelligencePanel
-                    projectId={project.id}
-                    initialReport={architectureReport}
                     canManage={isAdmin}
                   />
                 </div>
