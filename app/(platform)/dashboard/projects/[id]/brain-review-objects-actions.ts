@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
-import { setReviewObjectState } from "@/lib/brain-v2/review-objects-service";
+import { setReviewObjectState, bulkSetReviewObjectState } from "@/lib/brain-v2/review-objects-service";
 import { addReviewComment, setCommentResolved } from "@/lib/brain-v2/review-comments-service";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { BrainReviewObjectState } from "@/lib/types/database";
@@ -24,6 +24,20 @@ export async function setReviewObjectStateAction(
   await setReviewObjectState(createServiceClient(), reviewObjectId, state, reason, auth.userId ?? null);
   revalidatePath(`/dashboard/projects/${projectId}`);
   return { ok: true };
+}
+
+/** اعتماد الكل — كل عناصر المراجعة الفردية الظاهرة حاليًا (بعد الفلاتر) دفعة واحدة. */
+export async function bulkApproveReviewObjectsAction(
+  projectId: string,
+  reviewObjectIds: string[]
+): Promise<Result & { resolvedCount?: number }> {
+  const auth = await requireRole(["owner", "admin", "member"]);
+  if (!auth.ok) return authErr(auth.message);
+  if (reviewObjectIds.length === 0) return { ok: true, resolvedCount: 0 };
+
+  const { resolvedCount } = await bulkSetReviewObjectState(createServiceClient(), reviewObjectIds, "approved", null, auth.userId ?? null);
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { ok: true, resolvedCount };
 }
 
 export async function addReviewCommentAction(input: {

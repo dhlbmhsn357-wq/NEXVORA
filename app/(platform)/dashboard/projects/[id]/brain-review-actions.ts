@@ -7,6 +7,7 @@ import {
   reviewSection,
   setMissingInfoDisposition,
   setAssumptionDisposition,
+  bulkResolveOpenItems,
   requestBrainChanges,
   startBrainReview,
 } from "@/lib/brain-v2/review-service";
@@ -136,6 +137,26 @@ export async function setAssumptionDispositionAction(input: {
   if (!r.ok) return { ok: false, message: r.message ?? "فشل الحفظ." };
   revalidatePath(`/dashboard/projects/${input.projectId}`);
   return { ok: true };
+}
+
+/** اعتماد الكل — البنود المفتوحة (معلومات ناقصة + افتراضات) دفعة واحدة. */
+export async function bulkResolveOpenItemsAction(input: {
+  documentId: string;
+  projectId: string;
+  missingIndexes: number[];
+  assumptionIndexes: number[];
+}): Promise<Result & { resolvedCount?: number }> {
+  const auth = await requireRole(["owner", "admin", "member"]);
+  if (!auth.ok) return authErr(auth.message);
+  const r = await bulkResolveOpenItems({
+    documentId: input.documentId,
+    missingIndexes: input.missingIndexes,
+    assumptionIndexes: input.assumptionIndexes,
+    actorId: auth.userId ?? null,
+  });
+  if (!r.ok) return { ok: false, message: r.message ?? "فشل الحسم الجماعي." };
+  revalidatePath(`/dashboard/projects/${input.projectId}`);
+  return { ok: true, resolvedCount: r.resolvedCount };
 }
 
 export interface BrainReviewV2State {

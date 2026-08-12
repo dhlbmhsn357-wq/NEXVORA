@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GitPullRequestArrow, Check, X, GitMerge } from "lucide-react";
+import { GitPullRequestArrow, Check, X, GitMerge, CheckCheck } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import { toast } from "@/components/ui/Toaster";
-import { acceptBrainPendingChange, rejectBrainPendingChange, mergeBrainPendingChange } from "./brain-v2-actions";
+import { acceptBrainPendingChange, rejectBrainPendingChange, mergeBrainPendingChange, bulkAcceptBrainPendingChanges } from "./brain-v2-actions";
 import { KNOWLEDGE_SOURCE_LABELS } from "@/lib/brain-v2/knowledge-sources";
 import { BRAIN_SECTION_LABELS, type BrainSectionKey } from "@/lib/brain-v2/types";
 import { DOWNSTREAM_OF_BRAIN, SYNC_ARTIFACT_LABELS } from "@/lib/knowledge-sync/graph";
@@ -63,6 +63,28 @@ export default function PendingChangesPanel({
     });
   }
 
+  function bulkAccept() {
+    if (pendingChanges.length === 0) return;
+    if (pendingChanges.length > 5) {
+      const ok = window.confirm(`متأكد من اعتماد ${pendingChanges.length} عنصر دفعة واحدة؟`);
+      if (!ok) return;
+    }
+    startTransition(async () => {
+      const ids = pendingChanges.map((c) => c.id);
+      const r = await bulkAcceptBrainPendingChanges(projectId, ids);
+      if (!r.ok) {
+        toast.error(r.message);
+        return;
+      }
+      toast.success(
+        r.failedCount && r.failedCount > 0
+          ? `تم اعتماد ${r.acceptedCount} عنصر (وفشل ${r.failedCount}).`
+          : `تم اعتماد ${r.acceptedCount} عنصر`
+      );
+      router.refresh();
+    });
+  }
+
   function openMerge(change: BrainPendingChange) {
     setMergingId(change.id);
     setMergeText(JSON.stringify(change.new_value, null, 2));
@@ -94,9 +116,16 @@ export default function PendingChangesPanel({
 
   return (
     <Card padding="md">
-      <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--v-text)]">
-        <GitPullRequestArrow size={16} className="text-[var(--v-primary)]" /> المعرفة المعلّقة ({pendingChanges.length})
-      </p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-[var(--v-text)]">
+          <GitPullRequestArrow size={16} className="text-[var(--v-primary)]" /> المعرفة المعلّقة ({pendingChanges.length})
+        </p>
+        {canManage && (
+          <Button variant="success" size="sm" onClick={bulkAccept} loading={isPending} disabled={isPending}>
+            <CheckCheck size={13} /> اعتماد الكل ({pendingChanges.length})
+          </Button>
+        )}
+      </div>
       <p className="mb-3 text-[11px] text-[var(--v-text-muted)]">
         Impact Report — أي اعتماد هنا هيحدّث Project Brain، وبعده هيتم تحديث تلقائي (لو مفعّل) لـ:{" "}
         {DOWNSTREAM_OF_BRAIN.map((k) => SYNC_ARTIFACT_LABELS[k]).join("، ")}.

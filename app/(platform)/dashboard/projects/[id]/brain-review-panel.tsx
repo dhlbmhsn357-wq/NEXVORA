@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -18,6 +18,7 @@ import {
   Link2,
   RefreshCw,
   History,
+  CheckCheck,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -49,7 +50,7 @@ import {
   requestBrainChangesAction,
   runBrainReviewValidationAction,
 } from "./brain-review-actions";
-import { setReviewObjectStateAction, addReviewCommentAction, setCommentResolvedAction } from "./brain-review-objects-actions";
+import { setReviewObjectStateAction, addReviewCommentAction, setCommentResolvedAction, bulkApproveReviewObjectsAction } from "./brain-review-objects-actions";
 import BrainOpenItemsPanel from "./brain-open-items-panel";
 import { RECOMMENDATION_CATEGORY_LABELS } from "@/lib/organizational-intelligence/recommendation-labels";
 import type {
@@ -625,9 +626,11 @@ function ReviewObjectsSection({
   comments: BrainReviewComment[];
   canReview: boolean;
 }) {
+  const router = useRouter();
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isBulkPending, startBulk] = useTransition();
 
   const sections = useMemo(() => [...new Set(objects.map((o) => o.section_key))], [objects]);
   const byId = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects]);
@@ -644,6 +647,8 @@ function ReviewObjectsSection({
     .filter((o) => !sectionFilter || o.section_key === sectionFilter)
     .filter((o) => !search.trim() || o.item_title.toLowerCase().includes(search.trim().toLowerCase()));
 
+  const filteredUnapproved = filtered.filter((o) => o.state !== "approved");
+
   function dependsOnTitlesFor(objectId: string): string[] {
     return dependencies
       .filter((d) => d.review_object_id === objectId)
@@ -651,13 +656,37 @@ function ReviewObjectsSection({
       .filter((t): t is string => !!t);
   }
 
+  function bulkApprove() {
+    if (filteredUnapproved.length === 0) return;
+    if (filteredUnapproved.length > 5) {
+      const ok = window.confirm(`متأكد من اعتماد ${filteredUnapproved.length} عنصر دفعة واحدة؟`);
+      if (!ok) return;
+    }
+    startBulk(async () => {
+      const r = await bulkApproveReviewObjectsAction(projectId, filteredUnapproved.map((o) => o.id));
+      if (!r.ok) {
+        toast.error(r.message);
+        return;
+      }
+      toast.success(`تم اعتماد ${r.resolvedCount ?? filteredUnapproved.length} عنصر`);
+      router.refresh();
+    });
+  }
+
   if (objects.length === 0) return null;
 
   return (
     <Card padding="md">
-      <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--v-text)]">
-        <ShieldCheck size={15} className="text-[var(--v-primary)]" /> مراجعة عناصر المعرفة الفردية ({objects.length})
-      </p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold text-[var(--v-text)]">
+          <ShieldCheck size={15} className="text-[var(--v-primary)]" /> مراجعة عناصر المعرفة الفردية ({objects.length})
+        </p>
+        {canReview && filteredUnapproved.length > 0 && (
+          <Button variant="success" size="sm" onClick={bulkApprove} loading={isBulkPending} disabled={isBulkPending}>
+            <CheckCheck size={13} /> اعتماد الكل ({filteredUnapproved.length})
+          </Button>
+        )}
+      </div>
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <input
           value={search}

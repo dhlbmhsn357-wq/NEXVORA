@@ -64,6 +64,37 @@ export async function syncRecommendationsToBrainAction(
   };
 }
 
+/**
+ * اعتماد الكل — قبول دفعة توصيات دفعة واحدة (تحترم الفلاتر الحالية في
+ * الواجهة، القائمة اللي بتوصل هنا). بنستدعي RecommendationsEngine.setStatus
+ * لكل توصية (كتابة رخيصة، صف مستقل لكل واحدة)، وبعدين نزامن مع Brain
+ * *مرة واحدة* آخر الدفعة بدل ما نزامن N مرة (syncAcceptedRecommendationsToBrain
+ * بيمسح كل التوصيات المقبولة للمشروع في كل استدعاء، فتكراره N مرة تبذير
+ * وقت بلا فايدة إضافية).
+ */
+export async function bulkAcceptRecommendationsAction(
+  projectId: string,
+  recommendationIds: string[]
+): Promise<{ ok: boolean; message?: string; acceptedCount: number; brainMessage?: string }> {
+  const auth = await requireManageKnowledge();
+  if (!auth.ok) return { ok: false, message: auth.message ?? "غير مسموح.", acceptedCount: 0 };
+  if (recommendationIds.length === 0) return { ok: true, acceptedCount: 0 };
+
+  await Promise.all(recommendationIds.map((id) => RecommendationsEngine.setStatus(id, "accepted", auth.userId ?? null, null)));
+
+  const sync = await syncAcceptedRecommendationsToBrain(projectId, auth.userId ?? null);
+  const brainMessage = sync.ok
+    ? sync.addedCount > 0
+      ? `اتضافت ${sync.addedCount} توصية للـ Brain.`
+      : sync.backfilledCount > 0
+        ? `اتصلّح مصدر ${sync.backfilledCount} عنصر في الـ Brain.`
+        : undefined
+    : sync.message;
+
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { ok: true, acceptedCount: recommendationIds.length, brainMessage };
+}
+
 export type GenerateRecommendationsResult =
   | { status: "done"; generated: number }
   | { status: "skipped"; message: string }

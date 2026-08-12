@@ -138,6 +138,22 @@ export async function setReviewObjectState(
 }
 
 /**
+ * اعتماد الكل — دفعة من عناصر المراجعة الفردية دفعة واحدة. كل عنصر صف
+ * مستقل (بلا مستند مشترك بيتقرا/يتكتب زي البنود المفتوحة)، فالتوازي هنا
+ * آمن ومش هيتسبب في تدهيس كتابة فوق كتابة.
+ */
+export async function bulkSetReviewObjectState(
+  supabase: SupabaseClient,
+  reviewObjectIds: string[],
+  state: BrainReviewObjectState,
+  reason: string | null,
+  actorId: string | null
+): Promise<{ resolvedCount: number }> {
+  await Promise.all(reviewObjectIds.map((id) => setReviewObjectState(supabase, id, state, reason, actorId)));
+  return { resolvedCount: reviewObjectIds.length };
+}
+
+/**
  * بيتشغّل عند تعديل قسم/إنشاء Draft جديد من نسخة اتراجعت — بيكتشف أي
  * عنصر اتغيّر محتواه (بإعادة استخدام diffBrainContents) وبيعلّمه هو + أي
  * عنصر تاني بيعتمد عليه (قفزة واحدة) بـ needs_revalidation، عشان "مفيش

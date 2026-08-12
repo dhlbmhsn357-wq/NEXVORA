@@ -183,7 +183,9 @@ async function resolvePendingChange(
   changeId: string,
   actorId: string | null,
   status: "accepted" | "rejected" | "merged",
-  overrideValue?: unknown
+  overrideValue?: unknown,
+  /** لو false، بنأجّل notifyBrainChanged لآخر الدفعة (bulkAcceptPendingChanges) بدل ما نطلقه مرة لكل عنصر. */
+  notify: boolean = true
 ): Promise<{ ok: boolean; message?: string }> {
   const supabase = createServiceClient();
   const { data: change } = await supabase.from("brain_pending_changes").select("*").eq("id", changeId).maybeSingle();
@@ -227,10 +229,12 @@ async function resolvePendingChange(
     relation_type: "produced",
   });
 
-  try {
-    await notifyBrainChanged(row.project_id, actorId);
-  } catch (err) {
-    console.error(`[BrainSync] notifyBrainChanged threw after pending change ${changeId}:`, err);
+  if (notify) {
+    try {
+      await notifyBrainChanged(row.project_id, actorId);
+    } catch (err) {
+      console.error(`[BrainSync] notifyBrainChanged threw after pending change ${changeId}:`, err);
+    }
   }
 
   return { ok: true };
@@ -240,6 +244,36 @@ export const acceptPendingChange = (changeId: string, actorId: string | null) =>
 export const rejectPendingChange = (changeId: string, actorId: string | null) => resolvePendingChange(changeId, actorId, "rejected");
 export const mergePendingChange = (changeId: string, actorId: string | null, mergedValue: unknown) =>
   resolvePendingChange(changeId, actorId, "merged", mergedValue);
+
+/**
+ * اعتماد الكل — كل التغييرات المعلّقة (أو مجموعة معيّنة منها) دفعة
+ * واحدة. لازم تسلسلي (await كل عنصر لوحده) مش Promise.all، لأن كل
+ * عنصر بيقرا "آخر نسخة Draft" ويكتب فوقها (applyChangeToBrain) —
+ * تشغيلهم بالتوازي هيخلّي كل كتابة تدهس اللي قبلها. notifyBrainChanged
+ * (اللي ممكن يشغّل مزامنة مشتقات بالـ AI) بيتطلق مرة واحدة بس آخر
+ * الدفعة، مش لكل تغيير على حدة.
+ */
+export async function bulkAcceptPendingChanges(
+  projectId: string,
+  changeIds: string[],
+  actorId: string | null
+): Promise<{ ok: boolean; acceptedCount: number; failedIds: string[] }> {
+  const failedIds: string[] = [];
+  let acceptedCount = 0;
+  for (const changeId of changeIds) {
+    const r = await resolvePendingChange(changeId, actorId, "accepted", undefined, false);
+    if (r.ok) acceptedCount++;
+    else failedIds.push(changeId);
+  }
+  if (acceptedCount > 0) {
+    try {
+      await notifyBrainChanged(projectId, actorId);
+    } catch (err) {
+      console.error(`[BrainSync] notifyBrainChanged threw after bulk accept for project ${projectId}:`, err);
+    }
+  }
+  return { ok: failedIds.length === 0, acceptedCount, failedIds };
+}
 
 export async function listPendingChanges(projectId: string): Promise<BrainPendingChange[]> {
   const supabase = createServiceClient();

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HelpCircle, Lightbulb, CheckCircle2, XCircle, MessageSquarePlus, Clock3, Pencil } from "lucide-react";
+import { HelpCircle, Lightbulb, CheckCircle2, XCircle, MessageSquarePlus, Clock3, Pencil, CheckCheck } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/Toaster";
 import {
   setAssumptionDispositionAction,
   setMissingInfoDispositionAction,
+  bulkResolveOpenItemsAction,
 } from "./brain-review-actions";
 import { ASSUMPTION_LABELS, MISSING_INFO_LABELS } from "@/lib/brain-v2/review-types";
 import type {
@@ -19,6 +20,7 @@ import type {
   MissingInfoDispositionsMap,
 } from "@/lib/brain-v2/review-types";
 import type { BrainContent } from "@/lib/brain-v2/types";
+import { isOpenItemPending } from "@/lib/brain-v2/open-items-helpers";
 
 const TONE: Record<string, BadgeTone> = {
   pending: "warning",
@@ -37,9 +39,7 @@ function savedNote(d: MissingInfoDisposition | AssumptionDisposition | undefined
   return null;
 }
 
-function isPending(d: MissingInfoDisposition | AssumptionDisposition | undefined): boolean {
-  return !d || d.state === "pending";
-}
+const isPending = isOpenItemPending;
 
 /**
  * «البنود المفتوحة» — المعلومات الناقصة والافتراضات اللي لازم تتحسم قبل
@@ -71,16 +71,45 @@ export default function BrainOpenItemsPanel({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [openEditor, setOpenEditor] = useState<Record<string, boolean>>({});
+  const [isBulkPending, startBulk] = useTransition();
 
   const missingItems = content.missing_information.content;
   const assumptionItems = content.assumptions.content;
 
-  const missingPending = missingItems.filter((_, i) => isPending(missingDispositions[String(i)])).length;
-  const assumptionPending = assumptionItems.filter((_, i) => isPending(assumptionDispositions[String(i)])).length;
+  const missingPendingIndexes = missingItems
+    .map((_, i) => i)
+    .filter((i) => isPending(missingDispositions[String(i)]));
+  const assumptionPendingIndexes = assumptionItems
+    .map((_, i) => i)
+    .filter((i) => isPending(assumptionDispositions[String(i)]));
+  const missingPending = missingPendingIndexes.length;
+  const assumptionPending = assumptionPendingIndexes.length;
   const totalPending = missingPending + assumptionPending;
   const totalItems = missingItems.length + assumptionItems.length;
 
   if (totalItems === 0) return null;
+
+  function bulkResolve() {
+    if (totalPending === 0) return;
+    if (totalPending > 5) {
+      const ok = window.confirm(`متأكد من اعتماد ${totalPending} عنصر دفعة واحدة؟`);
+      if (!ok) return;
+    }
+    startBulk(async () => {
+      const r = await bulkResolveOpenItemsAction({
+        documentId,
+        projectId,
+        missingIndexes: missingPendingIndexes,
+        assumptionIndexes: assumptionPendingIndexes,
+      });
+      if (!r.ok) {
+        toast.error(r.message);
+        return;
+      }
+      toast.success(`تم اعتماد ${r.resolvedCount ?? totalPending} عنصر — الافتراضات اتأكّدت والمعلومات الناقصة اتحوّلت لأسئلة اجتماع.`);
+      router.refresh();
+    });
+  }
 
   function draftKey(kind: "m" | "a", index: number) {
     return `${kind}${index}`;
@@ -145,9 +174,16 @@ export default function BrainOpenItemsPanel({
         <p className="flex items-center gap-2 text-sm font-semibold text-[var(--v-text)]">
           <Clock3 size={16} className="text-[var(--v-amber)]" /> بنود مفتوحة لازم تُحسم قبل الاعتماد
         </p>
-        <Badge tone={totalPending === 0 ? "success" : "warning"}>
-          {totalPending === 0 ? "كل البنود محسومة ✓" : `${totalPending} من ${totalItems} لسه معلّقة`}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge tone={totalPending === 0 ? "success" : "warning"}>
+            {totalPending === 0 ? "كل البنود محسومة ✓" : `${totalPending} من ${totalItems} لسه معلّقة`}
+          </Badge>
+          {canReview && editable && totalPending > 0 && (
+            <Button variant="success" size="sm" onClick={bulkResolve} loading={isBulkPending} disabled={isBulkPending}>
+              <CheckCheck size={13} /> اعتماد الكل ({totalPending})
+            </Button>
+          )}
+        </div>
       </div>
 
       {!editable && (

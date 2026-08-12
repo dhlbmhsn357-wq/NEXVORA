@@ -153,6 +153,55 @@ export async function setAssumptionDisposition(input: {
 }
 
 /**
+ * حسم دفعة من البنود المفتوحة في ضربة واحدة (اعتماد الكل) — قراءة واحدة
+ * وكتابة واحدة للوثيقة بدل N قراءة/كتابة متتالية زي لو استُدعي
+ * setMissingInfoDisposition/setAssumptionDisposition لكل بند لوحده.
+ * الافتراضات المعلّقة بتتحط "مؤكَّدة" (accepted — مفيش نص مطلوب)،
+ * والمعلومات الناقصة المعلّقة بتتحوّل "سؤال للاجتماع" (converted_to_meeting_question
+ * — برضه من غير نص مطلوب)؛ الحالتين الوحيدتين اللي معندهمش نص إجباري
+ * فمناسبين لحسم جماعي بلا إدخال يدوي لكل بند.
+ */
+export async function bulkResolveOpenItems(input: {
+  documentId: string;
+  missingIndexes: number[];
+  assumptionIndexes: number[];
+  actorId: string | null;
+}): Promise<{ ok: boolean; message?: string; resolvedCount: number }> {
+  if (input.missingIndexes.length === 0 && input.assumptionIndexes.length === 0) {
+    return { ok: true, resolvedCount: 0 };
+  }
+  const supabase = createServiceClient();
+  const { data: doc } = await supabase
+    .from("project_brain_documents")
+    .select("missing_info_dispositions, assumption_dispositions, status")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  if (!doc) return { ok: false, message: "الوثيقة غير موجودة.", resolvedCount: 0 };
+  if (doc.status !== "draft" && doc.status !== "in_review") {
+    return { ok: false, message: "التعديل مسموح على draft/in_review فقط.", resolvedCount: 0 };
+  }
+
+  const nowIso = new Date().toISOString();
+  const missingMap = { ...((doc.missing_info_dispositions as MissingInfoDispositionsMap) ?? {}) };
+  for (const index of input.missingIndexes) {
+    missingMap[String(index)] = { state: "converted_to_meeting_question", by: input.actorId, at: nowIso };
+  }
+  const assumptionMap = { ...((doc.assumption_dispositions as AssumptionDispositionsMap) ?? {}) };
+  for (const index of input.assumptionIndexes) {
+    assumptionMap[String(index)] = { state: "accepted", by: input.actorId, at: nowIso };
+  }
+
+  const { error } = await supabase
+    .from("project_brain_documents")
+    .update({ missing_info_dispositions: missingMap, assumption_dispositions: assumptionMap })
+    .eq("id", input.documentId);
+  if (error) return { ok: false, message: error.message, resolvedCount: 0 };
+
+  await recomputeReadiness(supabase, input.documentId);
+  return { ok: true, resolvedCount: input.missingIndexes.length + input.assumptionIndexes.length };
+}
+
+/**
  * Request Changes — يعلّم الوثيقة الحالية بالسبب، وينشئ Draft جديد
  * (Version أعلى) نسخة من محتوى الوثيقة الحالية عشان الـ PM يعدّل عليها.
  */

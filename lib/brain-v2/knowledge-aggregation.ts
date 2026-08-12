@@ -24,6 +24,7 @@ export {
   acceptPendingChange,
   rejectPendingChange,
   mergePendingChange,
+  bulkAcceptPendingChanges,
   listPendingChanges,
   type KnowledgeCandidate,
   type ProposeChangesResult,

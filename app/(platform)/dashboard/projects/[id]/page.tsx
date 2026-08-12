@@ -122,6 +122,8 @@ import { listPackages as listHandoffPackages, listItems as listHandoffItems, lis
 import { computeCurrentHashesMapForProject } from "@/lib/handoff/assembler";
 import CommercialFullPanel from "./commercial-full-panel";
 import SubTabs from "./sub-tabs";
+import BrainWizard from "./brain-wizard";
+import { computeOpenItemsPendingCount } from "@/lib/brain-v2/open-items-helpers";
 import DeleteProjectButton from "../../delete-project-button";
 import { isFeatureEnabled } from "@/lib/feature-flags";
 import { selectWorkflowUiVersion } from "@/lib/workflow-v2/adapter";
@@ -941,103 +943,134 @@ export default async function ProjectDetailPage({
     ) : (
       <MeetingsPanel projectId={project.id} projectCode={project.project_code} meetings={meetings ?? []} />
     ),
-    // Consolidation UX 2026 (Commit 2A): projectBrain يبلع smartRecommendations + brainReview
-    // كـ subtabs لما v2 مفعّل. ArchitecturalRecommendationsSummary يظهر مرة واحدة فوق كل الأقسام.
-    // ProjectBrainEntries القديم يبان كـ collapsible داخل قسم النظرة العامة.
+    // Consolidation UX 2026 (Commit 3): projectBrain اتحوّل من 3 تبويبات حرة
+    // القفز لويزارد خطي بـ5 خطوات (brain-wizard.tsx) — المستخدم كان بيحس إنه
+    // تايه وسط محتوى كتير بلا تسلسل واضح، ولازم يعتمد عناصر عشرات المرات
+    // واحد واحد. البوابة (Gating) في الخطوتين 2 و3 بتستخدم نفس حساب العدّ
+    // اللي البانلز نفسها بتستخدمه (computeOpenItemsPendingCount +
+    // recommendations.filter) عشان الرقم في رسالة الحجب يطابق الرقم الحقيقي
+    // في البانل. ArchitecturalRecommendationsSummary اتشالت من هنا لأن نفس
+    // معلوماتها (توصيات معلّقة + جاهزية معمارية) بقت مغطّاة برسالة حجب
+    // الخطوة 3 وبتفاصيل الخطوة 4 بالكامل — تكرار كان زيادة.
     projectBrain: workflowV2Enabled ? (
-      <div className="space-y-6">
-        <ArchitecturalRecommendationsSummary
-          projectId={project.id}
-          recommendations={recommendations}
-          architectureReport={architectureReport}
-          canManage={isAdmin}
-        />
-        <SubTabs
-          ariaLabel="أقسام الدماغ"
-          sections={[
-            {
-              key: "",
-              label: "النظرة العامة",
-              content: (
-                <div className="space-y-6">
-                  <PendingChangesPanel projectId={project.id} pendingChanges={brainPendingChanges} canManage={isAdmin} />
-                  <KnowledgeGraphPanel
-                    projectId={project.id}
-                    nodes={knowledgeGraphState.nodes}
-                    relations={knowledgeGraphState.relations}
-                    latestReport={knowledgeGraphState.latestReport}
-                    domain={knowledgeGraphState.domain}
-                    isAdmin={isAdmin}
-                  />
-                  <KnowledgeGraphViewer edges={brainKnowledgeGraph} />
-                  {brainV2Latest && (
-                    <BrainOpenItemsPanel
+      (() => {
+        const openItemsPending = brainV2Latest
+          ? computeOpenItemsPendingCount(
+              brainV2Latest.content,
+              brainV2Latest.missing_info_dispositions ?? {},
+              brainV2Latest.assumption_dispositions ?? {}
+            ).totalPending
+          : 0;
+        const pendingStep2Count = brainPendingChanges.length + openItemsPending;
+        const pendingStep3Count = recommendations.filter(
+          (r) => r.status === "suggested" || r.status === "needs_discussion"
+        ).length;
+
+        return (
+          <BrainWizard
+            steps={[
+              {
+                key: "content",
+                label: "محتوى الـ Brain",
+                content: (
+                  <div className="space-y-6">
+                    <KnowledgeGraphPanel
                       projectId={project.id}
-                      documentId={brainV2Latest.id}
-                      content={brainV2Latest.content}
-                      missingDispositions={brainV2Latest.missing_info_dispositions ?? {}}
-                      assumptionDispositions={brainV2Latest.assumption_dispositions ?? {}}
-                      canReview={isAdmin}
-                      editable={brainV2Latest.status === "draft" || brainV2Latest.status === "in_review"}
+                      nodes={knowledgeGraphState.nodes}
+                      relations={knowledgeGraphState.relations}
+                      latestReport={knowledgeGraphState.latestReport}
+                      domain={knowledgeGraphState.domain}
+                      isAdmin={isAdmin}
                     />
-                  )}
-                  <BrainV2Panel
-                    projectId={project.id}
-                    document={brainV2Latest}
-                    approvedDocument={brainV2Approved}
-                    versions={brainV2Versions}
-                    isAdmin={isAdmin}
-                  />
-                  <details className="rounded-[var(--v-radius-lg)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3">
-                    <summary className="cursor-pointer text-xs text-[var(--v-text-muted)]">سجل Brain القديم (Legacy — للمرحلة الانتقالية)</summary>
-                    <div className="mt-3 space-y-4">
-                      <BrainPanel projectId={project.id} brain={brain} />
-                      <ProjectBrainEntries projectId={project.id} entries={brainEntries ?? []} />
-                    </div>
-                  </details>
-                </div>
-              ),
-            },
-            {
-              key: "recommendations",
-              label: "التوصيات",
-              content: (
-                <div className="space-y-5">
-                  <ArchitectureIntelligencePanel
-                    projectId={project.id}
-                    initialReport={architectureReport}
-                    canManage={isAdmin}
-                  />
+                    <KnowledgeGraphViewer edges={brainKnowledgeGraph} />
+                    <BrainV2Panel
+                      projectId={project.id}
+                      document={brainV2Latest}
+                      approvedDocument={brainV2Approved}
+                      versions={brainV2Versions}
+                      isAdmin={isAdmin}
+                    />
+                    <details className="rounded-[var(--v-radius-lg)] border border-[var(--v-border)] bg-[var(--v-surface)] p-3">
+                      <summary className="cursor-pointer text-xs text-[var(--v-text-muted)]">سجل Brain القديم (Legacy — للمرحلة الانتقالية)</summary>
+                      <div className="mt-3 space-y-4">
+                        <BrainPanel projectId={project.id} brain={brain} />
+                        <ProjectBrainEntries projectId={project.id} entries={brainEntries ?? []} />
+                      </div>
+                    </details>
+                  </div>
+                ),
+              },
+              {
+                key: "pending",
+                label: "مراجعة المعرفة المعلّقة",
+                gated: true,
+                blockedCount: pendingStep2Count,
+                blockedMessage: `لا يمكنك الانتقال قبل حسم ${pendingStep2Count} عنصر معلّق.`,
+                content: (
+                  <div className="space-y-6">
+                    <PendingChangesPanel projectId={project.id} pendingChanges={brainPendingChanges} canManage={isAdmin} />
+                    {brainV2Latest && (
+                      <BrainOpenItemsPanel
+                        projectId={project.id}
+                        documentId={brainV2Latest.id}
+                        content={brainV2Latest.content}
+                        missingDispositions={brainV2Latest.missing_info_dispositions ?? {}}
+                        assumptionDispositions={brainV2Latest.assumption_dispositions ?? {}}
+                        canReview={isAdmin}
+                        editable={brainV2Latest.status === "draft" || brainV2Latest.status === "in_review"}
+                      />
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: "recommendations",
+                label: "قرارات التوصيات",
+                gated: true,
+                blockedCount: pendingStep3Count,
+                blockedMessage: `لا يمكنك الانتقال قبل حسم ${pendingStep3Count} عنصر معلّق.`,
+                content: (
                   <SmartRecommendationsPanel
                     projectId={project.id}
                     recommendations={recommendations}
                     dependencies={recommendationDependencies}
                     canManage={isAdmin}
                   />
-                </div>
-              ),
-            },
-            {
-              key: "review",
-              label: "مراجعة الاعتماد",
-              content: (
-                <BrainReviewPanel
-                  projectId={project.id}
-                  document={brainV2Reviewable}
-                  confidenceThreshold={brainSettings.confidence_threshold_percent}
-                  isAdmin={isAdmin}
-                  recommendations={recommendations}
-                  reviewObjects={brainReviewV2State.objects}
-                  reviewDependencies={brainReviewV2State.dependencies}
-                  reviewComments={brainReviewV2State.comments}
-                  latestValidationReport={brainReviewV2State.latestValidationReport}
-                  reviewEvents={brainReviewV2State.events}
-                />
-              ),
-            },
-          ]}
-        />
-      </div>
+                ),
+              },
+              {
+                key: "architecture",
+                label: "الجاهزية المعمارية",
+                content: (
+                  <ArchitectureIntelligencePanel
+                    projectId={project.id}
+                    initialReport={architectureReport}
+                    canManage={isAdmin}
+                  />
+                ),
+              },
+              {
+                key: "review",
+                label: "الاعتماد النهائي",
+                content: (
+                  <BrainReviewPanel
+                    projectId={project.id}
+                    document={brainV2Reviewable}
+                    confidenceThreshold={brainSettings.confidence_threshold_percent}
+                    isAdmin={isAdmin}
+                    recommendations={recommendations}
+                    reviewObjects={brainReviewV2State.objects}
+                    reviewDependencies={brainReviewV2State.dependencies}
+                    reviewComments={brainReviewV2State.comments}
+                    latestValidationReport={brainReviewV2State.latestValidationReport}
+                    reviewEvents={brainReviewV2State.events}
+                  />
+                ),
+              },
+            ]}
+          />
+        );
+      })()
     ) : (
       <div className="space-y-6">
         <ArchitecturalRecommendationsSummary

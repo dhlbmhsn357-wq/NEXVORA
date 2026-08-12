@@ -19,7 +19,7 @@ import { detectAndUpsertModules } from "@/lib/domain-intelligence/module-library
 import { runArchitectureValidation } from "@/lib/architecture-validation/service";
 import { emitEvent } from "@/lib/automation/event-bus";
 import { EVENT_TYPES } from "@/lib/automation/events";
-import { proposeChanges, listPendingChanges, acceptPendingChange, rejectPendingChange, mergePendingChange } from "@/lib/brain-v2/knowledge-aggregation";
+import { proposeChanges, listPendingChanges, acceptPendingChange, rejectPendingChange, mergePendingChange, bulkAcceptPendingChanges } from "@/lib/brain-v2/knowledge-aggregation";
 import { buildManualNoteCandidate, type ManualNoteType } from "@/lib/brain-v2/manual-notes";
 import type { BrainSectionKey, BrainDocumentRow } from "@/lib/brain-v2/types";
 import type { BrainPendingChange, BrainKnowledgeGraphEdge } from "@/lib/types/database";
@@ -281,6 +281,23 @@ export async function rejectBrainPendingChange(projectId: string, changeId: stri
   if (!result.ok) return { ok: false, message: result.message ?? "فشل الرفض." };
   revalidatePath(`/dashboard/projects/${projectId}`);
   return { ok: true } as Result;
+}
+
+/** اعتماد الكل — كل التغييرات المعلّقة المحدّدة دفعة واحدة (Impact Report ينطبق عليهم كلهم). */
+export async function bulkAcceptBrainPendingChanges(
+  projectId: string,
+  changeIds: string[]
+): Promise<Result<{ acceptedCount: number; failedCount: number }>> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return authErr(auth.message);
+  if (changeIds.length === 0) return { ok: true, acceptedCount: 0, failedCount: 0 };
+
+  const result = await bulkAcceptPendingChanges(projectId, changeIds, auth.userId ?? null);
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  if (result.failedIds.length > 0 && result.acceptedCount === 0) {
+    return { ok: false, message: "فشل اعتماد كل العناصر المحدّدة." };
+  }
+  return { ok: true, acceptedCount: result.acceptedCount, failedCount: result.failedIds.length };
 }
 
 /** دمج بتعديل — mergedValueJson نص JSON خام للعنصر المعدَّل (نفس شكل new_value الأصلي). */

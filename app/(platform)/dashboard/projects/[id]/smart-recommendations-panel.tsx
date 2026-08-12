@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, ThumbsUp, ThumbsDown, Clock, MessageCircle, History, Wand2, Link2 } from "lucide-react";
+import { Sparkles, ThumbsUp, ThumbsDown, Clock, MessageCircle, History, Wand2, Link2, CheckCheck } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -13,6 +13,7 @@ import {
   setRecommendationStatusAction,
   generateRecommendationsAction,
   getRecommendationVersionsAction,
+  bulkAcceptRecommendationsAction,
 } from "./organizational-intelligence-actions";
 import {
   RECOMMENDATION_CATEGORY_LABELS,
@@ -121,6 +122,24 @@ export default function SmartRecommendationsPanel({
     setHistoryVersions(r.versions);
   }
 
+  function bulkAccept() {
+    if (openRecommendations.length === 0) return;
+    if (openRecommendations.length > 5) {
+      const ok = window.confirm(`متأكد من اعتماد ${openRecommendations.length} عنصر دفعة واحدة؟`);
+      if (!ok) return;
+    }
+    startAction(async () => {
+      const ids = openRecommendations.map((r) => r.id);
+      const r = await bulkAcceptRecommendationsAction(projectId, ids);
+      if (!r.ok) {
+        toast.error(r.message ?? "فشلت العملية.");
+        return;
+      }
+      toast.success(`تم اعتماد ${r.acceptedCount} عنصر${r.brainMessage ? ` — ${r.brainMessage}` : ""}`);
+      router.refresh();
+    });
+  }
+
   async function handleGenerate() {
     setIsGenerating(true);
     toast.success("جاري توليد التوصيات — بياخد حوالي دقيقة، سيب الصفحة مفتوحة.");
@@ -181,6 +200,13 @@ export default function SmartRecommendationsPanel({
         </Card>
       ) : (
         <div className="space-y-2">
+          {canManage && openRecommendations.length > 1 && (
+            <div className="flex justify-end">
+              <Button variant="success" size="sm" onClick={bulkAccept} disabled={isPending}>
+                <CheckCheck size={13} /> اعتماد الكل ({openRecommendations.length})
+              </Button>
+            </div>
+          )}
           {openRecommendations.map((r) => (
             <RecommendationCard
               key={r.id}
