@@ -1,9 +1,9 @@
 "use client";
 
 /** NEXVORA Handoff Package Panel (P12) */
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, PackageCheck, Printer, Sparkles, Lock, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { CheckCircle2, PackageCheck, Printer, Sparkles, Lock, AlertTriangle, ArrowUpRight, Share2, Copy, Info, ChevronDown, ChevronUp } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -32,7 +32,10 @@ import {
   previewAssemblyAction, applyAssemblyAction,
   freezePackageAction,
 } from "../handoff-actions";
+import { generateHandoffShareLinkAction } from "../handoff-share-actions";
 import type { AssemblyPreview } from "@/lib/handoff/assembler";
+
+const OPTIONAL_FILTER_STORAGE_KEY = "nexvora.handoff.showOptionalPending";
 
 export interface HandoffPanelProps {
   projectId: string;
@@ -65,6 +68,27 @@ export default function HandoffPanel({
   const [preview, setPreview] = useState<AssemblyPreview[] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [frozenSnap, setFrozenSnap] = useState<{ snapshotId: string; version: number } | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [showOptionalPending, setShowOptionalPending] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem(OPTIONAL_FILTER_STORAGE_KEY);
+      // Hydration-safe bootstrap from localStorage — this is the intended pattern.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (v === "1") setShowOptionalPending(true);
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(OPTIONAL_FILTER_STORAGE_KEY, showOptionalPending ? "1" : "0");
+    } catch { /* ignore */ }
+  }, [showOptionalPending]);
 
   const currentHashesMap = useMemo(
     () => new Map<string, string | null>(Object.entries(currentHashes)),
@@ -115,6 +139,23 @@ export default function HandoffPanel({
       router.refresh();
     });
   }
+  async function generateShare() {
+    setShareLoading(true);
+    const res = await generateHandoffShareLinkAction(projectId);
+    setShareLoading(false);
+    if (!res.ok) { toast.error(res.message); return; }
+    setShareUrl(res.data.url);
+    setShareCopied(false);
+  }
+  async function copyShare() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      toast.success("تم نسخ الرابط");
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch { toast.error("تعذّر النسخ — انسخه يدويًا."); }
+  }
   function doFreeze() {
     if (!latestPackage) return;
     if (!confirm("تسليم رسمي: سيُنشأ Snapshot ثابت للحزمة. متابعة؟")) return;
@@ -163,15 +204,47 @@ export default function HandoffPanel({
             المفقود: {readiness.missingMandatory.map((d) => d.label).join(" · ")}
           </p>
         )}
-        <div className="mt-4 flex justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Printer size={13} />}
-            onClick={() => window.open(`/handoff-print/${projectId}`, "_blank")}
-          >
-            طباعة / تصدير PDF
-          </Button>
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Share2 size={14} />}
+              disabled={shareLoading}
+              onClick={generateShare}
+            >
+              {shareLoading ? "جارٍ التوليد..." : shareUrl ? "تحديث رابط المشاركة" : "رابط مشاركة للمبرمج (Read-Only)"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Printer size={13} />}
+              onClick={() => window.open(`/handoff-print/${projectId}`, "_blank")}
+            >
+              طباعة / تصدير PDF
+            </Button>
+          </div>
+          {shareUrl && (
+            <div className="rounded-[var(--v-radius-sm)] border border-[var(--v-primary)]/40 bg-[var(--v-primary-tint)] p-3">
+              <p className="mb-1 text-[11px] font-semibold text-[var(--v-primary)]">
+                رابط المشاركة (أي شخص لديه الرابط يقدر يفتح الحزمة بدون login)
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code dir="ltr" className="flex-1 min-w-0 break-all rounded bg-white px-2 py-1 text-[11px] text-[var(--v-text)]">
+                  {shareUrl}
+                </code>
+                <Button size="sm" variant="ghost" icon={<Copy size={12} />} onClick={copyShare}>
+                  {shareCopied ? "تم النسخ" : "نسخ"}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => window.open(shareUrl, "_blank")}>
+                  فتح
+                </Button>
+              </div>
+              <p className="mt-2 text-[10px] text-[var(--v-text-muted)]">
+                الرابط موقّع رقميًا. يعرض فقط العناصر المكتملة افتراضيًا؛ أضف <code className="font-mono">?includeAll=1</code> لعرض الجميع.
+              </p>
+            </div>
+          )}
         </div>
         {canWrite && (
           <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
@@ -233,8 +306,43 @@ export default function HandoffPanel({
             <ItemsList defs={mandatoryDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} currentHashes={currentHashesMap} />
           </Card>
           <Card>
-            <Header title={`العناصر الاختيارية (${optionalDefs.length})`} />
-            <ItemsList defs={optionalDefs} itemsByKey={itemsByKey} onEdit={setEditing} canWrite={canWrite} currentHashes={currentHashesMap} />
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--v-border)] pb-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-semibold text-[var(--v-text)]">العناصر الاختيارية ({optionalDefs.length})</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowInfoModal(true)}
+                  className="inline-flex items-center gap-1 rounded-[var(--v-radius-sm)] border border-[var(--v-border)] px-2 py-0.5 text-[11px] text-[var(--v-text-secondary)] hover:bg-[var(--v-bg)]"
+                >
+                  <Info size={11} /> ما هذه العناصر الاختيارية؟
+                </button>
+              </div>
+              <label className="inline-flex cursor-pointer items-center gap-2 text-[12px] text-[var(--v-text-secondary)]">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--v-primary)]"
+                  checked={showOptionalPending}
+                  onChange={(e) => setShowOptionalPending(e.target.checked)}
+                />
+                أظهر العناصر الاختيارية المعلّقة
+              </label>
+            </div>
+            <ItemsList
+              defs={
+                showOptionalPending
+                  ? optionalDefs
+                  : optionalDefs.filter((d) => itemsByKey.get(d.key)?.status === "completed")
+              }
+              itemsByKey={itemsByKey}
+              onEdit={setEditing}
+              canWrite={canWrite}
+              currentHashes={currentHashesMap}
+              emptyNote={
+                !showOptionalPending && optionalDefs.some((d) => itemsByKey.get(d.key)?.status !== "completed")
+                  ? `تم إخفاء ${optionalDefs.filter((d) => itemsByKey.get(d.key)?.status !== "completed").length} عنصرًا اختياريًا معلّقًا. فعّل الفلتر لعرضها.`
+                  : undefined
+              }
+            />
           </Card>
         </>
       )}
@@ -295,6 +403,7 @@ export default function HandoffPanel({
         onConfirm={applyAndClose}
         pending={pending}
       />
+      <OptionalItemsInfoModal open={showInfoModal} onClose={() => setShowInfoModal(false)} />
       {pending && <span className="sr-only">جارٍ الحفظ...</span>}
     </div>
   );
@@ -333,6 +442,57 @@ function PreviewModal({
     cannot_resolve: "danger",
   };
   const applicable = previews.filter((p) => p.action === "will_link" || p.action === "stale_will_update").length;
+  const [optionalOpen, setOptionalOpen] = useState(false);
+  const mandatoryPreviews = previews.filter((p) => {
+    const d = HANDOFF_ITEM_REGISTRY.find((x) => x.key === p.itemKey);
+    return d?.isMandatory ?? false;
+  });
+  const optionalPreviews = previews.filter((p) => {
+    const d = HANDOFF_ITEM_REGISTRY.find((x) => x.key === p.itemKey);
+    return !(d?.isMandatory ?? false);
+  });
+  const renderRow = (p: AssemblyPreview) => {
+    const def = HANDOFF_ITEM_REGISTRY.find((d) => d.key === p.itemKey);
+    const isBlocker = p.action !== "will_link" && p.action !== "already_linked_same";
+    const tab = RESOLVE_TAB_BY_ITEM[p.itemKey];
+    const showResolve = isBlocker && tab && (def?.isMandatory ?? true);
+    return (
+      <li key={p.itemKey} className="flex flex-col gap-1 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-[var(--v-text)]">{def?.label ?? p.itemKey}</span>
+          {def?.isMandatory ? (
+            <Badge tone="danger">إلزامي</Badge>
+          ) : (
+            <Badge tone="neutral">اختياري</Badge>
+          )}
+          <Badge tone={actionTone[p.action]}>{actionLabel[p.action]}</Badge>
+          <Badge tone="neutral">مصدر: {p.resolved.sourceType}</Badge>
+          {showResolve && (
+            <a
+              href={
+                p.itemKey === "prototype_link"
+                  ? `/dashboard/projects/${projectId}?tab=${tab}#prototype-urls`
+                  : `/dashboard/projects/${projectId}?tab=${tab}`
+              }
+              target="_blank"
+              rel="noreferrer"
+              className="ms-auto inline-flex items-center gap-1 rounded-[var(--v-radius-sm)] border border-[var(--v-primary)] px-2 py-0.5 text-[11px] font-medium text-[var(--v-primary)] hover:bg-[var(--v-primary-tint)]"
+            >
+              حلّ الآن <ArrowUpRight size={11} />
+            </a>
+          )}
+        </div>
+        {def?.description && (
+          <p className="text-[11px] text-[var(--v-text-secondary)]">{def.description}</p>
+        )}
+        <p className="text-[11px] text-[var(--v-text-subtle)]">
+          الحالة الحالية: {p.currentStatus} · مصدر: {p.resolved.status} · {p.resolved.reason}
+          {!def?.isMandatory && <span className="ms-1 text-[var(--v-text-muted)]">— يمكنك تجاهله لو مش محتاجه.</span>}
+        </p>
+      </li>
+    );
+  };
+
   return (
     <Modal open={open} onClose={onClose} maxWidth="max-w-2xl">
       <div className="space-y-4 p-6">
@@ -341,41 +501,38 @@ function PreviewModal({
           سيتم قراءة المصادر المعتمَدة داخل المشروع فقط (مسوّدات لا تُحسب) وربطها بعناصر الحزمة.
           العناصر ذات Manual Override لا تُلمس.
         </p>
-        <div className="max-h-[50vh] overflow-y-auto rounded-[var(--v-radius-md)] border border-[var(--v-border)]">
-          <ul className="divide-y divide-[var(--v-border)]">
-            {previews.map((p) => {
-              const def = HANDOFF_ITEM_REGISTRY.find((d) => d.key === p.itemKey);
-              const isBlocker = p.action !== "will_link" && p.action !== "already_linked_same";
-              const tab = RESOLVE_TAB_BY_ITEM[p.itemKey];
-              return (
-                <li key={p.itemKey} className="flex flex-col gap-1 p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-[var(--v-text)]">{def?.label ?? p.itemKey}</span>
-                    <Badge tone={actionTone[p.action]}>{actionLabel[p.action]}</Badge>
-                    <Badge tone="neutral">مصدر: {p.resolved.sourceType}</Badge>
-                    {isBlocker && tab && (
-                      <a
-                        href={
-                          p.itemKey === "prototype_link"
-                            ? `/dashboard/projects/${projectId}?tab=${tab}#prototype-urls`
-                            : `/dashboard/projects/${projectId}?tab=${tab}`
-                        }
-                        target="_blank"
-                        rel="noreferrer"
-                        className="ms-auto inline-flex items-center gap-1 rounded-[var(--v-radius-sm)] border border-[var(--v-primary)] px-2 py-0.5 text-[11px] font-medium text-[var(--v-primary)] hover:bg-[var(--v-primary-tint)]"
-                      >
-                        حلّ الآن <ArrowUpRight size={11} />
-                      </a>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-[var(--v-text-subtle)]">
-                    الحالة الحالية: {p.currentStatus} · مصدر: {p.resolved.status} · {p.resolved.reason}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
+
+        <div className="max-h-[50vh] overflow-y-auto space-y-3">
+          {mandatoryPreviews.length > 0 && (
+            <div className="rounded-[var(--v-radius-md)] border border-[var(--v-border)]">
+              <div className="border-b border-[var(--v-border)] bg-[var(--v-bg)] px-3 py-2 text-[11px] font-semibold text-[var(--v-text-secondary)]">
+                العناصر الإلزامية ({mandatoryPreviews.length})
+              </div>
+              <ul className="divide-y divide-[var(--v-border)]">
+                {mandatoryPreviews.map(renderRow)}
+              </ul>
+            </div>
+          )}
+
+          {optionalPreviews.length > 0 && (
+            <div className="rounded-[var(--v-radius-md)] border border-[var(--v-border)]">
+              <button
+                type="button"
+                onClick={() => setOptionalOpen((v) => !v)}
+                className="flex w-full items-center justify-between border-b border-[var(--v-border)] bg-[var(--v-bg)] px-3 py-2 text-[11px] font-semibold text-[var(--v-text-secondary)] hover:bg-[var(--v-surface)]"
+              >
+                <span>عناصر اختيارية ({optionalPreviews.length}) — يمكنك تجاهلها لو مش محتاجها</span>
+                {optionalOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+              {optionalOpen && (
+                <ul className="divide-y divide-[var(--v-border)]">
+                  {optionalPreviews.map(renderRow)}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
+
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-[var(--v-text-secondary)]">
             سيُطبَّق على {applicable} عنصر.
@@ -392,13 +549,21 @@ function PreviewModal({
   );
 }
 
-function ItemsList({ defs, itemsByKey, onEdit, canWrite, currentHashes }: {
+function ItemsList({ defs, itemsByKey, onEdit, canWrite, currentHashes, emptyNote }: {
   defs: readonly HandoffItemDef[];
   itemsByKey: Map<string, HandoffItemRow>;
   onEdit: (def: HandoffItemDef) => void;
   canWrite: boolean;
   currentHashes: Map<string, string | null>;
+  emptyNote?: string;
 }) {
+  if (defs.length === 0 && emptyNote) {
+    return (
+      <p className="rounded-[var(--v-radius-sm)] border border-dashed border-[var(--v-border)] bg-[var(--v-bg)] p-3 text-[12px] text-[var(--v-text-secondary)]">
+        {emptyNote}
+      </p>
+    );
+  }
   return (
     <ul className="divide-y divide-[var(--v-border)]">
       {defs.map((d) => {
@@ -745,6 +910,68 @@ function NewDeliveryDialog({ open, onClose, partners, onSave }: {
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>إلغاء</Button>
           <Button variant="primary" onClick={() => onSave({ partnerId: partnerId || null, partnerName, receiptStatus, notes })}>حفظ</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ============================================================================
+// «ما هذه العناصر الاختيارية؟» — info modal
+// ============================================================================
+function OptionalItemsInfoModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const rows: Array<{ key: string; label: string; when: string }> = [
+    { key: "brain_snapshot", label: "Brain snapshot", when: "لو محتاج نسخة مجمَّدة من مخرجات Discovery للأرشيف." },
+    { key: "presentation_final", label: "عرض العميل النهائي", when: "لو المشروع بيتطلّب عرض تقديمي رسمي للعميل." },
+    { key: "developer_handoff", label: "Developer Handoff (وثيقة)", when: "لو مسلِّم فريق تطوير خارجي محتاج شرح تفصيلي." },
+    { key: "final_contract", label: "العقد الموقّع", when: "المشاريع اللي تسليمها بموجب عقد رسمي." },
+    { key: "sign_off_letter", label: "خطاب استلام رسمي", when: "لو العميل بيوقّع خطاب استلام نهائي." },
+    { key: "source_repo", label: "مستودع الكود (Git)", when: "لو بتسلّم كود مصدر (مش SaaS)." },
+    { key: "deployment_urls", label: "روابط النشر", when: "لو فيه بيئات staging/production منشورة." },
+    { key: "env_config_template", label: "قالب .env", when: "لو المطور محتاج يشغّل المشروع محليًا." },
+    { key: "db_schema_export", label: "مخطط قاعدة البيانات (ERD/SQL)", when: "المشاريع ذات قواعد بيانات معقّدة." },
+    { key: "api_docs", label: "وثائق API", when: "المشاريع اللي بتوفّر API للعملاء/تكاملات." },
+    { key: "test_reports", label: "تقارير الاختبار", when: "المشاريع اللي فيها QA رسمي/عقود ضمان جودة." },
+    { key: "security_report", label: "تقرير الأمن", when: "لو تمّ إجراء pen-test أو audit." },
+    { key: "performance_report", label: "تقرير الأداء", when: "لو المشروع critical للأداء (Lighthouse/load test)." },
+    { key: "runbook", label: "دليل التشغيل (Runbook)", when: "لو الفريق التشغيلي هيدير الإنتاج." },
+    { key: "monitoring_setup", label: "إعداد المراقبة", when: "لو فيه لوحات مراقبة (Grafana/Datadog)." },
+    { key: "backup_policy", label: "سياسة النسخ الاحتياطية", when: "لو العميل مسؤول عن البيانات الحسّاسة." },
+    { key: "user_manual", label: "دليل المستخدم", when: "لو المستخدم النهائي غير تقني." },
+    { key: "admin_manual", label: "دليل المسؤول", when: "لو فيه لوحة تحكم يدير بيها المسؤول." },
+    { key: "training_videos", label: "فيديوهات التدريب", when: "لو التدريب جزء من التسليم." },
+    { key: "training_sessions", label: "جلسات تدريب مسجّلة", when: "لو اتفاق التسليم يتضمّن ورش تدريب." },
+    { key: "warranty_terms", label: "شروط الضمان", when: "لو العقد بيحدّد فترة ضمان." },
+    { key: "support_plan", label: "خطة الدعم (SLA)", when: "لو فيه اتفاقية مستوى خدمة بعد التسليم." },
+  ];
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-2xl">
+      <div className="space-y-4 p-6">
+        <div className="flex items-start gap-3">
+          <div className="rounded-full bg-[var(--v-primary-tint)] p-2 text-[var(--v-primary)]">
+            <Info size={16} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--v-text)]">ما هذه العناصر الاختيارية؟</h2>
+            <p className="mt-1 text-xs text-[var(--v-text-secondary)]">
+              دي عناصر لتسليمات المشاريع الكبيرة (Enterprise). معظم المشاريع الصغيرة/المتوسطة
+              محتاجة فقط الـ <strong>7 عناصر إلزامية</strong>. تجاهل الباقي بدون قلق إلا لو
+              العقد أو طبيعة المشروع تفرضها.
+            </p>
+          </div>
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto rounded-[var(--v-radius-md)] border border-[var(--v-border)]">
+          <ul className="divide-y divide-[var(--v-border)]">
+            {rows.map((r) => (
+              <li key={r.key} className="p-3">
+                <p className="text-sm font-medium text-[var(--v-text)]">{r.label}</p>
+                <p className="mt-0.5 text-[11px] text-[var(--v-text-secondary)]">متى يهم: {r.when}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex justify-end">
+          <Button variant="primary" onClick={onClose}>فهمت</Button>
         </div>
       </div>
     </Modal>
