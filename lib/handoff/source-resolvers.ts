@@ -254,7 +254,8 @@ export async function resolveAcceptanceCriteria(
 }
 
 // ---------------------------------------------------------------------------
-// prototype_link — staging_url → production_url → Prototype Studio artifact
+// prototype_link — staging_url → production_url فقط
+// (روابط داخلية أو Codex Build Pack لا تُقبل — يجب توفير رابط خارجي فعلي)
 // ---------------------------------------------------------------------------
 export async function resolvePrototypeLink(
   supabase: SupabaseClient, projectId: string,
@@ -277,26 +278,13 @@ export async function resolvePrototypeLink(
       };
     }
 
-    const { data: artifact } = await supabase.from("prototype_studio_artifacts")
-      .select("id, version, created_at, status")
-      .eq("project_id", projectId).eq("artifact_type", "codex_build_pack")
-      .in("status", ["active", "approved"])
-      .order("version", { ascending: false }).limit(1).maybeSingle();
-    if (artifact) {
-      const artUrl = `/dashboard/projects/${projectId}?tab=prototypeStudio&section=build`;
-      return {
-        itemKey: "prototype_link", sourceType: "prototype_studio",
-        sourceVersion: `pack:v${artifact.version}`,
-        sourceHash: createSourceHash(`pack:${artifact.id}`),
-        contentUrl: artUrl, contentText: `Codex Build Pack v${artifact.version} (نموذج جاهز للتنفيذ).`,
-        contentRefType: "prototype_studio_artifact", contentRefId: artifact.id as string,
-        status: "ready",
-        reason: `Codex Build Pack v${artifact.version} موجود (لا يوجد رابط نشر بعد).`,
-      };
-    }
-
-    return empty("prototype_link", "staging_url", "missing",
-      "لا يوجد staging_url أو production_url ولا Codex Build Pack مُولّد.");
+    // ملاحظة: Codex Build Pack ليس رابط Prototype قابلًا للعرض؛ إنه مصدر بناء
+    // داخلي للمطوّر. لا نُرجعه كـ prototype_link حتى لا يتسرّب رابط داخلي
+    // (Studio) في PDF التسليم.
+    return empty(
+      "prototype_link", "staging_url", "missing",
+      "لا يوجد رابط Prototype خارجي (Figma/InVision/Vercel). أضف الرابط من Prototype Studio → إعدادات النموذج → «رابط النموذج للعميل».",
+    );
   } catch (e) {
     return empty("prototype_link", "staging_url", "missing", e instanceof Error ? e.message : "تعذّر قراءة المشروع.");
   }

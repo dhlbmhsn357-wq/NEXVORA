@@ -21,6 +21,7 @@ import {
   importBuildBriefAction, approveBuildBriefAction,
   generateCodexBuildPackAction, downloadCodexPackZipAction,
   listStudioArtifactsAction, suggestStudioConfigAction,
+  saveProjectPrototypeUrlsAction,
 } from "./prototype-studio-actions";
 import Modal from "@/components/ui/Modal";
 import type { StudioConfigSuggestion } from "@/lib/prototype-studio/suggest-config";
@@ -51,6 +52,10 @@ interface Props {
   latestApprovedBrief: PrototypeStudioArtifactRow | null;
   latestBriefDraft: PrototypeStudioArtifactRow | null;
   latestCodexPack: PrototypeStudioArtifactRow | null;
+  /** رابط النموذج للعميل (Staging) — مصدر عنصر prototype_link في Handoff. */
+  initialStagingUrl?: string;
+  /** رابط الإنتاج — بديل عن Staging إن لم يوجد. */
+  initialProductionUrl?: string;
 }
 
 export default function PrototypeStudioPanel(props: Props) {
@@ -136,7 +141,16 @@ export default function PrototypeStudioPanel(props: Props) {
         </nav>
       </header>
 
-      {step === "config" && <ConfigForm cfg={cfg} updateCfg={updateCfg} onSave={save} pending={pending} />}
+      {step === "config" && (
+        <>
+          <ConfigForm cfg={cfg} updateCfg={updateCfg} onSave={save} pending={pending} />
+          <PrototypeUrlsForm
+            projectId={props.projectId}
+            initialStaging={props.initialStagingUrl ?? ""}
+            initialProduction={props.initialProductionUrl ?? ""}
+          />
+        </>
+      )}
       {step === "scope" && <ScopeForm cfg={cfg} updateCfg={updateCfg} onSave={save} pending={pending} />}
       {step === "design" && <DesignForm cfg={cfg} updateCfg={updateCfg} onSave={save} pending={pending} />}
       {step === "discuss" && (
@@ -164,6 +178,66 @@ export default function PrototypeStudioPanel(props: Props) {
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// Prototype URLs Form (Step 1 — bottom section)
+// -----------------------------------------------------------------------------
+// روابط النموذج الخارجية للعميل/المطوّر — تُقرأ من projects.staging_url و
+// projects.production_url وتُستخدم كمصدر الوحيد المقبول لعنصر prototype_link
+// في PDF التسليم. الروابط الداخلية (صفحات Studio) ممنوعة.
+function PrototypeUrlsForm({
+  projectId, initialStaging, initialProduction,
+}: {
+  projectId: string;
+  initialStaging: string;
+  initialProduction: string;
+}) {
+  const router = useRouter();
+  const [staging, setStaging] = useState(initialStaging);
+  const [production, setProduction] = useState(initialProduction);
+  const [pending, startTransition] = useTransition();
+  const invalid = (u: string) => u !== "" && !/^https?:\/\//i.test(u);
+
+  function save() {
+    if (invalid(staging) || invalid(production)) {
+      toast.error("الرابط يجب أن يبدأ بـ http:// أو https://");
+      return;
+    }
+    startTransition(async () => {
+      const res = await saveProjectPrototypeUrlsAction(projectId, staging, production);
+      if (res.ok) { toast.success("تم حفظ روابط النموذج"); router.refresh(); }
+      else toast.error(res.message);
+    });
+  }
+
+  return (
+    <section
+      id="prototype-urls"
+      className="rounded-xl border border-[var(--v-border)] bg-[var(--v-surface)] p-4 flex flex-col gap-4"
+    >
+      <div>
+        <h3 className="font-bold">رابط النموذج للعميل (Prototype URL)</h3>
+        <p className="mt-1 text-xs text-[var(--v-text-secondary)]">
+          هذا الرابط يظهر في PDF تسليم الحزمة (Handoff). يجب أن يكون رابطًا خارجيًا فعليًا
+          (Figma / InVision / Vercel / صفحة نشر) — الروابط الداخلية غير مقبولة لأنّها محميّة بتسجيل الدخول.
+        </p>
+      </div>
+      <TextField label="رابط النموذج للعميل (Staging URL)" value={staging} onChange={setStaging} />
+      {invalid(staging) && (
+        <p className="text-[11px] text-[var(--v-red)]">يجب أن يبدأ بـ http:// أو https://</p>
+      )}
+      <TextField label="رابط الإنتاج (Production URL)" value={production} onChange={setProduction} />
+      {invalid(production) && (
+        <p className="text-[11px] text-[var(--v-red)]">يجب أن يبدأ بـ http:// أو https://</p>
+      )}
+      <div className="flex justify-end border-t border-[var(--v-border)] pt-2">
+        <Button variant="primary" onClick={save} disabled={pending}>
+          {pending ? "جارٍ الحفظ..." : "حفظ روابط النموذج"}
+        </Button>
+      </div>
+    </section>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Config Form (Step 1)

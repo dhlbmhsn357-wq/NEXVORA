@@ -28,6 +28,39 @@ async function guard() {
   return { ok: true as const, userId: gate.userId ?? null };
 }
 
+/**
+ * حفظ روابط النموذج الخارجية (Staging/Production) على مستوى المشروع.
+ * تُستخدم في تسليم الحزمة كمصدر الوحيد لعنصر prototype_link — أي روابط
+ * داخلية (Studio صفحات محمية) ممنوعة في PDF التسليم.
+ */
+export async function saveProjectPrototypeUrlsAction(
+  projectId: string,
+  staging: string,
+  production: string,
+): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const s = staging.trim();
+  const p = production.trim();
+  const isValid = (u: string) => u === "" || /^https?:\/\//i.test(u);
+  if (!isValid(s) || !isValid(p)) {
+    return { ok: false, message: "الرابط يجب أن يبدأ بـ http:// أو https://" };
+  }
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("projects")
+      .update({ staging_url: s || null, production_url: p || null })
+      .eq("id", projectId);
+    if (error) return { ok: false, message: error.message };
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الحفظ." };
+  }
+}
+
 export async function saveStudioConfigAction(
   projectId: string,
   patch: SaveConfigPatch,

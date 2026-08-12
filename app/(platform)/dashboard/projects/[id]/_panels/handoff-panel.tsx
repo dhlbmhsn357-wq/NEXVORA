@@ -355,7 +355,11 @@ function PreviewModal({
                     <Badge tone="neutral">مصدر: {p.resolved.sourceType}</Badge>
                     {isBlocker && tab && (
                       <a
-                        href={`/dashboard/projects/${projectId}?tab=${tab}`}
+                        href={
+                          p.itemKey === "prototype_link"
+                            ? `/dashboard/projects/${projectId}?tab=${tab}#prototype-urls`
+                            : `/dashboard/projects/${projectId}?tab=${tab}`
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="ms-auto inline-flex items-center gap-1 rounded-[var(--v-radius-sm)] border border-[var(--v-primary)] px-2 py-0.5 text-[11px] font-medium text-[var(--v-primary)] hover:bg-[var(--v-primary-tint)]"

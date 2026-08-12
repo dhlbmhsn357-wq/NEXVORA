@@ -1117,6 +1117,8 @@ export default async function ProjectDetailPage({
           latestApprovedBrief={studioLatestApprovedBrief}
           latestBriefDraft={studioLatestBriefDraft}
           latestCodexPack={studioLatestCodexPack}
+          initialStagingUrl={project.staging_url ?? ""}
+          initialProductionUrl={project.production_url ?? ""}
         />
       ) : (
         <div className="rounded-xl border border-dashed border-[var(--v-border)] p-8 text-center text-sm text-[var(--v-text-secondary)]">
