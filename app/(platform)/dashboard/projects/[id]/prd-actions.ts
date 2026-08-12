@@ -105,7 +105,7 @@ export async function approvePRDAction(
   const svc = createServiceClient();
   const actorId = await getActorId();
   const { data: prd, error: readErr } = await svc
-    .from("prds")
+    .from("prd")
     .select("id,status")
     .eq("project_id", projectId)
     .maybeSingle();
@@ -113,7 +113,7 @@ export async function approvePRDAction(
   if (!prd) return { ok: false, message: "لا يوجد PRD لهذا المشروع." };
   if (prd.status === "approved") return { ok: true };
   const { error } = await svc
-    .from("prds")
+    .from("prd")
     .update({ status: "approved", updated_at: new Date().toISOString() })
     .eq("id", prd.id);
   if (error) return { ok: false, message: error.message };
