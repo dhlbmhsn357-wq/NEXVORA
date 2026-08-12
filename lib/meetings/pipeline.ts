@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { TelegramClient } from "@/lib/telegram/client";
 import { MeetingService } from "./meeting-service";
-import { uploadMeetingRecording, downloadMeetingRecording } from "@/lib/storage/meeting-storage";
+import { uploadMeetingRecording, downloadMeetingRecording, deleteMeetingRecording } from "@/lib/storage/meeting-storage";
 import { TranscriptionAgent } from "@/lib/ai/agents/transcription-agent";
 import { MeetingExtractionAgent } from "@/lib/ai/agents/meeting-extraction-agent";
 import { friendlyAiErrorMessage } from "@/lib/ai/error-messages";
@@ -51,21 +51,23 @@ export async function processMeetingPipeline(params: {
     await MeetingService.updateStatus(supabase, params.meetingId, "transcribing");
 
     let audioBuffer: ArrayBuffer;
+    let recordingPath: string;
     if (params.source.kind === "telegram") {
       audioBuffer = await telegram!.downloadFile(params.source.fileId);
 
-      const storagePath = await uploadMeetingRecording(
+      recordingPath = await uploadMeetingRecording(
         supabase,
         params.projectCode,
         params.meetingId,
         audioBuffer,
         params.mimeType
       );
-      await MeetingService.setRecordingUrl(supabase, params.meetingId, storagePath);
+      await MeetingService.setRecordingUrl(supabase, params.meetingId, recordingPath);
     } else {
       // التسجيل مرفوع أصلًا من المتصفح مباشرة لـ Storage — ننزّله للتفريغ بس.
-      audioBuffer = await downloadMeetingRecording(supabase, params.source.storagePath);
-      await MeetingService.setRecordingUrl(supabase, params.meetingId, params.source.storagePath);
+      recordingPath = params.source.storagePath;
+      audioBuffer = await downloadMeetingRecording(supabase, recordingPath);
+      await MeetingService.setRecordingUrl(supabase, params.meetingId, recordingPath);
     }
 
     const transcription = await TranscriptionAgent.run(audioBuffer, params.mimeType, {
@@ -121,6 +123,17 @@ export async function processMeetingPipeline(params: {
 
     await MeetingService.updateStatus(supabase, params.meetingId, "processed");
     await notify("تم تجهيز الاجتماع بنجاح ✅ راجع Project Brain.");
+
+    // نقطة اللاعودة: التفريغ والاستخراج اتحفظوا بنجاح، فالملف الصوتي
+    // مالوش داعي يفضل مخزّن — النص المفرّغ بقى مصدر الحقيقة. لو فشلت
+    // أي خطوة قبل كده (تفريغ/استخراج)، الكود يرجع فورًا (return) قبل
+    // الوصول هنا فالملف بيفضل موجود لإعادة المحاولة.
+    try {
+      await deleteMeetingRecording(supabase, recordingPath);
+      await MeetingService.setRecordingUrl(supabase, params.meetingId, null);
+    } catch (err) {
+      console.error(`[MeetingPipeline] فشل تنظيف تسجيل الاجتماع ${params.meetingId}:`, err);
+    }
 
     const syncResult = await ProjectBrainSyncService.sync(params.projectId, "meeting_processed");
     if (syncResult.status === "error") {

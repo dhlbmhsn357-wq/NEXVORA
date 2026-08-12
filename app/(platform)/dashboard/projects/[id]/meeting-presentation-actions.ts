@@ -18,6 +18,7 @@ import {
   updateCurrentSlide,
 } from "@/lib/meeting-presentation/live-session-service";
 import { processMeetingPipeline } from "@/lib/meetings/pipeline";
+import { MeetingService } from "@/lib/meetings/meeting-service";
 import { MEETINGS_BUCKET, meetingRecordingPath } from "@/lib/storage/meeting-storage";
 import type {
   MeetingLifecycleEvent,
@@ -150,6 +151,38 @@ export async function endLiveMeeting(projectId: string, sessionId: string): Prom
     return { ok: true };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : "فشل إنهاء الاجتماع." };
+  }
+}
+
+/**
+ * رفع مستقل (بدون Live Meeting Mode ولا عرض تقديمي): بينشئ صف
+ * meetings فاضي بس عشان getMeetingRecordingUploadTarget يقدر يبني مسار
+ * الرفع منه — نفس نمط MeetingService.create المستخدم في Telegram
+ * webhook وبدء Live Meeting Mode بالظبط، إعادة استخدام مش تكرار.
+ */
+export async function createMeetingForUploadAction(
+  projectId: string,
+  title?: string
+): Promise<{ ok: boolean; meetingId?: string; message?: string }> {
+  const auth = await requireRole(["owner", "admin", "member"]);
+  if (!auth.ok) return { ok: false, message: auth.message };
+
+  const supabase = createServiceClient();
+  const { data: project } = await supabase.from("projects").select("project_code").eq("id", projectId).maybeSingle();
+  if (!project) return { ok: false, message: "المشروع غير موجود." };
+
+  try {
+    const meeting = await MeetingService.create(supabase, projectId, project.project_code as string);
+
+    const trimmedTitle = title?.trim();
+    if (trimmedTitle) {
+      await supabase.from("meetings").update({ title: trimmedTitle }).eq("id", meeting.id);
+    }
+
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, meetingId: meeting.id };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "فشل إنشاء الاجتماع." };
   }
 }
 

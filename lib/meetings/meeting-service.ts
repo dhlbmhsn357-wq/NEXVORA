@@ -65,7 +65,7 @@ export class MeetingService {
   static async setRecordingUrl(
     supabase: SupabaseClient,
     meetingId: string,
-    recordingUrl: string
+    recordingUrl: string | null
   ): Promise<void> {
     await supabase.from("meetings").update({ recording_url: recordingUrl }).eq("id", meetingId);
   }

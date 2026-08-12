@@ -11,6 +11,7 @@ import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import MeetingReportPanel from "./meeting-report-panel";
 import MeetingSearchPanel from "./meeting-search-panel";
+import MeetingUploadButton from "./meeting-upload-button";
 import type { Meeting, ProjectBrainEntry, Transcript, MeetingStatus } from "@/lib/types/database";
 import type { MeetingReportData } from "@/lib/meetings/report-service";
 
@@ -101,7 +102,7 @@ export default function MeetingsPanel({
         <MeetingSearchPanel projectId={projectId} />
       </div>
 
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[var(--v-text)]">اجتماعات المشروع</p>
           <p className="mt-1 text-xs text-[var(--v-text-muted)]">
@@ -110,9 +111,12 @@ export default function MeetingsPanel({
             — ابعت أي تسجيل صوتي للبوت وحط الكود ده في التعليق (Caption)
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} loading={refreshing}>
-          تحديث
-        </Button>
+        <div className="flex items-center gap-2">
+          <MeetingUploadButton projectId={projectId} />
+          <Button variant="outline" size="sm" onClick={handleRefresh} loading={refreshing}>
+            تحديث
+          </Button>
+        </div>
       </div>
 
       {meetings.length === 0 && (

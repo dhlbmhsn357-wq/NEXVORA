@@ -49,3 +49,19 @@ export async function uploadMeetingRecording(
 
   return path;
 }
+
+/**
+ * حذف تسجيل الاجتماع من Storage بعد نجاح التفريغ والاستخراج بالكامل —
+ * النص المفرَّغ (transcripts.raw_text) بيبقى مصدر الحقيقة الوحيد بعد
+ * كده، والملف الصوتي (كبير) مالوش داعي يفضل مخزّن للأبد. فشل الحذف مش
+ * قاتل — بنسجّله بس ومنوقفش نجاح الـ Pipeline بسببه.
+ */
+export async function deleteMeetingRecording(
+  supabase: SupabaseClient,
+  path: string
+): Promise<void> {
+  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  if (error) {
+    console.error(`[meeting-storage] فشل حذف التسجيل ${path}: ${error.message}`);
+  }
+}
