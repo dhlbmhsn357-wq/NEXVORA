@@ -100,6 +100,49 @@ export async function reviewSection(input: {
   return { ok: true };
 }
 
+/**
+ * اعتماد دفعة من الأقسام في ضربة واحدة (اعتماد كل الأقسام غير المرفوضة) —
+ * قراءة واحدة وكتابة واحدة لعمود section_reviews (JSONB) بدل استدعاء
+ * reviewSection لكل قسم لوحده (18 قراءة/كتابة متتالية).
+ */
+export async function bulkReviewSections(input: {
+  documentId: string;
+  sectionKeys: BrainSectionKey[];
+  actorId: string | null;
+}): Promise<{ ok: boolean; message?: string; resolvedCount: number }> {
+  if (input.sectionKeys.length === 0) return { ok: true, resolvedCount: 0 };
+  const supabase = createServiceClient();
+  const { data: doc } = await supabase
+    .from("project_brain_documents")
+    .select("section_reviews, status")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  if (!doc) return { ok: false, message: "الوثيقة غير موجودة.", resolvedCount: 0 };
+  if (doc.status !== "draft" && doc.status !== "in_review") {
+    return { ok: false, message: "المراجعة مسموحة على draft/in_review فقط.", resolvedCount: 0 };
+  }
+
+  const nowIso = new Date().toISOString();
+  const current = { ...((doc.section_reviews as SectionReviewsMap) ?? {}) };
+  for (const key of input.sectionKeys) {
+    current[key] = {
+      state: "approved",
+      reason: null,
+      reviewer_id: input.actorId,
+      reviewed_at: nowIso,
+    };
+  }
+
+  const { error } = await supabase
+    .from("project_brain_documents")
+    .update({ section_reviews: current })
+    .eq("id", input.documentId);
+  if (error) return { ok: false, message: error.message, resolvedCount: 0 };
+
+  await recomputeReadiness(supabase, input.documentId);
+  return { ok: true, resolvedCount: input.sectionKeys.length };
+}
+
 export async function setMissingInfoDisposition(input: {
   documentId: string;
   index: number;

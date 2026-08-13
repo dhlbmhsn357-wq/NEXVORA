@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { requireAdmin, requireRole } from "@/lib/auth/rbac";
 import {
   reviewSection,
+  bulkReviewSections,
   setMissingInfoDisposition,
   setAssumptionDisposition,
   bulkResolveOpenItems,
@@ -90,6 +91,24 @@ export async function reviewSectionAction(input: {
   if (!r.ok) return { ok: false, message: r.message ?? "فشل حفظ المراجعة." };
   revalidatePath(`/dashboard/projects/${input.projectId}`);
   return { ok: true };
+}
+
+/** اعتماد الكل — كل الأقسام غير المرفوضة (pending/needs_review) دفعة واحدة. */
+export async function bulkApproveSectionsAction(
+  documentId: string,
+  projectId: string,
+  sectionKeys: BrainSectionKey[]
+): Promise<Result & { resolvedCount?: number }> {
+  const auth = await requireRole(["owner", "admin", "member"]);
+  if (!auth.ok) return authErr(auth.message);
+  const r = await bulkReviewSections({
+    documentId,
+    sectionKeys,
+    actorId: auth.userId ?? null,
+  });
+  if (!r.ok) return { ok: false, message: r.message ?? "فشل الاعتماد الجماعي." };
+  revalidatePath(`/dashboard/projects/${projectId}`);
+  return { ok: true, resolvedCount: r.resolvedCount };
 }
 
 export async function setMissingInfoDispositionAction(input: {

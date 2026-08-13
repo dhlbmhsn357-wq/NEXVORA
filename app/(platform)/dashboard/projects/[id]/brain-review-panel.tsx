@@ -47,6 +47,7 @@ import { approveBrainDraft, rejectBrainDraft } from "./brain-v2-actions";
 import {
   startReviewAction,
   reviewSectionAction,
+  bulkApproveSectionsAction,
   requestBrainChangesAction,
   runBrainReviewValidationAction,
 } from "./brain-review-actions";
@@ -139,6 +140,9 @@ export default function BrainReviewPanel({
 
   const canReview = doc.status === "draft" || doc.status === "in_review";
   const canApprove = isAdmin && doc.status === "in_review" && gate.canApprove;
+  const pendingSectionKeys = BRAIN_SECTIONS.filter(
+    (k) => reviews[k]?.state !== "approved" && reviews[k]?.state !== "rejected"
+  );
 
   async function run(fn: () => Promise<{ ok: boolean; message?: string }>, ok: string) {
     setBusy(true);
@@ -235,15 +239,29 @@ export default function BrainReviewPanel({
             )}
             {isAdmin && doc.status === "in_review" && (
               <>
-                <Button
-                  variant="success"
-                  size="sm"
-                  icon={<CheckCircle2 size={14} />}
-                  onClick={() => run(() => approveBrainDraft(doc.id, projectId), "تم الاعتماد")}
-                  disabled={busy || !canApprove}
-                >
-                  اعتماد
-                </Button>
+                {canApprove ? (
+                  <Button
+                    variant="success"
+                    size="sm"
+                    icon={<CheckCircle2 size={14} />}
+                    onClick={() => run(() => approveBrainDraft(doc.id, projectId), "تم الاعتماد")}
+                    disabled={busy}
+                  >
+                    اعتماد
+                  </Button>
+                ) : (
+                  <Tooltip label={`محجوب: ${gate.blockers.length} شرط لسه محتاج حسم — شوف القائمة تحت`}>
+                    <Button
+                      variant="success"
+                      size="sm"
+                      icon={<CheckCircle2 size={14} />}
+                      onClick={() => run(() => approveBrainDraft(doc.id, projectId), "تم الاعتماد")}
+                      disabled
+                    >
+                      اعتماد
+                    </Button>
+                  </Tooltip>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -280,23 +298,41 @@ export default function BrainReviewPanel({
       />
 
       {/* Approval Checklist */}
-      <ApprovalChecklist gate={gate} />
+      <ApprovalChecklist
+        gate={gate}
+        projectId={projectId}
+        documentId={doc.id}
+        pendingSectionKeys={pendingSectionKeys}
+        canReview={canReview}
+      />
 
       {/* التوصيات الذكية المقبولة — لازم تتراجع مع الـ Brain نفسه، مش عزل بينهم */}
       <AcceptedRecommendationsSection accepted={acceptedRecommendations} pendingCount={suggestedRecommendations.length} />
 
       {/* مراجعة كل عنصر معرفة على حدة — Phase 5 */}
-      <ReviewObjectsSection
-        projectId={projectId}
-        documentId={doc.id}
-        objects={reviewObjects}
-        dependencies={reviewDependencies}
-        comments={reviewComments}
-        canReview={canReview}
-      />
+      <div id="review-objects-section">
+        <ReviewObjectsSection
+          projectId={projectId}
+          documentId={doc.id}
+          objects={reviewObjects}
+          dependencies={reviewDependencies}
+          comments={reviewComments}
+          canReview={canReview}
+        />
+      </div>
 
       {/* Sections Review Grid */}
-      <div className="space-y-3">
+      <div id="sections-grid" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-[var(--v-text)]">مراجعة الأقسام ({BRAIN_SECTIONS.length})</p>
+          {canReview && (
+            <BulkApproveSectionsButton
+              projectId={projectId}
+              documentId={doc.id}
+              pendingSectionKeys={pendingSectionKeys}
+            />
+          )}
+        </div>
         {BRAIN_SECTIONS.map((key) => (
           <SectionReviewCard
             key={key}
@@ -314,15 +350,17 @@ export default function BrainReviewPanel({
 
       {/* البنود المفتوحة (معلومات ناقصة + افتراضات) — نفس المكوّن
           المستخدم في Project Brain، عشان الحسم يبقى بواجهة واحدة. */}
-      <BrainOpenItemsPanel
-        projectId={projectId}
-        documentId={doc.id}
-        content={content}
-        missingDispositions={missingDispositions}
-        assumptionDispositions={assumptionDispositions}
-        canReview={canReview}
-        editable={doc.status === "draft" || doc.status === "in_review"}
-      />
+      <div id="open-items-panel">
+        <BrainOpenItemsPanel
+          projectId={projectId}
+          documentId={doc.id}
+          content={content}
+          missingDispositions={missingDispositions}
+          assumptionDispositions={assumptionDispositions}
+          canReview={canReview}
+          editable={doc.status === "draft" || doc.status === "in_review"}
+        />
+      </div>
 
       {/* Modals */}
       <Modal open={rejecting} onClose={() => setRejecting(false)}>
@@ -382,9 +420,32 @@ export default function BrainReviewPanel({
 
 function ApprovalChecklist({
   gate,
+  projectId,
+  documentId,
+  pendingSectionKeys,
+  canReview,
 }: {
   gate: { canApprove: boolean; blockers: string[] };
+  projectId: string;
+  documentId: string;
+  pendingSectionKeys: BrainSectionKey[];
+  canReview: boolean;
 }) {
+  const router = useRouter();
+  const [revalidating, setRevalidating] = useState(false);
+
+  async function handleRevalidate() {
+    setRevalidating(true);
+    const r = await runBrainReviewValidationAction(documentId, projectId);
+    setRevalidating(false);
+    if (!r.ok) {
+      toast.error(r.message);
+      return;
+    }
+    toast.success("جاري إعادة التحقّق — النتيجة هتظهر بعد لحظات.");
+    router.refresh();
+  }
+
   if (gate.canApprove) {
     return (
       <Card padding="md">
@@ -395,19 +456,52 @@ function ApprovalChecklist({
       </Card>
     );
   }
+
   return (
     <Card padding="md">
       <div className="flex items-start gap-2">
         <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--v-amber)]" />
         <div className="flex-1">
-          <p className="text-sm font-semibold text-[var(--v-text)]">قبل الاعتماد لازم:</p>
-          <ul className="mt-1 space-y-0.5">
+          <p className="text-sm font-semibold text-[var(--v-text)]">قبل الاعتماد لازم ({gate.blockers.length}):</p>
+          <ul className="mt-2 space-y-2">
             {gate.blockers.map((b, i) => (
-              <li key={i} className="text-xs text-[var(--v-text-muted)]">
-                • {b}
+              <li key={i} className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--v-text-muted)]">
+                <span>• {b}</span>
+                {(b.includes("Missing Info") || b.includes("افتراض")) && (
+                  <a href="#open-items-panel" className="shrink-0 text-[11px] font-medium text-[var(--v-primary)] hover:underline">
+                    اذهب للبنود المفتوحة ↓
+                  </a>
+                )}
+                {b.includes("توصية ذكية") && (
+                  <span className="shrink-0 text-[11px] text-[var(--v-text-subtle)]">راجعها في خطوة «قرارات التوصيات»</span>
+                )}
+                {b.includes("عنصر معرفة") && (
+                  <a href="#review-objects-section" className="shrink-0 text-[11px] font-medium text-[var(--v-primary)] hover:underline">
+                    اذهب لعناصر المعرفة ↓
+                  </a>
+                )}
+                {(b.includes("مشكلة حرجة") || b.includes("عالية الخطورة")) && canReview && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<RefreshCw size={12} />}
+                    onClick={handleRevalidate}
+                    disabled={revalidating}
+                  >
+                    {revalidating ? "جاري التحقّق..." : "إعادة تحقّق الآن"}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
+          {pendingSectionKeys.length > 0 && canReview && (
+            <div className="mt-3 border-t border-[var(--v-border)] pt-2">
+              <p className="mb-1.5 text-[11px] text-[var(--v-text-subtle)]">
+                فيه {pendingSectionKeys.length} قسم لسه بدون قرار اعتماد فردي — ما بيمنعش الاعتماد النهائي لو مفيش قسم مرفوض، بس تقدر تحسمهم كلهم دفعة واحدة:
+              </p>
+              <BulkApproveSectionsButton projectId={projectId} documentId={documentId} pendingSectionKeys={pendingSectionKeys} />
+            </div>
+          )}
         </div>
       </div>
     </Card>
@@ -939,6 +1033,47 @@ function ReviewObjectCard({
         </div>
       </Modal>
     </div>
+  );
+}
+
+// ============================================================
+// اعتماد كل الأقسام غير المرفوضة دفعة واحدة
+// ============================================================
+
+function BulkApproveSectionsButton({
+  projectId,
+  documentId,
+  pendingSectionKeys,
+}: {
+  projectId: string;
+  documentId: string;
+  pendingSectionKeys: BrainSectionKey[];
+}) {
+  const router = useRouter();
+  const [isBulkPending, startBulk] = useTransition();
+
+  if (pendingSectionKeys.length === 0) return null;
+
+  function bulkApprove() {
+    if (pendingSectionKeys.length > 5) {
+      const ok = window.confirm(`متأكد من اعتماد ${pendingSectionKeys.length} قسم دفعة واحدة؟`);
+      if (!ok) return;
+    }
+    startBulk(async () => {
+      const r = await bulkApproveSectionsAction(documentId, projectId, pendingSectionKeys);
+      if (!r.ok) {
+        toast.error(r.message);
+        return;
+      }
+      toast.success(`تم اعتماد ${r.resolvedCount ?? pendingSectionKeys.length} قسم`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Button variant="success" size="sm" onClick={bulkApprove} loading={isBulkPending} disabled={isBulkPending}>
+      <CheckCheck size={13} /> اعتماد كل الأقسام غير المرفوضة ({pendingSectionKeys.length})
+    </Button>
   );
 }
 
