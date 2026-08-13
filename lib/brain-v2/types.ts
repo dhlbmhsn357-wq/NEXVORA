@@ -246,6 +246,7 @@ export interface BrainDocumentRow {
   section_reviews: import("./review-types").SectionReviewsMap;
   missing_info_dispositions: import("./review-types").MissingInfoDispositionsMap;
   assumption_dispositions: import("./review-types").AssumptionDispositionsMap;
+  issue_dispositions: import("./review-types").IssueDispositionsMap;
   readiness_score: number;
   review_started_at: string | null;
   review_started_by: string | null;

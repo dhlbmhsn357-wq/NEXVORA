@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BrainContent } from "./types";
 import { enumerateReviewObjects, computeMissingReviewObjects, detectChangedItemKeys, cascadeRevalidation, isBlockingReviewState } from "./review-objects";
+import { issueStableKey, type IssueDispositionsMap } from "./review-types";
 import type { BrainReviewIssue, BrainReviewObject, BrainReviewObjectDependency, BrainReviewObjectState } from "@/lib/types/database";
 
 /**
@@ -66,7 +67,7 @@ export interface ReviewGateInputs {
 
 /** يجمّع مدخلات البوابة الثلاثة الجديدة (Phase 5) — يستخدمها checkApprovalGate في service.ts. */
 export async function getReviewGateInputs(supabase: SupabaseClient, documentId: string): Promise<ReviewGateInputs> {
-  const [{ data: objectsRaw }, { data: latestReport }] = await Promise.all([
+  const [{ data: objectsRaw }, { data: latestReport }, { data: doc }] = await Promise.all([
     supabase.from("brain_review_objects").select("state, needs_revalidation").eq("document_id", documentId),
     supabase
       .from("brain_review_validation_reports")
@@ -75,13 +76,23 @@ export async function getReviewGateInputs(supabase: SupabaseClient, documentId: 
       .order("generated_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase.from("project_brain_documents").select("issue_dispositions").eq("id", documentId).maybeSingle(),
   ]);
   const objects = (objectsRaw as Array<{ state: BrainReviewObjectState; needs_revalidation: boolean }> | null) ?? [];
   const issues = (latestReport?.issues as BrainReviewIssue[] | null) ?? [];
+  const issueDispositions = (doc?.issue_dispositions as IssueDispositionsMap | null) ?? {};
+
+  // مشكلة اتأجّلت/اتجوهلت بقرار صريح (سبب مسجّل) ما بتفضلش تمنع الاعتماد —
+  // فقط اللي لسه pending (أو بدون قرار خالص) بتُحسب هنا.
+  const blockingIssues = issues.filter((i) => {
+    if (i.severity !== "critical" && i.severity !== "high") return false;
+    const d = issueDispositions[issueStableKey(i)];
+    return !d || d.state === "pending";
+  });
 
   return {
     pendingReviewObjectsCount: objects.filter((o) => isBlockingReviewState(o.state)).length,
-    criticalValidationIssuesCount: issues.filter((i) => i.severity === "critical" || i.severity === "high").length,
+    criticalValidationIssuesCount: blockingIssues.length,
     needsRevalidationCount: objects.filter((o) => o.needs_revalidation).length,
   };
 }

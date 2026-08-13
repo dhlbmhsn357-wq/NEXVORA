@@ -8,6 +8,8 @@ import type {
   AssumptionDisposition,
   AssumptionDispositionsMap,
   BrainSettings,
+  IssueDisposition,
+  IssueDispositionsMap,
   MissingInfoDisposition,
   MissingInfoDispositionsMap,
   SectionReviewState,
@@ -192,6 +194,47 @@ export async function setAssumptionDisposition(input: {
     .eq("id", input.documentId);
   if (error) return { ok: false, message: error.message };
   await recomputeReadiness(supabase, input.documentId);
+  return { ok: true };
+}
+
+/**
+ * تأجيل/تجاهل مشكلة تحقّق حرجة/عالية (أو التراجع لـ pending) — Phase 5
+ * escape hatch. يتخزّن على project_brain_documents.issue_dispositions
+ * (مش على تقرير التحقّق) بمفتاح ثابت (issueStableKey) عشان يعيش عبر أي
+ * "إعادة تحقّق" لاحقة بتولّد صف تقرير جديد.
+ */
+export async function setIssueDisposition(input: {
+  documentId: string;
+  issueKey: string;
+  state: IssueDisposition["state"];
+  reason: string | null;
+  actorId: string | null;
+}): Promise<{ ok: boolean; message?: string }> {
+  const supabase = createServiceClient();
+  const { data: doc } = await supabase
+    .from("project_brain_documents")
+    .select("issue_dispositions, status")
+    .eq("id", input.documentId)
+    .maybeSingle();
+  if (!doc) return { ok: false, message: "الوثيقة غير موجودة." };
+  if (doc.status !== "draft" && doc.status !== "in_review") {
+    return { ok: false, message: "التعديل مسموح على draft/in_review فقط." };
+  }
+  if (input.state !== "pending" && !input.reason?.trim()) {
+    return { ok: false, message: "السبب مطلوب." };
+  }
+
+  const map = (doc.issue_dispositions as IssueDispositionsMap) ?? {};
+  const disposition: IssueDisposition =
+    input.state === "pending"
+      ? { state: "pending", reason: null, actor_id: null, at: new Date().toISOString() }
+      : { state: input.state, reason: input.reason?.trim() || null, actor_id: input.actorId, at: new Date().toISOString() };
+  const next = { ...map, [input.issueKey]: disposition };
+  const { error } = await supabase
+    .from("project_brain_documents")
+    .update({ issue_dispositions: next })
+    .eq("id", input.documentId);
+  if (error) return { ok: false, message: error.message };
   return { ok: true };
 }
 

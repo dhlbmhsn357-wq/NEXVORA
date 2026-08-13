@@ -8,6 +8,7 @@ import {
   bulkReviewSections,
   setMissingInfoDisposition,
   setAssumptionDisposition,
+  setIssueDisposition,
   bulkResolveOpenItems,
   requestBrainChanges,
   startBrainReview,
@@ -18,6 +19,7 @@ import { getReviewComments } from "@/lib/brain-v2/review-comments-service";
 import { createServiceClient } from "@/lib/supabase/service";
 import type {
   AssumptionDisposition,
+  IssueDisposition,
   MissingInfoDisposition,
   SectionReviewState,
 } from "@/lib/brain-v2/review-types";
@@ -152,6 +154,28 @@ export async function setAssumptionDispositionAction(input: {
     documentId: input.documentId,
     index: input.index,
     disposition,
+  });
+  if (!r.ok) return { ok: false, message: r.message ?? "فشل الحفظ." };
+  revalidatePath(`/dashboard/projects/${input.projectId}`);
+  return { ok: true };
+}
+
+/** تأجيل/تجاهل مشكلة تحقّق حرجة/عالية (أو التراجع لـ pending) — Phase 5 escape hatch. */
+export async function setIssueDispositionAction(input: {
+  documentId: string;
+  projectId: string;
+  issueKey: string;
+  state: IssueDisposition["state"];
+  reason: string | null;
+}): Promise<Result> {
+  const auth = await requireRole(["owner", "admin", "member"]);
+  if (!auth.ok) return authErr(auth.message);
+  const r = await setIssueDisposition({
+    documentId: input.documentId,
+    issueKey: input.issueKey,
+    state: input.state,
+    reason: input.reason,
+    actorId: auth.userId ?? null,
   });
   if (!r.ok) return { ok: false, message: r.message ?? "فشل الحفظ." };
   revalidatePath(`/dashboard/projects/${input.projectId}`);

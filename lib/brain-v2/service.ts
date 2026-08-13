@@ -20,7 +20,7 @@ import type {
 } from "./review-types";
 
 const DOC_COLUMNS =
-  "id, project_id, version, status, content, completeness_score, based_on_analysis_id, previous_version, change_summary, created_by, approved_by, approved_at, rejected_by, rejected_at, rejection_reason, created_at, updated_at, section_reviews, missing_info_dispositions, assumption_dispositions, readiness_score, review_started_at, review_started_by, changes_requested_at, changes_requested_by, changes_requested_reason";
+  "id, project_id, version, status, content, completeness_score, based_on_analysis_id, previous_version, change_summary, created_by, approved_by, approved_at, rejected_by, rejected_at, rejection_reason, created_at, updated_at, section_reviews, missing_info_dispositions, assumption_dispositions, issue_dispositions, readiness_score, review_started_at, review_started_by, changes_requested_at, changes_requested_by, changes_requested_reason";
 
 /**
  * جلب آخر Brain Document للمشروع (بأعلى version). ممكن يبقى draft أو approved.

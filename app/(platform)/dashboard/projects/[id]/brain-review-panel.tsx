@@ -35,7 +35,11 @@ import {
 } from "@/lib/brain-v2/types";
 import {
   REVIEW_STATE_LABELS,
+  ISSUE_DISPOSITION_LABELS,
+  issueStableKey,
   type SectionReviewState,
+  type IssueDisposition,
+  type IssueDispositionsMap,
 } from "@/lib/brain-v2/review-types";
 import {
   computeReadinessScore,
@@ -50,6 +54,7 @@ import {
   bulkApproveSectionsAction,
   requestBrainChangesAction,
   runBrainReviewValidationAction,
+  setIssueDispositionAction,
 } from "./brain-review-actions";
 import { setReviewObjectStateAction, addReviewCommentAction, setCommentResolvedAction, bulkApproveReviewObjectsAction } from "./brain-review-objects-actions";
 import BrainOpenItemsPanel from "./brain-open-items-panel";
@@ -115,6 +120,7 @@ export default function BrainReviewPanel({
   const reviews = doc.section_reviews ?? {};
   const missingDispositions = doc.missing_info_dispositions ?? {};
   const assumptionDispositions = doc.assumption_dispositions ?? {};
+  const issueDispositions: IssueDispositionsMap = doc.issue_dispositions ?? {};
 
   const readiness = computeReadinessScore({
     completeness: doc.completeness_score,
@@ -127,6 +133,10 @@ export default function BrainReviewPanel({
   const acceptedRecommendations = recommendations.filter((r) => r.status === "accepted");
   const reviewProgress = computeReviewProgress(reviewObjects);
   const criticalIssues = (latestValidationReport?.issues ?? []).filter((i) => i.severity === "critical" || i.severity === "high");
+  const pendingCriticalIssues = criticalIssues.filter((i) => {
+    const d = issueDispositions[issueStableKey(i)];
+    return !d || d.state === "pending";
+  });
   const gate = checkApprovalGate({
     content,
     sectionReviews: reviews,
@@ -134,7 +144,7 @@ export default function BrainReviewPanel({
     assumptionDispositions,
     pendingRecommendationsCount: suggestedRecommendations.length,
     pendingReviewObjectsCount: reviewProgress.blockingCount,
-    criticalValidationIssuesCount: criticalIssues.length,
+    criticalValidationIssuesCount: pendingCriticalIssues.length,
     needsRevalidationCount: reviewProgress.needsRevalidationCount,
   });
 
@@ -293,6 +303,7 @@ export default function BrainReviewPanel({
         report={latestValidationReport}
         progress={reviewProgress}
         criticalIssues={criticalIssues}
+        issueDispositions={issueDispositions}
         events={reviewEvents}
         canReview={canReview}
       />
@@ -569,6 +580,7 @@ function ExecutiveDashboard({
   report,
   progress,
   criticalIssues,
+  issueDispositions,
   events,
   canReview,
 }: {
@@ -577,12 +589,23 @@ function ExecutiveDashboard({
   report: BrainReviewValidationReport | null;
   progress: ReturnType<typeof computeReviewProgress>;
   criticalIssues: BrainReviewValidationReport["issues"];
+  issueDispositions: IssueDispositionsMap;
   events: BrainReviewEvent[];
   canReview: boolean;
 }) {
   const router = useRouter();
   const [running, setRunning] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [showDispositioned, setShowDispositioned] = useState(false);
+
+  const pendingIssues = criticalIssues.filter((i) => {
+    const d = issueDispositions[issueStableKey(i)];
+    return !d || d.state === "pending";
+  });
+  const dispositionedIssues = criticalIssues.filter((i) => {
+    const d = issueDispositions[issueStableKey(i)];
+    return d && d.state !== "pending";
+  });
 
   async function handleRevalidate() {
     setRunning(true);
@@ -632,18 +655,48 @@ function ExecutiveDashboard({
 
       {criticalIssues.length > 0 && (
         <div className="mt-3 space-y-1.5">
-          <p className="text-xs font-semibold text-[var(--v-red)]">مشاكل حرجة/عالية الخطورة ({criticalIssues.length})</p>
-          {criticalIssues.map((issue, i) => (
-            <div key={i} className="flex items-start gap-2 rounded-[var(--v-radius-md)] border border-[var(--v-red)]/30 bg-[var(--v-red)]/5 p-2">
-              <AlertTriangle size={13} className="mt-0.5 shrink-0 text-[var(--v-red)]" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-[var(--v-text)]">
-                  {REVIEW_ISSUE_TYPE_LABELS[issue.type] ?? issue.type} — {REVIEW_ISSUE_SEVERITY_LABELS[issue.severity]}
-                </p>
-                <p className="text-[11px] text-[var(--v-text-muted)]">{issue.description}</p>
-              </div>
+          <p className="text-xs font-semibold text-[var(--v-red)]">مشاكل حرجة/عالية الخطورة ({pendingIssues.length})</p>
+          {pendingIssues.length === 0 ? (
+            <p className="text-[11px] text-[var(--v-text-muted)]">كل المشاكل الحرجة/العالية اتأجّلت أو اتجوهلت بقرار صريح.</p>
+          ) : (
+            pendingIssues.map((issue) => (
+              <IssueCard
+                key={issueStableKey(issue)}
+                projectId={projectId}
+                documentId={documentId}
+                issue={issue}
+                disposition={undefined}
+                canReview={canReview}
+              />
+            ))
+          )}
+
+          {dispositionedIssues.length > 0 && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setShowDispositioned((v) => !v)}
+                className="flex items-center gap-1 text-[11px] text-[var(--v-text-muted)] hover:text-[var(--v-text)]"
+              >
+                {showDispositioned ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                مؤجّلة/متجاهَلة ({dispositionedIssues.length})
+              </button>
+              {showDispositioned && (
+                <div className="mt-1.5 space-y-1.5">
+                  {dispositionedIssues.map((issue) => (
+                    <IssueCard
+                      key={issueStableKey(issue)}
+                      projectId={projectId}
+                      documentId={documentId}
+                      issue={issue}
+                      disposition={issueDispositions[issueStableKey(issue)]}
+                      canReview={canReview}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -666,6 +719,150 @@ function ExecutiveDashboard({
         </div>
       )}
     </Card>
+  );
+}
+
+// ============================================================
+// مشكلة تحقّق واحدة — تأجيل/تجاهل (Phase 5 escape hatch)
+// ============================================================
+
+function IssueCard({
+  projectId,
+  documentId,
+  issue,
+  disposition,
+  canReview,
+}: {
+  projectId: string;
+  documentId: string;
+  issue: BrainReviewValidationReport["issues"][number];
+  disposition: IssueDisposition | undefined;
+  canReview: boolean;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [pendingState, setPendingState] = useState<"deferred" | "dismissed" | null>(null);
+  const [reason, setReason] = useState("");
+
+  const isDispositioned = !!disposition && disposition.state !== "pending";
+
+  async function apply(state: IssueDisposition["state"], r: string | null) {
+    setBusy(true);
+    const res = await setIssueDispositionAction({
+      documentId,
+      projectId,
+      issueKey: issueStableKey(issue),
+      state,
+      reason: r,
+    });
+    setBusy(false);
+    if (!res.ok) {
+      toast.error(res.message);
+      return;
+    }
+    setPendingState(null);
+    setReason("");
+    toast.success("تم تسجيل القرار");
+    router.refresh();
+  }
+
+  return (
+    <div
+      className={`flex items-start gap-2 rounded-[var(--v-radius-md)] border p-2 ${
+        isDispositioned ? "border-[var(--v-border)] bg-[var(--v-surface-2)] opacity-70" : "border-[var(--v-red)]/30 bg-[var(--v-red)]/5"
+      }`}
+    >
+      <AlertTriangle size={13} className={`mt-0.5 shrink-0 ${isDispositioned ? "text-[var(--v-text-subtle)]" : "text-[var(--v-red)]"}`} />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="text-xs font-medium text-[var(--v-text)]">
+            {REVIEW_ISSUE_TYPE_LABELS[issue.type] ?? issue.type} — {REVIEW_ISSUE_SEVERITY_LABELS[issue.severity]}
+          </p>
+          {isDispositioned && <Badge tone={disposition!.state === "dismissed" ? "neutral" : "warning"}>{ISSUE_DISPOSITION_LABELS[disposition!.state]}</Badge>}
+        </div>
+        <p className={`text-[11px] text-[var(--v-text-muted)] ${isDispositioned ? "line-through" : ""}`}>{issue.description}</p>
+        {isDispositioned && disposition!.reason && (
+          <Tooltip label={disposition!.reason}>
+            <p className="mt-1 cursor-help truncate text-[11px] text-[var(--v-text-subtle)]">السبب: {disposition!.reason}</p>
+          </Tooltip>
+        )}
+
+        {canReview && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {!isDispositioned ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingState("deferred");
+                    setReason("");
+                  }}
+                  disabled={busy}
+                  className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-2 py-1 text-[10px] font-medium text-[var(--v-text-muted)] hover:border-[var(--v-primary)] disabled:opacity-50"
+                >
+                  تأجيل
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingState("dismissed");
+                    setReason("");
+                  }}
+                  disabled={busy}
+                  className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-2 py-1 text-[10px] font-medium text-[var(--v-text-muted)] hover:border-[var(--v-primary)] disabled:opacity-50"
+                >
+                  تجاهل (خطر مقبول)
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => apply("pending", null)}
+                disabled={busy}
+                className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-2 py-1 text-[10px] font-medium text-[var(--v-primary)] hover:border-[var(--v-primary)] disabled:opacity-50"
+              >
+                التراجع (إعادة للمعلّقة)
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Modal open={pendingState !== null} onClose={() => setPendingState(null)}>
+        <div className="p-4">
+          <p className="mb-2 text-sm font-semibold text-[var(--v-text)]">
+            {pendingState === "deferred" ? "تأجيل المشكلة" : "تجاهل المشكلة (قبول كخطر معروف)"} — السبب
+          </p>
+          <p className="mb-2 text-xs text-[var(--v-text-muted)]">{issue.description}</p>
+          <textarea
+            className="w-full rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-2 text-sm text-[var(--v-text)]"
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="اكتب سبب التأجيل/التجاهل (إجباري)…"
+          />
+          <div className="mt-3 flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPendingState(null)}>
+              إلغاء
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={busy}
+              onClick={() => {
+                if (!reason.trim()) {
+                  toast.error("اكتب السبب.");
+                  return;
+                }
+                if (pendingState) apply(pendingState, reason);
+              }}
+            >
+              تأكيد
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
   );
 }
 
