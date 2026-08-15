@@ -29,6 +29,7 @@ import {
   recordContactResult,
   archiveProspect,
   unarchiveProspect,
+  deleteProspect,
   getTodayContactList,
   getProspectingSummary,
   type ProspectListFilters,
@@ -238,6 +239,19 @@ export async function unarchiveProspectAction(id: string, reason: string): Promi
   if (!auth.ok) return fail(auth.message ?? "غير مصرّح.");
   if (!reason.trim()) return fail("سبب إعادة الفتح مطلوب.");
   const result = await unarchiveProspect(id, reason, auth.userId ?? null);
+  if (result.ok) revalidatePath(PATH);
+  return result;
+}
+
+/**
+ * حذف نهائي — owner/admin فقط (أضيق من MANAGE_ROLES اللي بتشمل supervisor،
+ * لأن ده إجراء بلا رجعة عكس الأرشفة). يُستخدم لتصحيح أخطاء الاستيراد
+ * (صفوف تمهيدية اتقرأت غلط، تكرار، إلخ) — مش جزء من دورة حياة العمل العادية.
+ */
+export async function deleteProspectAction(id: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  const auth = await requireRole(["owner", "admin"]);
+  if (!auth.ok) return fail(auth.message ?? "غير مصرّح.");
+  const result = await deleteProspect(id);
   if (result.ok) revalidatePath(PATH);
   return result;
 }

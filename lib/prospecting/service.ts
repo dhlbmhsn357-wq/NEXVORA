@@ -711,6 +711,30 @@ export async function recordContactResult(
 }
 
 // ---------------------------------------------------------------------------
+// حذف نهائي — لتصحيح أخطاء الاستيراد (صفوف تمهيدية اتقرأت غلط كجهات، جهة
+// اتضافت مرتين، إلخ). عكس الأرشفة: مفيش رجوع. prospect_activities بتتحذف
+// تلقائيًا معاه (on delete cascade في 0115). ممنوع حذف جهة اتحوّلت لـ Lead
+// بالفعل — سجل التحويل التاريخي أهم من "تنظيف" شكلي.
+// ---------------------------------------------------------------------------
+export async function deleteProspect(id: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  const svc = createServiceClient();
+  const { data: current, error: fetchErr } = await svc
+    .from("prospects")
+    .select("id, converted_lead_id, organization_name")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchErr) throw fetchErr;
+  if (!current) return { ok: false, message: "الجهة المستهدفة غير موجودة." };
+  if (current.converted_lead_id) {
+    return { ok: false, message: "لا يمكن حذف جهة تم تحويلها إلى Lead بالفعل — أرشفها بدل حذفها لو مش محتاجها." };
+  }
+
+  const { error } = await svc.from("prospects").delete().eq("id", id);
+  if (error) throw error;
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
 // archive / unarchive
 // ---------------------------------------------------------------------------
 export async function archiveProspect(id: string, actorId: string | null): Promise<ProspectActionResult> {

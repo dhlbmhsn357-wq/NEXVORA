@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { MessageCircle, Pencil, Archive, ArrowUpRight, PhoneOff } from "lucide-react";
+import { MessageCircle, Pencil, Archive, ArrowUpRight, PhoneOff, Trash2 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import Tooltip from "@/components/ui/Tooltip";
 import { toast } from "@/components/ui/Toaster";
@@ -10,7 +10,7 @@ import WhatsAppSendModal from "./whatsapp-send-modal";
 import RecordContactResultModal from "./record-contact-result-modal";
 import ConvertToLeadModal from "./convert-to-lead-modal";
 import EditProspectModal from "./edit-prospect-modal";
-import { archiveProspectAction, assignProspectAction } from "./prospect-actions";
+import { archiveProspectAction, assignProspectAction, deleteProspectAction } from "./prospect-actions";
 import { STATUS_TONE, PROSPECT_STATUS_LABELS, PRIORITY_LABELS, PRIORITY_TONE, formatDate } from "./prospect-ui-constants";
 import type { ProspectRow } from "@/lib/prospecting/types";
 import type { AssignableProfile } from "./prospects-client";
@@ -35,6 +35,7 @@ export default function ProspectsTable({
   const [convertFor, setConvertFor] = useState<ProspectRow | null>(null);
   const [editFor, setEditFor] = useState<ProspectRow | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleArchive(id: string) {
     setArchivingId(id);
@@ -42,6 +43,19 @@ export default function ProspectsTable({
     setArchivingId(null);
     if (!result.ok) return toast.error(result.message ?? "فشلت الأرشفة.");
     toast.success("تمت الأرشفة.");
+    onChanged();
+  }
+
+  async function handleDelete(id: string, name: string) {
+    const ok = window.confirm(
+      `حذف "${name}" نهائيًا؟ ده إجراء لا يمكن التراجع عنه — كل سجل التواصل الخاص بيها هيتحذف معاها. لو الجهة مش مهمة بس عايز تخفيها بس، استخدم «أرشفة» بدل كده.`
+    );
+    if (!ok) return;
+    setDeletingId(id);
+    const result = await deleteProspectAction(id);
+    setDeletingId(null);
+    if (!result.ok) return toast.error(result.message ?? "فشل الحذف.");
+    toast.success("تم الحذف نهائيًا.");
     onChanged();
   }
 
@@ -163,6 +177,18 @@ export default function ProspectsTable({
                       >
                         <Archive size={12} /> أرشفة
                       </button>
+                    )}
+                    {isOwnerOrAdmin && !p.convertedLeadId && (
+                      <Tooltip label="حذف نهائي — لا يمكن التراجع عنه. للأخطاء (زي صفوف استيراد غلط).">
+                        <button
+                          type="button"
+                          disabled={deletingId === p.id}
+                          onClick={() => handleDelete(p.id, p.organizationName)}
+                          className="inline-flex items-center gap-1 rounded-[var(--v-radius-md)] border border-[var(--v-border)] px-2 py-1 text-[11px] font-medium text-[var(--v-text-muted)] hover:border-[var(--v-red)] hover:bg-[var(--v-red)]/5 hover:text-[var(--v-red)] disabled:opacity-50"
+                        >
+                          <Trash2 size={12} /> حذف نهائي
+                        </button>
+                      </Tooltip>
                     )}
                   </div>
                 </td>
