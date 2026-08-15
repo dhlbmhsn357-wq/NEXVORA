@@ -46,6 +46,9 @@ function snapshotOf(prd: PRD) {
     non_functional_requirements: prd.non_functional_requirements,
     risks_assumptions: prd.risks_assumptions,
     success_metrics: prd.success_metrics,
+    business_rules_detail: prd.business_rules_detail,
+    system_messages_detail: prd.system_messages_detail,
+    flow_specifications: prd.flow_specifications,
     status: prd.status,
     generated_from_brain_version: prd.generated_from_brain_version,
   };

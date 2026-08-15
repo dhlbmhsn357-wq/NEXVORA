@@ -163,7 +163,12 @@ describe("getStructuredContextForPRD", () => {
 
 describe("formatStructuredContextForPrompt", () => {
   it("يرجّع string فاضي لما مافيش أي بيانات", () => {
-    expect(formatStructuredContextForPrompt({ requirements: [], stories: [], acceptanceCriteria: [] })).toBe("");
+    expect(
+      formatStructuredContextForPrompt({
+        requirements: [], stories: [], acceptanceCriteria: [],
+        businessRules: [], systemMessages: [], flowsWithDetail: [],
+      })
+    ).toBe("");
   });
 
   it("يبني قسم كامل لما فيه requirements + stories + ac", () => {
@@ -196,12 +201,67 @@ describe("formatStructuredContextForPrompt", () => {
           notes: "", createdAt: "", updatedAt: "", createdBy: null,
         },
       ],
+      businessRules: [],
+      systemMessages: [],
+      flowsWithDetail: [],
     });
     expect(out).toContain("المصدر الأساسي");
     expect(out).toContain("REQ-1");
     expect(out).toContain("US-1");
     expect(out).toContain("Given بيانات صحيحة");
     expect(out).toContain("المصدر الأساسي");
+    expect(out).not.toContain("قواعد العمل والحالات الخاصة");
+    expect(out).not.toContain("رسائل النظام");
+    expect(out).not.toContain("مواصفات التدفقات التفصيلية");
+  });
+
+  it("يبني الأقسام التلاتة الجديدة لما فيه business rules / system messages / flow detail، ويتجاهلها لما تكون فاضية", () => {
+    const out = formatStructuredContextForPrompt({
+      requirements: [],
+      stories: [],
+      acceptanceCriteria: [],
+      businessRules: [
+        {
+          id: "b1", projectId: "p1", title: "حد أقصى لإعادة الجدولة",
+          triggerCondition: "طلب إعادة جدولة", thresholdValue: "3 مرات",
+          onViolation: "منع الإجراء", enforcementPoint: "server",
+          linkedFlowId: null, notes: "",
+          createdAt: "", updatedAt: "", createdBy: null,
+        },
+      ],
+      systemMessages: [
+        {
+          id: "m1", projectId: "p1", eventName: "رصيد غير كافٍ",
+          messageType: "error", messageText: "لا يوجد رصيد كافٍ لإتمام العملية",
+          linkedFlowId: null, notes: "",
+          createdAt: "", updatedAt: "", createdBy: null,
+        },
+      ],
+      flowsWithDetail: [
+        {
+          id: "f1", projectId: "p1", personaId: null, name: "تسجيل الدخول",
+          description: "", flowType: "primary", triggerEvent: "", successOutcome: "",
+          steps: [
+            {
+              order: 1, action: "إدخال البريد وكلمة المرور", expectedResult: "", notes: "",
+              uiElements: [{ fieldName: "البريد", fieldType: "نص", validationRule: "صيغة بريد صالحة" }],
+              successMessage: "تم الدخول", errorMessages: ["بيانات غير صحيحة"],
+            },
+          ],
+          notes: "",
+          createdAt: "", updatedAt: "", createdBy: null,
+        },
+      ],
+    });
+    expect(out).toContain("قواعد العمل والحالات الخاصة");
+    expect(out).toContain("حد أقصى لإعادة الجدولة");
+    expect(out).toContain("3 مرات");
+    expect(out).toContain("رسائل النظام");
+    expect(out).toContain("رصيد غير كافٍ");
+    expect(out).toContain("مواصفات التدفقات التفصيلية");
+    expect(out).toContain("صيغة بريد صالحة");
+    expect(out).toContain("تم الدخول");
+    expect(out).toContain("بيانات غير صحيحة");
   });
 });
 

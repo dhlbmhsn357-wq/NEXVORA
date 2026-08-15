@@ -41,11 +41,21 @@ export const FLOW_TYPE_LABELS: Record<FlowType, string> = {
   primary: "رئيسي", secondary: "ثانوي", edge: "حالة خاصة",
 };
 
+export interface FlowStepUIElement {
+  fieldName: string;
+  fieldType: string; // نص حر: "نص", "رقم", "قائمة منسدلة", "زر", "خانة اختيار", إلخ — لا enum مقفول، المستخدم يكتب بحرية
+  validationRule: string; // نص حر: "حد أدنى 8 أحرف", "إجباري", "صيغة بريد صالحة"، إلخ
+}
+
 export interface FlowStep {
   order: number;
   action: string;
   expectedResult: string;
   notes: string;
+  // === تفاصيل تنفيذية (اختيارية) — إضافة لالتقاط عمق مواصفة وظيفية حقيقية ===
+  uiElements?: FlowStepUIElement[];
+  successMessage?: string;
+  errorMessages?: string[];
 }
 
 export interface UserFlowRow {

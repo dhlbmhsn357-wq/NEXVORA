@@ -1,5 +1,8 @@
 import { PRD_SECTION_KEYS } from "@/lib/types/database";
-import type { AcceptanceCriterion, PRDSectionKey, UserStory } from "@/lib/types/database";
+import type {
+  AcceptanceCriterion, PRDSectionKey, UserStory,
+  PRDBusinessRuleDetail, PRDSystemMessageDetail, PRDFlowSpecification,
+} from "@/lib/types/database";
 
 export interface PRDGeneratedData {
   overview: string;
@@ -13,6 +16,9 @@ export interface PRDGeneratedData {
   non_functional_requirements: string[];
   risks_assumptions: string[];
   success_metrics: string[];
+  business_rules_detail: PRDBusinessRuleDetail[];
+  system_messages_detail: PRDSystemMessageDetail[];
+  flow_specifications: PRDFlowSpecification[];
 }
 
 export type PRDValidationResult =
@@ -25,6 +31,10 @@ export type PRDSectionValidationResult =
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -63,6 +73,68 @@ function isAcceptanceCriteriaArray(value: unknown): value is AcceptanceCriterion
   );
 }
 
+const ENFORCEMENT_POINTS = ["client", "server", "both"] as const;
+const MESSAGE_TYPES = ["success", "error", "info", "warning"] as const;
+
+function isBusinessRuleDetailArray(value: unknown): value is PRDBusinessRuleDetail[] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      return (
+        isNonEmptyString(o.title) &&
+        isString(o.trigger_condition) &&
+        isString(o.threshold_value) &&
+        isString(o.on_violation) &&
+        typeof o.enforcement_point === "string" &&
+        (ENFORCEMENT_POINTS as readonly string[]).includes(o.enforcement_point)
+      );
+    })
+  );
+}
+
+function isSystemMessageDetailArray(value: unknown): value is PRDSystemMessageDetail[] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      return (
+        isNonEmptyString(o.event_name) &&
+        typeof o.message_type === "string" &&
+        (MESSAGE_TYPES as readonly string[]).includes(o.message_type) &&
+        isString(o.message_text)
+      );
+    })
+  );
+}
+
+function isFlowSpecificationArray(value: unknown): value is PRDFlowSpecification[] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      const uiElementsOk =
+        Array.isArray(o.ui_elements) &&
+        o.ui_elements.every((e) => {
+          if (typeof e !== "object" || e === null) return false;
+          const eo = e as Record<string, unknown>;
+          return isString(eo.field_name) && isString(eo.field_type) && isString(eo.validation_rule);
+        });
+      const errorMessagesOk = Array.isArray(o.error_messages) && o.error_messages.every((m) => isString(m));
+      return (
+        isNonEmptyString(o.flow_name) &&
+        isNonEmptyString(o.step_action) &&
+        uiElementsOk &&
+        isString(o.success_message) &&
+        errorMessagesOk
+      );
+    })
+  );
+}
+
 function validateSectionValue(key: PRDSectionKey, value: unknown): boolean {
   switch (key) {
     case "overview":
@@ -72,6 +144,12 @@ function validateSectionValue(key: PRDSectionKey, value: unknown): boolean {
       return isUserStoryArray(value);
     case "acceptance_criteria":
       return isAcceptanceCriteriaArray(value);
+    case "business_rules_detail":
+      return isBusinessRuleDetailArray(value);
+    case "system_messages_detail":
+      return isSystemMessageDetailArray(value);
+    case "flow_specifications":
+      return isFlowSpecificationArray(value);
     default:
       return isStringArray(value);
   }

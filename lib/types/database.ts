@@ -951,6 +951,38 @@ export interface AcceptanceCriterion {
   then: string;
 }
 
+/**
+ * أقسام الـ PRD الثلاثة الجديدة (0116) — 100% مصدرها البيانات المُهيكلة
+ * (business_rules/system_messages/user_flows.steps)، صفر اختراع من الـ AI.
+ */
+export interface PRDBusinessRuleDetail {
+  title: string;
+  trigger_condition: string;
+  threshold_value: string;
+  on_violation: string;
+  enforcement_point: "client" | "server" | "both";
+}
+
+export interface PRDSystemMessageDetail {
+  event_name: string;
+  message_type: "success" | "error" | "info" | "warning";
+  message_text: string;
+}
+
+export interface PRDFlowSpecificationUIElement {
+  field_name: string;
+  field_type: string;
+  validation_rule: string;
+}
+
+export interface PRDFlowSpecification {
+  flow_name: string;
+  step_action: string;
+  ui_elements: PRDFlowSpecificationUIElement[];
+  success_message: string;
+  error_messages: string[];
+}
+
 export type PRDSyncStatus = "idle" | "generating" | "failed";
 
 export type PRDVersionReason =
@@ -972,6 +1004,9 @@ export const PRD_SECTION_KEYS = [
   "non_functional_requirements",
   "risks_assumptions",
   "success_metrics",
+  "business_rules_detail",
+  "system_messages_detail",
+  "flow_specifications",
 ] as const;
 
 export type PRDSectionKey = (typeof PRD_SECTION_KEYS)[number];
@@ -990,6 +1025,9 @@ export interface PRD {
   non_functional_requirements: string[];
   risks_assumptions: string[];
   success_metrics: string[];
+  business_rules_detail: PRDBusinessRuleDetail[];
+  system_messages_detail: PRDSystemMessageDetail[];
+  flow_specifications: PRDFlowSpecification[];
   version: number;
   status: string;
   generated_from_brain_version: number | null;
@@ -1016,6 +1054,9 @@ export interface PRDVersion {
   non_functional_requirements: string[] | null;
   risks_assumptions: string[] | null;
   success_metrics: string[] | null;
+  business_rules_detail: PRDBusinessRuleDetail[] | null;
+  system_messages_detail: PRDSystemMessageDetail[] | null;
+  flow_specifications: PRDFlowSpecification[] | null;
   status: string | null;
   generated_from_brain_version: number | null;
   reason: PRDVersionReason;

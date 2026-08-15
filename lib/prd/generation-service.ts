@@ -18,18 +18,27 @@ import {
 } from "@/lib/ai/prompt-framework";
 import type { PRDSectionKey, ProjectRecommendation } from "@/lib/types/database";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import type { RequirementRow } from "@/lib/product-definition/types";
+import type { RequirementRow, UserFlowRow, FlowStep } from "@/lib/product-definition/types";
 import type { UserStoryRow, AcceptanceCriterionRow } from "@/lib/user-stories/types";
+import type { BusinessRuleRow, SystemMessageRow } from "@/lib/product-definition/business-rules-types";
 
 /**
  * سياق مُهيكل مصدره جداول Product Definition + User Stories + AC.
  * لما يبقى موجود، بيبقى المصدر الأساسي لبناء أقسام user_stories +
  * acceptance_criteria في PRD، والبراين يفضل داعم لباقي الأقسام.
+ *
+ * businessRules/systemMessages/flowsWithDetail (0116): مصدر zero-invention
+ * صارم لأقسام business_rules_detail/system_messages_detail/flow_specifications —
+ * لازم تكون موجودة فعليًا في الجداول المُهيكلة، ممنوع تُستنتج من Brain.
  */
 export interface StructuredPRDContext {
   requirements: RequirementRow[];
   stories: UserStoryRow[];
   acceptanceCriteria: AcceptanceCriterionRow[];
+  businessRules: BusinessRuleRow[];
+  systemMessages: SystemMessageRow[];
+  /** تدفّقات فيها على الأقل خطوة واحدة بتفاصيل تنفيذية (uiElements/successMessage/errorMessages) — باقي التدفقات مُستبعدة عشان متعملش ضوضاء. */
+  flowsWithDetail: UserFlowRow[];
 }
 
 /** يقرأ الجداول المُهيكلة بدون رمي أخطاء — أي فشل يرجع صف فاضي. */
@@ -37,7 +46,7 @@ export async function getStructuredContextForPRD(
   projectId: string,
   supabase: SupabaseClient
 ): Promise<StructuredPRDContext> {
-  const [reqRes, storiesRes, acRes] = await Promise.all([
+  const [reqRes, storiesRes, acRes, businessRulesRes, systemMessagesRes, flowsRes] = await Promise.all([
     supabase
       .from("product_requirements")
       .select("*")
@@ -54,6 +63,21 @@ export async function getStructuredContextForPRD(
       .eq("project_id", projectId)
       .order("user_story_id", { ascending: true })
       .order("order_index", { ascending: true }),
+    supabase
+      .from("business_rules")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("system_messages")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("user_flows")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("flow_type", { ascending: true }),
   ]);
 
   const requirements = ((reqRes.data ?? []) as unknown[]).map((r) => {
@@ -124,7 +148,69 @@ export async function getStructuredContextForPRD(
     } as AcceptanceCriterionRow;
   });
 
-  return { requirements, stories, acceptanceCriteria };
+  const businessRules = ((businessRulesRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      title: String(row.title ?? ""),
+      triggerCondition: String(row.trigger_condition ?? ""),
+      thresholdValue: String(row.threshold_value ?? ""),
+      onViolation: String(row.on_violation ?? ""),
+      enforcementPoint: (row.enforcement_point as BusinessRuleRow["enforcementPoint"]) ?? "server",
+      linkedFlowId: (row.linked_flow_id as string | null) ?? null,
+      notes: String(row.notes ?? ""),
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as BusinessRuleRow;
+  });
+
+  const systemMessages = ((systemMessagesRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      eventName: String(row.event_name ?? ""),
+      messageType: (row.message_type as SystemMessageRow["messageType"]) ?? "info",
+      messageText: String(row.message_text ?? ""),
+      linkedFlowId: (row.linked_flow_id as string | null) ?? null,
+      notes: String(row.notes ?? ""),
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as SystemMessageRow;
+  });
+
+  const allFlows = ((flowsRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    const steps = (Array.isArray(row.steps) ? row.steps : []) as FlowStep[];
+    return {
+      id: String(row.id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      personaId: (row.persona_id as string | null) ?? null,
+      name: String(row.name ?? ""),
+      description: String(row.description ?? ""),
+      flowType: (row.flow_type as UserFlowRow["flowType"]) ?? "primary",
+      triggerEvent: String(row.trigger_event ?? ""),
+      successOutcome: String(row.success_outcome ?? ""),
+      steps,
+      notes: String(row.notes ?? ""),
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as UserFlowRow;
+  });
+
+  // فلتر: بس التدفّقات اللي فيها على الأقل خطوة واحدة بتفاصيل تنفيذية —
+  // باقي التدفقات مُستبعدة عشان القسم متتعملش فيه ضوضاء بلا فايدة.
+  const flowsWithDetail = allFlows.filter((f) =>
+    f.steps.some(
+      (s) => (s.uiElements && s.uiElements.length > 0) || !!s.successMessage || (s.errorMessages && s.errorMessages.length > 0)
+    )
+  );
+
+  return { requirements, stories, acceptanceCriteria, businessRules, systemMessages, flowsWithDetail };
 }
 
 /**
@@ -135,7 +221,10 @@ export function formatStructuredContextForPrompt(ctx: StructuredPRDContext): str
   if (
     ctx.requirements.length === 0 &&
     ctx.stories.length === 0 &&
-    ctx.acceptanceCriteria.length === 0
+    ctx.acceptanceCriteria.length === 0 &&
+    ctx.businessRules.length === 0 &&
+    ctx.systemMessages.length === 0 &&
+    ctx.flowsWithDetail.length === 0
   ) {
     return "";
   }
@@ -192,8 +281,45 @@ export function formatStructuredContextForPrompt(ctx: StructuredPRDContext): str
     }
   }
 
+  if (ctx.businessRules.length > 0) {
+    parts.push("\n### قواعد العمل والحالات الخاصة");
+    for (const b of ctx.businessRules) {
+      parts.push(`- ${b.title} — تطبيق: ${b.enforcementPoint}`);
+      if (b.triggerCondition) parts.push(`  الشرط المُفعِّل: ${b.triggerCondition}`);
+      if (b.thresholdValue) parts.push(`  القيمة الحدّية: ${b.thresholdValue}`);
+      if (b.onViolation) parts.push(`  عند التجاوز: ${b.onViolation}`);
+    }
+  }
+
+  if (ctx.systemMessages.length > 0) {
+    parts.push("\n### رسائل النظام");
+    for (const m of ctx.systemMessages) {
+      parts.push(`- [${m.messageType}] ${m.eventName}: "${m.messageText}"`);
+    }
+  }
+
+  if (ctx.flowsWithDetail.length > 0) {
+    parts.push("\n### مواصفات التدفقات التفصيلية");
+    for (const f of ctx.flowsWithDetail) {
+      parts.push(`- تدفّق: ${f.name}`);
+      for (const s of f.steps) {
+        const hasDetail =
+          (s.uiElements && s.uiElements.length > 0) || !!s.successMessage || (s.errorMessages && s.errorMessages.length > 0);
+        if (!hasDetail) continue;
+        parts.push(`  • خطوة ${s.order}: ${s.action}`);
+        for (const el of s.uiElements ?? []) {
+          parts.push(`      حقل: ${el.fieldName} — نوع: ${el.fieldType} — تحقق: ${el.validationRule}`);
+        }
+        if (s.successMessage) parts.push(`      رسالة نجاح: ${s.successMessage}`);
+        for (const err of s.errorMessages ?? []) {
+          parts.push(`      رسالة خطأ: ${err}`);
+        }
+      }
+    }
+  }
+
   parts.push(
-    "\n**ملاحظة:** لأي عنصر موجود فوق، انقله كما هو في القسم المقابل من PRD (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements). ممنوع إعادة اختراع عنصر موجود."
+    "\n**ملاحظة:** لأي عنصر موجود فوق، انقله كما هو في القسم المقابل من PRD (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements/business_rules_detail/system_messages_detail/flow_specifications). ممنوع إعادة اختراع عنصر موجود. لأقسام business_rules_detail/system_messages_detail/flow_specifications تحديدًا: لو مفيش عناصر هنا فوق لقسم منهم، أرجع مصفوفة فارغة `[]` — ممنوع تخترع بدائل."
   );
 
   return parts.join("\n");

@@ -60,8 +60,62 @@ export function formatPRDAsMarkdown(projectName: string, prd: PRD): string {
 
   lines.push("## مؤشرات النجاح");
   lines.push(...bulletList(prd.success_metrics));
+  lines.push("");
+
+  lines.push("## قواعد العمل والحالات الخاصة");
+  if (prd.business_rules_detail.length === 0) {
+    lines.push("—");
+  } else {
+    lines.push("| القاعدة | الشرط المُفعِّل | القيمة الحدّية | عند التجاوز | مين بيطبّقها |");
+    lines.push("|---|---|---|---|---|");
+    for (const b of prd.business_rules_detail) {
+      lines.push(
+        `| ${escapeCell(b.title)} | ${escapeCell(b.trigger_condition)} | ${escapeCell(b.threshold_value)} | ${escapeCell(b.on_violation)} | ${escapeCell(b.enforcement_point)} |`
+      );
+    }
+  }
+  lines.push("");
+
+  lines.push("## رسائل النظام");
+  if (prd.system_messages_detail.length === 0) {
+    lines.push("—");
+  } else {
+    lines.push("| الحدث | النوع | نص الرسالة |");
+    lines.push("|---|---|---|");
+    for (const m of prd.system_messages_detail) {
+      lines.push(`| ${escapeCell(m.event_name)} | ${escapeCell(m.message_type)} | ${escapeCell(m.message_text)} |`);
+    }
+  }
+  lines.push("");
+
+  lines.push("## مواصفات التدفقات التفصيلية");
+  if (prd.flow_specifications.length === 0) {
+    lines.push("—");
+  } else {
+    for (const f of prd.flow_specifications) {
+      lines.push(`### ${f.flow_name}`);
+      lines.push(`**الخطوة:** ${f.step_action}`);
+      if (f.ui_elements.length > 0) {
+        lines.push("");
+        lines.push("| الحقل | النوع | التحقق |");
+        lines.push("|---|---|---|");
+        for (const el of f.ui_elements) {
+          lines.push(`| ${escapeCell(el.field_name)} | ${escapeCell(el.field_type)} | ${escapeCell(el.validation_rule)} |`);
+        }
+      }
+      if (f.success_message) lines.push(`- **رسالة نجاح:** ${f.success_message}`);
+      for (const err of f.error_messages) {
+        lines.push(`- **رسالة خطأ:** ${err}`);
+      }
+      lines.push("");
+    }
+  }
 
   return lines.join("\n");
+}
+
+function escapeCell(value: string): string {
+  return (value || "—").replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
 
 function bulletList(items: string[]): string[] {

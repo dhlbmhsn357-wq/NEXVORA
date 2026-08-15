@@ -13,7 +13,10 @@ const SCHEMA_TEMPLATE = `{
   "functional_requirements": ["متطلب وظيفي محدد"],
   "non_functional_requirements": ["متطلب غير وظيفي (أداء، أمان، إلخ)"],
   "risks_assumptions": ["مخاطرة أو افتراض"],
-  "success_metrics": ["مؤشر نجاح قابل للقياس"]
+  "success_metrics": ["مؤشر نجاح قابل للقياس"],
+  "business_rules_detail": [{ "title": "...", "trigger_condition": "...", "threshold_value": "...", "on_violation": "...", "enforcement_point": "client|server|both" }],
+  "system_messages_detail": [{ "event_name": "...", "message_type": "success|error|info|warning", "message_text": "..." }],
+  "flow_specifications": [{ "flow_name": "...", "step_action": "...", "ui_elements": [{ "field_name": "...", "field_type": "...", "validation_rule": "..." }], "success_message": "...", "error_messages": ["..."] }]
 }`;
 
 const STRICT_RULES = `قواعد صارمة:
@@ -23,11 +26,13 @@ const STRICT_RULES = `قواعد صارمة:
 - لو البيانات غير كافية لقسم معين، اذكر ده بوضوح داخل القيمة النصية نفسها (مثلاً "بيانات غير كافية لتحديد هذا القسم") بدل ما تخترع محتوى.
 - كل عنصر في acceptance_criteria لازم يكون بصيغة Given/When/Then بالظبط بالحقول الثلاثة، وممنوع أي صيغة تانية.
 - كل عنصر في user_stories لازم يكون مرتبط بمشكلة حقيقية موجودة في Project Brain.
+- لو فيه قواعد عمل/رسائل نظام/تفاصيل تدفّقات مُهيكلة في البيانات فوق، انقلها **كاملة وكما هي بالضبط** — القسم ده أهم مصدر للدقة، ممنوع تلخيصه أو حذف عناصر منه. لو مفيش بيانات مُهيكلة لقسم من التلاتة دول، أرجع مصفوفة فارغة \`[]\` — **ممنوع تخترع قواعد أو رسائل أو تفاصيل تدفّقات غير موجودة في المصدر**.
 - كل النصوص بالعربية.`;
 
 /**
- * Prompt التوليد الكامل — الأقسام الإحدى عشر بنفس الترتيب المحدد بالظبط،
- * بدون تغيير أسماء المفاتيح أو ترتيبها أو إضافة أقسام جديدة.
+ * Prompt التوليد الكامل — الـ14 قسم (11 استراتيجي + 3 مواصفة تنفيذية
+ * zero-invention مضافة في 0116) بنفس الترتيب المحدد بالظبط، بدون تغيير
+ * أسماء المفاتيح أو ترتيبها أو إضافة أقسام جديدة.
  *
  * acceptedRecommendations: التوصيات الذكية (Phase 4) اللي اتقبلت فعليًا —
  * "الـ PRD ممنوع يتولّد من الـ Brain مباشرة، لازم يشمل التوصيات المعتمدة."
@@ -39,7 +44,7 @@ export function buildPRDGenerationPrompt(
   structuredBlock = ""
 ): string {
   const structuredSection = structuredBlock
-    ? `\n## STRUCTURED DATA (PRIMARY SOURCE)\n${structuredBlock}\n\n> للأقسام \`user_stories\`, \`acceptance_criteria\`, \`functional_requirements\`, \`non_functional_requirements\` — لو فيه عناصر في البيانات المُهيكلة فوق، اعتبرها **المصدر الأساسي** ولا تخترع بدائل. Brain + التوصيات مصادر داعمة فقط لباقي الأقسام.\n`
+    ? `\n## STRUCTURED DATA (PRIMARY SOURCE)\n${structuredBlock}\n\n> للأقسام \`user_stories\`, \`acceptance_criteria\`, \`functional_requirements\`, \`non_functional_requirements\` — لو فيه عناصر في البيانات المُهيكلة فوق، اعتبرها **المصدر الأساسي** ولا تخترع بدائل. Brain + التوصيات مصادر داعمة فقط لباقي الأقسام.\n> للأقسام \`business_rules_detail\`, \`system_messages_detail\`, \`flow_specifications\` — دي zero-invention بالكامل: لو موجودة فوق انقلها كما هي بالضبط، ولو مش موجودة أرجع \`[]\`. ممنوع تستنتجها من Brain.\n`
     : "";
   return `أنت Product Manager محترف بتكتب أول مسودة لـ Product Requirements Document (PRD) اعتمادًا على المعرفة المجمّعة في Project Brain + التوصيات الذكية المقبولة + البيانات المُهيكلة (Requirements/Stories/AC) الموجودة تحت. المسودة دي نقطة بداية للمراجعة البشرية، مش قرار نهائي.
 ${structuredSection}
@@ -49,7 +54,7 @@ ${formatBrainV2ForPrompt(brain)}
 ${formatAcceptedRecommendationsForPrompt(acceptedRecommendations)}
 ${fusedContext ? `\n${fusedContext}\n` : ""}
 ## المطلوب منك بالضبط
-أرجع **JSON فقط** بالشكل التالي بالضبط (11 قسم بنفس الترتيب، بدون أي مفتاح إضافي أو مفقود):
+أرجع **JSON فقط** بالشكل التالي بالضبط (14 قسم بنفس الترتيب، بدون أي مفتاح إضافي أو مفقود):
 
 ${SCHEMA_TEMPLATE}
 
@@ -68,6 +73,9 @@ const sectionDescriptions: Record<PRDSectionKey, string> = {
   non_functional_requirements: `"non_functional_requirements": ["متطلب غير وظيفي"]`,
   risks_assumptions: `"risks_assumptions": ["مخاطرة أو افتراض"]`,
   success_metrics: `"success_metrics": ["مؤشر نجاح قابل للقياس"]`,
+  business_rules_detail: `"business_rules_detail": [{ "title": "...", "trigger_condition": "...", "threshold_value": "...", "on_violation": "...", "enforcement_point": "client|server|both" }]`,
+  system_messages_detail: `"system_messages_detail": [{ "event_name": "...", "message_type": "success|error|info|warning", "message_text": "..." }]`,
+  flow_specifications: `"flow_specifications": [{ "flow_name": "...", "step_action": "...", "ui_elements": [{ "field_name": "...", "field_type": "...", "validation_rule": "..." }], "success_message": "...", "error_messages": ["..."] }]`,
 };
 
 /**
@@ -83,7 +91,7 @@ export function buildPRDSectionRegenerationPrompt(
   structuredBlock = ""
 ): string {
   const structuredSection = structuredBlock
-    ? `\n## STRUCTURED DATA (PRIMARY SOURCE)\n${structuredBlock}\n\n> لو القسم المطلوب من الأقسام المُهيكلة (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements) استخدم البيانات فوق كمصدر أساسي، ولا تخترع عناصر بديلة.\n`
+    ? `\n## STRUCTURED DATA (PRIMARY SOURCE)\n${structuredBlock}\n\n> لو القسم المطلوب من الأقسام المُهيكلة (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements) استخدم البيانات فوق كمصدر أساسي، ولا تخترع عناصر بديلة.\n> لو القسم المطلوب هو business_rules_detail/system_messages_detail/flow_specifications فهو zero-invention بالكامل: انقل العناصر الموجودة فوق كما هي بالضبط، ولو مفيش بيانات مُهيكلة أرجع \`[]\`.\n`
     : "";
   return `أنت Product Manager محترف بتعيد كتابة قسم واحد بس من PRD موجود، اعتمادًا على Project Brain + التوصيات الذكية المقبولة + البيانات المُهيكلة وباقي أقسام المستند الحالية (كسياق بس، متعدّلش فيها).
 ${structuredSection}

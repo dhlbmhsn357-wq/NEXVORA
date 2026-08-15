@@ -24,6 +24,19 @@ import {
   planImportFromBrain, applyImportFromBrain,
   type BrainImportPlan,
 } from "@/lib/product-definition/import-from-brain";
+import {
+  listBusinessRules, createBusinessRule, updateBusinessRule, deleteBusinessRule,
+  type BusinessRuleInput,
+} from "@/lib/product-definition/business-rules-service";
+import {
+  listSystemMessages, createSystemMessage, updateSystemMessage, deleteSystemMessage,
+  type SystemMessageInput,
+} from "@/lib/product-definition/system-messages-service";
+import {
+  BUSINESS_RULE_ENFORCEMENT_POINTS, SYSTEM_MESSAGE_TYPES,
+  type BusinessRuleEnforcementPoint, type BusinessRuleRow,
+  type SystemMessageType, type SystemMessageRow,
+} from "@/lib/product-definition/business-rules-types";
 
 type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; message: string };
 
@@ -39,6 +52,10 @@ const isFlowType = (x: string): x is FlowType => (FLOW_TYPES as readonly string[
 const isMoscow = (x: string): x is MoscowPriority => (MOSCOW_PRIORITIES as readonly string[]).includes(x);
 const isReqStatus = (x: string): x is RequirementStatus => (REQUIREMENT_STATUSES as readonly string[]).includes(x);
 const isReqType = (x: string): x is RequirementType => (REQUIREMENT_TYPES as readonly string[]).includes(x);
+const isEnforcementPoint = (x: string): x is BusinessRuleEnforcementPoint =>
+  (BUSINESS_RULE_ENFORCEMENT_POINTS as readonly string[]).includes(x);
+const isSystemMessageType = (x: string): x is SystemMessageType =>
+  (SYSTEM_MESSAGE_TYPES as readonly string[]).includes(x);
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 function parseTags(raw: string | undefined): string[] {
   if (!raw) return [];
@@ -129,6 +146,24 @@ export async function deletePersonaAction(projectId: string, id: string): Promis
 // ---------------------------------------------------------------------------
 // User Flows
 // ---------------------------------------------------------------------------
+function sanitizeUiElements(raw: unknown): FlowStep["uiElements"] {
+  if (!Array.isArray(raw)) return undefined;
+  const cleaned = raw
+    .map((e) => {
+      if (!e || typeof e !== "object") return null;
+      const obj = e as Record<string, unknown>;
+      const fieldName = String(obj.fieldName ?? "").trim();
+      if (!fieldName) return null;
+      return {
+        fieldName,
+        fieldType: String(obj.fieldType ?? "").trim(),
+        validationRule: String(obj.validationRule ?? "").trim(),
+      };
+    })
+    .filter((e): e is NonNullable<ReturnType<typeof sanitizeUiElements>>[number] => e !== null);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 function sanitizeSteps(raw: unknown): FlowStep[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -137,11 +172,19 @@ function sanitizeSteps(raw: unknown): FlowStep[] {
       const obj = s as Record<string, unknown>;
       const action = String(obj.action ?? "").trim();
       if (!action) return null;
+      const uiElements = sanitizeUiElements(obj.uiElements);
+      const successMessage = String(obj.successMessage ?? "").trim();
+      const errorMessages = Array.isArray(obj.errorMessages)
+        ? obj.errorMessages.map((m) => String(m ?? "").trim()).filter(Boolean)
+        : undefined;
       return {
         order: typeof obj.order === "number" ? obj.order : idx + 1,
         action,
         expectedResult: String(obj.expectedResult ?? "").trim(),
         notes: String(obj.notes ?? "").trim(),
+        ...(uiElements !== undefined ? { uiElements } : {}),
+        ...(successMessage ? { successMessage } : {}),
+        ...(errorMessages && errorMessages.length > 0 ? { errorMessages } : {}),
       };
     })
     .filter((s): s is FlowStep => s !== null);
@@ -361,5 +404,171 @@ export async function applyImportFromBrainAction(
     return { ok: true, data: res };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "فشل الاستيراد." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Business Rules — قواعد العمل والحالات الخاصة
+// ---------------------------------------------------------------------------
+export async function listBusinessRulesAction(projectId: string): Promise<ActionResult<BusinessRuleRow[]>> {
+  try {
+    const rows = await listBusinessRules(projectId);
+    return { ok: true, data: rows };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل القراءة." };
+  }
+}
+
+export async function createBusinessRuleAction(
+  projectId: string,
+  raw: {
+    title: string; triggerCondition?: string; thresholdValue?: string;
+    onViolation?: string; enforcementPoint?: string; linkedFlowId?: string | null; notes?: string;
+  }
+): Promise<ActionResult<{ id: string }>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const title = raw.title?.trim();
+  if (!title) return { ok: false, message: "اسم القاعدة مطلوب." };
+  const input: BusinessRuleInput = {
+    title,
+    triggerCondition: raw.triggerCondition ?? "",
+    thresholdValue: raw.thresholdValue ?? "",
+    onViolation: raw.onViolation ?? "",
+    enforcementPoint: raw.enforcementPoint && isEnforcementPoint(raw.enforcementPoint) ? raw.enforcementPoint : "server",
+    linkedFlowId: raw.linkedFlowId || null,
+    notes: raw.notes ?? "",
+  };
+  try {
+    const row = await createBusinessRule(projectId, input, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الإنشاء." };
+  }
+}
+
+export async function updateBusinessRuleAction(
+  projectId: string, id: string,
+  patch: Partial<{
+    title: string; triggerCondition: string; thresholdValue: string;
+    onViolation: string; enforcementPoint: string; linkedFlowId: string | null; notes: string;
+  }>
+): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const clean: Partial<BusinessRuleInput> = {};
+  if (patch.title !== undefined) {
+    const t = patch.title.trim(); if (!t) return { ok: false, message: "اسم القاعدة مطلوب." };
+    clean.title = t;
+  }
+  if (patch.triggerCondition !== undefined) clean.triggerCondition = patch.triggerCondition;
+  if (patch.thresholdValue !== undefined) clean.thresholdValue = patch.thresholdValue;
+  if (patch.onViolation !== undefined) clean.onViolation = patch.onViolation;
+  if (patch.enforcementPoint !== undefined) {
+    if (!isEnforcementPoint(patch.enforcementPoint)) return { ok: false, message: "قيمة تطبيق غير معروفة." };
+    clean.enforcementPoint = patch.enforcementPoint;
+  }
+  if (patch.linkedFlowId !== undefined) clean.linkedFlowId = patch.linkedFlowId;
+  if (patch.notes !== undefined) clean.notes = patch.notes;
+  try {
+    await updateBusinessRule(id, clean);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." };
+  }
+}
+
+export async function deleteBusinessRuleAction(projectId: string, id: string): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    await deleteBusinessRule(id);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الحذف." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// System Messages — رسائل النظام
+// ---------------------------------------------------------------------------
+export async function listSystemMessagesAction(projectId: string): Promise<ActionResult<SystemMessageRow[]>> {
+  try {
+    const rows = await listSystemMessages(projectId);
+    return { ok: true, data: rows };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل القراءة." };
+  }
+}
+
+export async function createSystemMessageAction(
+  projectId: string,
+  raw: {
+    eventName: string; messageType?: string; messageText?: string;
+    linkedFlowId?: string | null; notes?: string;
+  }
+): Promise<ActionResult<{ id: string }>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const eventName = raw.eventName?.trim();
+  if (!eventName) return { ok: false, message: "اسم الحدث مطلوب." };
+  const input: SystemMessageInput = {
+    eventName,
+    messageType: raw.messageType && isSystemMessageType(raw.messageType) ? raw.messageType : "info",
+    messageText: raw.messageText ?? "",
+    linkedFlowId: raw.linkedFlowId || null,
+    notes: raw.notes ?? "",
+  };
+  try {
+    const row = await createSystemMessage(projectId, input, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الإنشاء." };
+  }
+}
+
+export async function updateSystemMessageAction(
+  projectId: string, id: string,
+  patch: Partial<{
+    eventName: string; messageType: string; messageText: string;
+    linkedFlowId: string | null; notes: string;
+  }>
+): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const clean: Partial<SystemMessageInput> = {};
+  if (patch.eventName !== undefined) {
+    const t = patch.eventName.trim(); if (!t) return { ok: false, message: "اسم الحدث مطلوب." };
+    clean.eventName = t;
+  }
+  if (patch.messageType !== undefined) {
+    if (!isSystemMessageType(patch.messageType)) return { ok: false, message: "نوع رسالة غير معروف." };
+    clean.messageType = patch.messageType;
+  }
+  if (patch.messageText !== undefined) clean.messageText = patch.messageText;
+  if (patch.linkedFlowId !== undefined) clean.linkedFlowId = patch.linkedFlowId;
+  if (patch.notes !== undefined) clean.notes = patch.notes;
+  try {
+    await updateSystemMessage(id, clean);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." };
+  }
+}
+
+export async function deleteSystemMessageAction(projectId: string, id: string): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    await deleteSystemMessage(id);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الحذف." };
   }
 }

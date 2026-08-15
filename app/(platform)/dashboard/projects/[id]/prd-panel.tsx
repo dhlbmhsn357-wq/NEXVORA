@@ -42,9 +42,16 @@ const sectionLabels: Record<PRDSectionKey, string> = {
   non_functional_requirements: "المتطلبات غير الوظيفية",
   risks_assumptions: "المخاطر والافتراضات",
   success_metrics: "مؤشرات النجاح",
+  // 0116 — أقسام مواصفة تنفيذية جديدة (زواعد العمل/رسائل النظام/تفاصيل
+  // التدفقات). الليبل هنا للـ Compare View فقط حاليًا — واجهة تعديل/عرض
+  // مخصّصة لها هتضاف في الجزء الثاني (UI)، مش List بسيط لأن شكل البيانات
+  // مصفوفة كائنات مش نصوص.
+  business_rules_detail: "قواعد العمل والحالات الخاصة",
+  system_messages_detail: "رسائل النظام",
+  flow_specifications: "مواصفات التدفقات التفصيلية",
 };
 
-type SectionType = "text" | "list" | "user_stories" | "acceptance_criteria";
+type SectionType = "text" | "list" | "user_stories" | "acceptance_criteria" | "structured_detail";
 
 const sectionTypes: Record<PRDSectionKey, SectionType> = {
   overview: "text",
@@ -58,7 +65,17 @@ const sectionTypes: Record<PRDSectionKey, SectionType> = {
   non_functional_requirements: "list",
   risks_assumptions: "list",
   success_metrics: "list",
+  // "structured_detail": مصفوفة كائنات — مالهاش كارت تعديل/عرض في هذه
+  // اللوحة بعد (Part 2 UI هيضيفه). مُستبعدة من PRD_SECTION_KEYS.map
+  // الرئيسي تحت (EDITABLE_SECTION_KEYS) عشان متتعرضش كـ list نصوص خطأ.
+  business_rules_detail: "structured_detail",
+  system_messages_detail: "structured_detail",
+  flow_specifications: "structured_detail",
 };
+
+/** الأقسام القابلة للعرض/التعديل بكارت SectionCard الحالي — الأقسام
+ * المُهيكلة الجديدة (0116) مُستبعدة مؤقتًا لحد ما تتضاف واجهتها المخصّصة. */
+const EDITABLE_SECTION_KEYS = PRD_SECTION_KEYS.filter((k) => sectionTypes[k] !== "structured_detail");
 
 export default function PRDPanel({
   projectId,
@@ -249,7 +266,7 @@ export default function PRDPanel({
       )}
 
       <div className="space-y-3">
-        {PRD_SECTION_KEYS.map((key) => (
+        {EDITABLE_SECTION_KEYS.map((key) => (
           <SectionCard
             key={key}
             projectId={projectId}
