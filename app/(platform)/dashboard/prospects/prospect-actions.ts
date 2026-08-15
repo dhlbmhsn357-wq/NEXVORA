@@ -43,6 +43,7 @@ import {
   validateImportFile,
   parseSpreadsheetFile,
   listSpreadsheetSheets,
+  guessColumnMapping,
   previewImportRows,
   type ProspectColumnMapping,
   type ImportPreviewResult,
@@ -133,8 +134,12 @@ export async function parseUploadedFileAction(
     rows: Record<string, unknown>[];
     fileType: "xlsx" | "csv";
     sheetName: string;
+    /** رقم صف العناوين الفعلي (0-based) — لو > 0 يبقى الملف فيه صفوف تمهيدية اتخطّاها. */
+    headerRowIndex: number;
     /** كل الشيتات المتاحة في الملف (شيت واحد دائمًا لملفات csv). لو أكتر من شيت، الواجهة تعرض اختيار. */
     sheets: SpreadsheetSheetInfo[];
+    /** تخمين تلقائي لربط الأعمدة (مرادفات عربي/إنجليزي) — نقطة بداية، المستخدم يراجع/يصحح. */
+    guessedMapping: ProspectColumnMapping;
   }>
 > {
   const auth = await requireRole([...MANAGE_ROLES]);
@@ -156,7 +161,8 @@ export async function parseUploadedFileAction(
     validation.fileType,
     typeof requestedSheet === "string" && requestedSheet ? requestedSheet : undefined
   );
-  return { ok: true, data: { ...parsed, fileType: validation.fileType, sheets } };
+  const guessedMapping = guessColumnMapping(parsed.headers);
+  return { ok: true, data: { ...parsed, fileType: validation.fileType, sheets, guessedMapping } };
 }
 
 /** غلاف Server Action حول previewImportRows (pure function) — لاستدعائها من مكوّن "use client". */

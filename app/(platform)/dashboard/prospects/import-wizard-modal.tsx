@@ -21,14 +21,18 @@ const MAPPABLE_FIELDS: { value: keyof ProspectColumnMapping; label: string }[] =
   { value: "city_or_area", label: "المدينة/المنطقة" },
   { value: "branches_count", label: "عدد الفروع" },
   { value: "scope_notes", label: "ملاحظات النطاق" },
-  { value: "primary_phone_raw", label: "رقم الهاتف" },
+  { value: "primary_phone_raw", label: "رقم الهاتف الأساسي" },
+  { value: "secondary_phones", label: "هواتف أخرى" },
   { value: "email", label: "البريد الإلكتروني" },
   { value: "website_url", label: "الموقع الإلكتروني" },
   { value: "social_url", label: "رابط اجتماعي" },
+  { value: "source_urls", label: "مصادر إضافية" },
   { value: "visible_size_evidence", label: "دليل الحجم" },
   { value: "activity_signal", label: "إشارة نشاط" },
   { value: "pain_hypothesis", label: "فرضية المشكلة" },
   { value: "suggested_offer", label: "العرض المقترح" },
+  { value: "research_score", label: "درجة البحث" },
+  { value: "priority", label: "الأولوية" },
   { value: "notes", label: "ملاحظات" },
 ];
 
@@ -69,6 +73,7 @@ export default function ImportWizardModal({
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [sheets, setSheets] = useState<SpreadsheetSheetInfo[]>([]);
   const [selectedSheet, setSelectedSheet] = useState("");
+  const [headerRowIndex, setHeaderRowIndex] = useState(0);
 
   const [headerToField, setHeaderToField] = useState<Record<string, string>>({});
 
@@ -105,13 +110,13 @@ export default function ImportWizardModal({
     setRows(result.data.rows);
     setSheets(result.data.sheets);
     setSelectedSheet(result.data.sheetName);
+    setHeaderRowIndex(result.data.headerRowIndex);
 
-    // تخمين أولي بسيط بمطابقة أسماء الأعمدة لأسماء الحقول.
+    // تخمين تلقائي ذكي (مرادفات عربي/إنجليزي، من السيرفر) — عمود → حقل.
+    // headerToField هنا معكوس (source header → field) عشان يناسب الـ Select لكل عمود.
     const guessed: Record<string, string> = {};
-    for (const h of result.data.headers) {
-      const norm = h.trim().toLowerCase().replace(/\s+/g, "_");
-      const match = MAPPABLE_FIELDS.find((f2) => f2.value === norm);
-      if (match) guessed[h] = match.value;
+    for (const [field, header] of Object.entries(result.data.guessedMapping)) {
+      if (header) guessed[header as string] = field;
     }
     setHeaderToField(guessed);
   }
@@ -216,9 +221,16 @@ export default function ImportWizardModal({
             )}
 
             {headers.length > 0 && (
-              <p className="text-xs text-[var(--v-text-muted)]">
-                تمّت قراءة {rows.length} صف من شيت &quot;{selectedSheet}&quot; بـ {headers.length} عمود. اضغط «متابعة» للتحقق من ربط الأعمدة.
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-[var(--v-text-muted)]">
+                  تمّت قراءة {rows.length} صف من شيت &quot;{selectedSheet}&quot; بـ {headers.length} عمود. اضغط «متابعة» للتحقق من ربط الأعمدة.
+                </p>
+                {headerRowIndex > 0 && (
+                  <p className="text-xs text-[var(--v-primary)]">
+                    ✓ تخطّينا {headerRowIndex} صف تمهيدي (عنوان/ملاحظة) قبل صف العناوين تلقائيًا.
+                  </p>
+                )}
+              </div>
             )}
 
             <div className="flex justify-between gap-2">

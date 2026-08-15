@@ -315,6 +315,44 @@ function getMapped(raw: Record<string, unknown>, mapping: ProspectColumnMapping,
   return String(v).trim();
 }
 
+/** يفصل قيمة نصية فيها أكتر من عنصر (هواتف/روابط) بأي فاصل شائع — / أو ، أو ; أو سطر جديد. */
+function splitMultiValue(raw: string): string[] {
+  return raw
+    .split(/[\/,;\n،]+/)
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
+}
+
+/** يحوّل نص هواتف متعددة إلى مصفوفة أرقام مطبَّعة (يتجاهل الغير صالح بصمت). */
+function parseSecondaryPhones(raw: string): string[] {
+  return splitMultiValue(raw)
+    .map((p) => normalizeEgyptianPhone(p))
+    .filter((r) => r.isValid)
+    .map((r) => r.normalized as string);
+}
+
+/** يحوّل نص أرقام/درجة إلى numeric — يتجاهل بصمت لو مش رقم صالح (زي "97/100" ياخد 97 بس). */
+function parseResearchScore(raw: string): number | null {
+  const match = raw.match(/-?\d+(\.\d+)?/);
+  if (!match) return null;
+  const n = Number(match[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * يحوّل نص أولوية حر (عربي أو رمزي) إلى enum ثابت. يدعم صيغ شائعة في ملفات
+ * أبحاث السوق: "A - أولوية قصوى" / "مرتفعة" / "B" / "متوسطة" / "منخفضة" / "high".
+ * غير متعرَّف عليه → null (يُترك للـ default 'medium' على مستوى DB).
+ */
+function parsePriority(raw: string): ProspectPriority | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  if (/^a\b|قصوى|مرتفع|عالي|high/.test(v)) return "high";
+  if (/^c\b|منخفض|ضعيف|low/.test(v)) return "low";
+  if (/^b\b|متوسط|medium/.test(v)) return "medium";
+  return null;
+}
+
 /** يبني صف الإدراج من صف خام + mapping — بدون I/O، قابلة للاختبار مستقلة. */
 export function buildProspectInsertRow(
   raw: Record<string, unknown>,
@@ -335,6 +373,18 @@ export function buildProspectInsertRow(
   const branchesCountRaw = getMapped(raw, columnMapping, "branches_count");
   const branchesCount = branchesCountRaw && !Number.isNaN(Number(branchesCountRaw)) ? Number(branchesCountRaw) : null;
 
+  const secondaryPhonesRaw = getMapped(raw, columnMapping, "secondary_phones");
+  const secondaryPhones = secondaryPhonesRaw ? parseSecondaryPhones(secondaryPhonesRaw) : [];
+
+  const sourceUrlsRaw = getMapped(raw, columnMapping, "source_urls");
+  const sourceUrls = sourceUrlsRaw ? splitMultiValue(sourceUrlsRaw) : [];
+
+  const researchScoreRaw = getMapped(raw, columnMapping, "research_score");
+  const researchScore = researchScoreRaw ? parseResearchScore(researchScoreRaw) : null;
+
+  const priorityRaw = getMapped(raw, columnMapping, "priority");
+  const priority = priorityRaw ? parsePriority(priorityRaw) : null;
+
   return {
     initialStatus,
     row: {
@@ -348,13 +398,17 @@ export function buildProspectInsertRow(
       scope_notes: getMapped(raw, columnMapping, "scope_notes") || null,
       primary_phone_raw: phoneRaw || null,
       primary_phone_normalized: phoneResult?.isValid ? phoneResult.normalized : null,
+      secondary_phones: secondaryPhones,
       email,
       website_url: getMapped(raw, columnMapping, "website_url") || null,
       social_url: getMapped(raw, columnMapping, "social_url") || null,
+      source_urls: sourceUrls,
       visible_size_evidence: getMapped(raw, columnMapping, "visible_size_evidence") || null,
       activity_signal: getMapped(raw, columnMapping, "activity_signal") || null,
       pain_hypothesis: getMapped(raw, columnMapping, "pain_hypothesis") || null,
       suggested_offer: getMapped(raw, columnMapping, "suggested_offer") || null,
+      research_score: researchScore,
+      ...(priority ? { priority } : {}),
       notes: getMapped(raw, columnMapping, "notes") || null,
       verification_status: phoneRaw && !phoneResult?.isValid ? "invalid_phone" : "unverified",
       status: initialStatus,
