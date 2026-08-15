@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Activity, Users, Building2, FolderKanban, MessagesSquare,
-  ListChecks, Brain, Workflow, LayoutTemplate, Settings, BookOpen, CheckSquare, DatabaseZap, GitBranch, Sparkles, Wand2, FlaskConical, Rocket, BadgeCheck, HeartPulse, type LucideIcon,
+  ListChecks, Brain, Workflow, LayoutTemplate, Settings, BookOpen, CheckSquare, DatabaseZap, GitBranch, Sparkles, Wand2, FlaskConical, Rocket, BadgeCheck, HeartPulse, Target, type LucideIcon,
 } from "lucide-react";
 
 /**
@@ -84,6 +84,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "مساحة العمل",
     titleKey: "nav.group.workspace",
     items: [
+      { href: "/dashboard/prospects", label: "قاعدة الاستهداف", labelKey: "nav.prospects", icon: Target },
       { href: "/dashboard/leads", label: "العملاء المحتملون", labelKey: "nav.leads", icon: Users },
       { href: "/dashboard/clients", label: "العملاء", labelKey: "nav.clients", icon: Building2 },
       { href: "/dashboard/projects", label: "المشاريع", labelKey: "nav.projects", icon: FolderKanban },

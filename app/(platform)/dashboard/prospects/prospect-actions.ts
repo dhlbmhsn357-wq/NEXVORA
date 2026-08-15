@@ -15,6 +15,8 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/rbac";
 import { roleSatisfies } from "@/lib/auth/roles";
+import { createClient } from "@/lib/supabase/server";
+import type { ProspectMessageTemplateRow } from "@/lib/prospecting/types";
 import {
   listProspects,
   getProspectById,
@@ -37,7 +39,13 @@ import {
   type ProspectActionResult,
 } from "@/lib/prospecting/service";
 import { checkExistingLeadMatch, executeConversion, type ConversionOutcome } from "@/lib/prospecting/conversion-service";
-import type { ProspectColumnMapping } from "@/lib/prospecting/import-service";
+import {
+  validateImportFile,
+  parseSpreadsheetFile,
+  previewImportRows,
+  type ProspectColumnMapping,
+  type ImportPreviewResult,
+} from "@/lib/prospecting/import-service";
 import type { ProspectRow, ProspectWithActivities } from "@/lib/prospecting/types";
 
 const PATH = "/dashboard/prospects";
@@ -109,6 +117,40 @@ export async function createProspectsFromImportAction(
   return { ok: true, data } as const;
 }
 
+/**
+ * يقرأ ملف مرفوع من المتصفح (FormData) ويحلّله إلى headers + rows —
+ * بديل client-safe لـ parseSpreadsheetFile (اللي محتاج Buffer/server-only
+ * imports مش متاحة في المتصفح). لا يُخزَّن الملف الخام — معالجة كاملة
+ * في الذاكرة ثم تُرمى.
+ */
+export async function parseUploadedFileAction(
+  formData: FormData
+): Promise<Result<{ headers: string[]; rows: Record<string, unknown>[]; fileType: "xlsx" | "csv" }>> {
+  const auth = await requireRole([...MANAGE_ROLES]);
+  if (!auth.ok) return fail(auth.message ?? "غير مصرّح.");
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) return fail("لم يتم اختيار ملف.");
+
+  const validation = validateImportFile(file.name, file.size);
+  if (!validation.ok || !validation.fileType) return fail(validation.message ?? "ملف غير صالح.");
+
+  const buffer = await file.arrayBuffer();
+  const parsed = parseSpreadsheetFile(buffer, validation.fileType);
+  return { ok: true, data: { ...parsed, fileType: validation.fileType } };
+}
+
+/** غلاف Server Action حول previewImportRows (pure function) — لاستدعائها من مكوّن "use client". */
+export async function previewImportRowsAction(
+  rows: Record<string, unknown>[],
+  columnMapping: ProspectColumnMapping
+): Promise<Result<ImportPreviewResult>> {
+  const auth = await requireRole([...MANAGE_ROLES]);
+  if (!auth.ok) return fail(auth.message ?? "غير مصرّح.");
+  const data = previewImportRows(rows, columnMapping);
+  return { ok: true, data };
+}
+
 // ---------------------------------------------------------------------------
 // update / assign (owner/admin/supervisor)
 // ---------------------------------------------------------------------------
@@ -173,6 +215,42 @@ export async function unarchiveProspectAction(id: string, reason: string): Promi
   const result = await unarchiveProspect(id, reason, auth.userId ?? null);
   if (result.ok) revalidatePath(PATH);
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// قوالب الرسائل (قراءة فقط — كل الأدوار)
+// ---------------------------------------------------------------------------
+export async function listMessageTemplatesAction(): Promise<Result<ProspectMessageTemplateRow[]>> {
+  const auth = await requireRole([...GENERAL_ROLES]);
+  if (!auth.ok) return fail(auth.message ?? "غير مصرّح.");
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("prospect_message_templates")
+    .select("*")
+    .order("is_default", { ascending: false })
+    .order("created_at", { ascending: true });
+  if (error) return fail(error.message);
+  interface DbTemplate {
+    id: string;
+    name: string;
+    template_type: ProspectMessageTemplateRow["templateType"];
+    body: string;
+    is_default: boolean;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+  }
+  const rows = ((data as DbTemplate[] | null) ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    templateType: r.template_type,
+    body: r.body,
+    isDefault: r.is_default,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
+  return { ok: true, data: rows };
 }
 
 // ---------------------------------------------------------------------------
