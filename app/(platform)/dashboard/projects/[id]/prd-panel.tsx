@@ -16,7 +16,7 @@ import { toast } from "@/components/ui/Toaster";
 import RegenerateConfirmDialog from "@/components/ui/RegenerateConfirmDialog";
 import CompareModalShell from "@/components/ui/CompareModalShell";
 import EditableSectionCard from "@/components/ui/EditableSectionCard";
-import Badge from "@/components/ui/Badge";
+import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import AiBadge from "@/components/ui/AiBadge";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
@@ -27,7 +27,12 @@ import type {
   PRDVersion,
   UserStory,
   AcceptanceCriterion,
+  PRDBusinessRuleDetail,
+  PRDSystemMessageDetail,
+  PRDFlowSpecification,
 } from "@/lib/types/database";
+import { SYSTEM_MESSAGE_TYPE_LABELS, type SystemMessageType } from "@/lib/product-definition/business-rules-types";
+import { groupFlowSpecificationsByFlow } from "@/lib/product-definition/flow-step-detail";
 import { useBackgroundRefresh } from "@/lib/ui/use-background-refresh";
 
 const sectionLabels: Record<PRDSectionKey, string> = {
@@ -65,17 +70,19 @@ const sectionTypes: Record<PRDSectionKey, SectionType> = {
   non_functional_requirements: "list",
   risks_assumptions: "list",
   success_metrics: "list",
-  // "structured_detail": مصفوفة كائنات — مالهاش كارت تعديل/عرض في هذه
-  // اللوحة بعد (Part 2 UI هيضيفه). مُستبعدة من PRD_SECTION_KEYS.map
-  // الرئيسي تحت (EDITABLE_SECTION_KEYS) عشان متتعرضش كـ list نصوص خطأ.
+  // "structured_detail": مصفوفة كائنات مُهيكلة (0116) — لها كارت عرض
+  // مخصّص (StructuredSectionCard) بدل محرّر السطور النصية العام. القراءة
+  // فقط دائمًا: التعديل الحقيقي بيحصل في تبويب "تعريف المنتج" (المصدر
+  // الحي)، مش هنا — تعديلها هنا كنص كان هيكسر اتساقها مع الجداول المصدر.
   business_rules_detail: "structured_detail",
   system_messages_detail: "structured_detail",
   flow_specifications: "structured_detail",
 };
 
-/** الأقسام القابلة للعرض/التعديل بكارت SectionCard الحالي — الأقسام
- * المُهيكلة الجديدة (0116) مُستبعدة مؤقتًا لحد ما تتضاف واجهتها المخصّصة. */
+/** الأقسام القابلة للعرض/التعديل بكارت SectionCard النصي العام. */
 const EDITABLE_SECTION_KEYS = PRD_SECTION_KEYS.filter((k) => sectionTypes[k] !== "structured_detail");
+/** الأقسام المُهيكلة (0116) — كارت عرض/تجميع مخصّص، للقراءة فقط + إعادة توليد. */
+const STRUCTURED_SECTION_KEYS = PRD_SECTION_KEYS.filter((k) => sectionTypes[k] === "structured_detail");
 
 export default function PRDPanel({
   projectId,
@@ -276,6 +283,16 @@ export default function PRDPanel({
             onChanged={() => router.refresh()}
           />
         ))}
+        {STRUCTURED_SECTION_KEYS.map((key) => (
+          <StructuredSectionCard
+            key={key}
+            projectId={projectId}
+            sectionKey={key}
+            prd={prd}
+            disabled={isGenerating}
+            onChanged={() => router.refresh()}
+          />
+        ))}
       </div>
 
       {showConfirm && (
@@ -398,6 +415,234 @@ function SectionView({ sectionKey, prd }: { sectionKey: PRDSectionKey; prd: PRD 
         </li>
       ))}
     </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Structured sections (0116) — business_rules_detail / system_messages_detail
+// / flow_specifications. لقطات مُولَّدة بالذكاء الاصطناعي من الجداول الحية
+// في "تعريف المنتج" وقت التوليد فقط (zero-invention) — للقراءة هنا، مفيش
+// تعديل نصّي مباشر لأنه ما كانش هيرجع يحدّث الجداول المصدر. إعادة التوليد
+// لسّه متاحة لأنها بتقرأ نفس الجداول من جديد وتبني القسم من واقعها الحالي.
+// ---------------------------------------------------------------------------
+const MESSAGE_TYPE_TONE: Record<SystemMessageType, BadgeTone> = {
+  success: "success", error: "danger", info: "info", warning: "warning",
+};
+
+function StructuredSectionCard({
+  projectId,
+  sectionKey,
+  prd,
+  disabled,
+  onChanged,
+}: {
+  projectId: string;
+  sectionKey: PRDSectionKey;
+  prd: PRD;
+  disabled: boolean;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  async function handleRegenerate() {
+    setRegenerating(true);
+    await regeneratePRDSection(projectId, sectionKey);
+    setRegenerating(false);
+    onChanged();
+  }
+
+  const sourceLabel =
+    sectionKey === "business_rules_detail" ? "قواعد العمل"
+    : sectionKey === "system_messages_detail" ? "رسائل النظام"
+    : "تدفّقات المستخدم";
+
+  return (
+    <div className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-bg)]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between p-3 text-right focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--v-primary)]"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold text-[var(--v-text)]">
+          {sectionLabels[sectionKey]}
+          <Badge tone="neutral">للقراءة فقط</Badge>
+        </span>
+        <span className="text-xs text-[var(--v-text-muted)]">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-[var(--v-border)] p-3">
+          <StructuredSectionView sectionKey={sectionKey} prd={prd} />
+
+          <p className="mt-3 text-[11px] text-[var(--v-text-muted)]">
+            المصدر: <b>{sourceLabel}</b> في تعريف المنتج — عدّل هناك ثم أعد توليد القسم.{" "}
+            <a href={`?tab=definition`} className="text-[var(--v-primary)] hover:underline">فتح تعريف المنتج</a>
+          </p>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={disabled || regenerating}
+              className="rounded-[var(--v-radius-sm)] border border-[var(--v-border)] px-2 py-1 text-[11px] font-medium text-[var(--v-text)] hover:border-[var(--v-primary)] disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--v-primary)]"
+            >
+              {regenerating ? "جاري إعادة التوليد…" : "Re-Generate Section"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StructuredSectionView({ sectionKey, prd }: { sectionKey: PRDSectionKey; prd: PRD }) {
+  if (sectionKey === "business_rules_detail") {
+    const items = prd.business_rules_detail;
+    if (items.length === 0) {
+      return (
+        <p className="text-sm text-[var(--v-text-muted)]">
+          لا توجد قواعد عمل مُوثّقة في وقت التوليد — أضفها في «تعريف المنتج» ثم أعد توليد هذا القسم.
+        </p>
+      );
+    }
+    return <BusinessRulesTable items={items} />;
+  }
+
+  if (sectionKey === "system_messages_detail") {
+    const items = prd.system_messages_detail;
+    if (items.length === 0) {
+      return (
+        <p className="text-sm text-[var(--v-text-muted)]">
+          لا توجد رسائل نظام مُوثّقة في وقت التوليد — أضفها في «تعريف المنتج» ثم أعد توليد هذا القسم.
+        </p>
+      );
+    }
+    return <SystemMessagesTable items={items} />;
+  }
+
+  const items = prd.flow_specifications;
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-[var(--v-text-muted)]">
+        لا توجد تفاصيل تنفيذية موثّقة لأي خطوة تدفّق وقت التوليد — أضفها في «تعريف المنتج» (تفاصيل تنفيذية لكل
+        خطوة) ثم أعد توليد هذا القسم.
+      </p>
+    );
+  }
+  return <FlowSpecificationsList items={items} />;
+}
+
+function BusinessRulesTable({ items }: { items: PRDBusinessRuleDetail[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-[var(--v-border)] text-right text-xs text-[var(--v-text-muted)]">
+            <th className="p-2 font-medium">العنوان</th>
+            <th className="p-2 font-medium">الشرط المُفعِّل</th>
+            <th className="p-2 font-medium">القيمة الحدّية</th>
+            <th className="p-2 font-medium">عند التجاوز</th>
+            <th className="p-2 font-medium">من يطبّقها</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((b, i) => (
+            <tr key={i} className="border-b border-[var(--v-border)] align-top last:border-0">
+              <td className="p-2 font-medium text-[var(--v-text)]">{b.title || "—"}</td>
+              <td className="p-2 text-[var(--v-text-secondary)]">{b.trigger_condition || "—"}</td>
+              <td className="p-2 text-[var(--v-text-secondary)]">{b.threshold_value || "—"}</td>
+              <td className="p-2 text-[var(--v-text-secondary)]">{b.on_violation || "—"}</td>
+              <td className="p-2">
+                <Badge tone={b.enforcement_point === "client" ? "info" : b.enforcement_point === "both" ? "warning" : "primary"}>
+                  {b.enforcement_point}
+                </Badge>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SystemMessagesTable({ items }: { items: PRDSystemMessageDetail[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[480px] border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-[var(--v-border)] text-right text-xs text-[var(--v-text-muted)]">
+            <th className="p-2 font-medium">الحدث</th>
+            <th className="p-2 font-medium">النوع</th>
+            <th className="p-2 font-medium">النص</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((m, i) => (
+            <tr key={i} className="border-b border-[var(--v-border)] align-top last:border-0">
+              <td className="p-2 font-medium text-[var(--v-text)]">{m.event_name || "—"}</td>
+              <td className="p-2">
+                <Badge tone={MESSAGE_TYPE_TONE[m.message_type]}>{SYSTEM_MESSAGE_TYPE_LABELS[m.message_type]}</Badge>
+              </td>
+              <td className="p-2 text-[var(--v-text-secondary)]">{m.message_text || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FlowSpecificationsList({ items }: { items: PRDFlowSpecification[] }) {
+  const groups = groupFlowSpecificationsByFlow(items);
+  return (
+    <div className="space-y-4">
+      {groups.map((g, gi) => (
+        <div key={gi} className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] p-2">
+          <p className="mb-2 text-sm font-semibold text-[var(--v-text)]">{g.flowName}</p>
+          <ul className="space-y-3">
+            {g.items.map((f, i) => (
+              <li key={i} className="border-t border-[var(--v-border)] pt-2 first:border-0 first:pt-0">
+                <p className="text-xs text-[var(--v-text)]"><b>الخطوة:</b> {f.step_action || "—"}</p>
+                {f.ui_elements.length > 0 && (
+                  <div className="mt-1 overflow-x-auto">
+                    <table className="w-full min-w-[420px] border-collapse text-[11px]">
+                      <thead>
+                        <tr className="border-b border-[var(--v-border)] text-right text-[var(--v-text-muted)]">
+                          <th className="p-1 font-medium">الحقل</th>
+                          <th className="p-1 font-medium">النوع</th>
+                          <th className="p-1 font-medium">التحقق</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {f.ui_elements.map((el, ei) => (
+                          <tr key={ei} className="border-b border-[var(--v-border)] last:border-0">
+                            <td className="p-1 text-[var(--v-text-secondary)]">{el.field_name || "—"}</td>
+                            <td className="p-1 text-[var(--v-text-secondary)]">{el.field_type || "—"}</td>
+                            <td className="p-1 text-[var(--v-text-secondary)]">{el.validation_rule || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {f.success_message && (
+                  <p className="mt-1 text-[11px] text-[var(--v-green)]"><b>رسالة نجاح:</b> {f.success_message}</p>
+                )}
+                {f.error_messages.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {f.error_messages.map((err, ei) => (
+                      <li key={ei} className="text-[11px] text-[var(--v-red)]"><b>رسالة خطأ:</b> {err}</li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 

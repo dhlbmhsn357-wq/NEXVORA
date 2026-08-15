@@ -8,7 +8,10 @@
  */
 import { useEffect, useMemo, useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Star, GitBranch, ListChecks, Target, CheckCircle2, CheckCheck, Download, Brain } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, Star, GitBranch, ListChecks, Target, CheckCircle2, CheckCheck, Download, Brain,
+  ShieldCheck, MessageSquareText, ChevronDown, ChevronUp,
+} from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
@@ -25,7 +28,15 @@ import {
   REQUIREMENT_TYPES, REQUIREMENT_TYPE_LABELS,
   type PersonaRow, type UserFlowRow, type RequirementRow, type FlowType,
   type MoscowPriority, type RequirementStatus, type RequirementType,
+  type FlowStep, type FlowStepUIElement,
 } from "@/lib/product-definition/types";
+import {
+  BUSINESS_RULE_ENFORCEMENT_POINTS, BUSINESS_RULE_ENFORCEMENT_POINT_LABELS,
+  SYSTEM_MESSAGE_TYPES, SYSTEM_MESSAGE_TYPE_LABELS,
+  type BusinessRuleRow, type BusinessRuleEnforcementPoint,
+  type SystemMessageRow, type SystemMessageType,
+} from "@/lib/product-definition/business-rules-types";
+import { stepDetailBadgeLabel } from "@/lib/product-definition/flow-step-detail";
 import {
   summarizePersonas, summarizeFlows, summarizeRequirements,
   deriveDefinitionReadiness,
@@ -35,6 +46,8 @@ import {
   createFlowAction, updateFlowAction, deleteFlowAction,
   createRequirementAction, updateRequirementAction, deleteRequirementAction,
   planImportFromBrainAction, applyImportFromBrainAction,
+  createBusinessRuleAction, updateBusinessRuleAction, deleteBusinessRuleAction,
+  createSystemMessageAction, updateSystemMessageAction, deleteSystemMessageAction,
 } from "./definition-actions";
 import type { BrainImportPlan } from "@/lib/product-definition/import-from-brain";
 
@@ -51,17 +64,25 @@ const REQ_STATUS_TONE: Record<RequirementStatus, BadgeTone> = {
   draft: "neutral", approved: "info", in_progress: "warning",
   done: "success", deferred: "neutral",
 };
+const ENFORCEMENT_TONE: Record<BusinessRuleEnforcementPoint, BadgeTone> = {
+  client: "info", server: "primary", both: "warning",
+};
+const MESSAGE_TYPE_TONE: Record<SystemMessageType, BadgeTone> = {
+  success: "success", error: "danger", info: "info", warning: "warning",
+};
 
 export interface DefinitionPanelProps {
   projectId: string;
   personas: PersonaRow[];
   flows: UserFlowRow[];
   requirements: RequirementRow[];
+  businessRules: BusinessRuleRow[];
+  systemMessages: SystemMessageRow[];
   canWrite: boolean;
 }
 
 export default function DefinitionPanel(props: DefinitionPanelProps) {
-  const { projectId, personas, flows, requirements, canWrite } = props;
+  const { projectId, personas, flows, requirements, businessRules, systemMessages, canWrite } = props;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -71,6 +92,11 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
   const [creatingFlow, setCreatingFlow] = useState(false);
   const [editingReq, setEditingReq] = useState<RequirementRow | null>(null);
   const [creatingReq, setCreatingReq] = useState(false);
+  const [editingRule, setEditingRule] = useState<BusinessRuleRow | null>(null);
+  const [creatingRule, setCreatingRule] = useState(false);
+  const [editingMsg, setEditingMsg] = useState<SystemMessageRow | null>(null);
+  const [creatingMsg, setCreatingMsg] = useState(false);
+  const [msgTypeFilter, setMsgTypeFilter] = useState<SystemMessageType | "all">("all");
 
   // استيراد من Project Brain المعتمد
   const [brainPlan, setBrainPlan] = useState<BrainImportPlan | null>(null);
@@ -331,6 +357,100 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
         )}
       </Card>
 
+      {/* القواعد والرسائل — قواعد العمل + رسائل النظام */}
+      <div>
+        <h2 className="mb-3 text-lg font-semibold text-[var(--v-text)]">القواعد والرسائل</h2>
+        <div className="space-y-6">
+          {/* Business Rules */}
+          <Card>
+            <SectionHeader
+              title={<span className="inline-flex items-center gap-1.5"><ShieldCheck size={16} /> قواعد العمل ({businessRules.length})</span>}
+              action={canWrite ? <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreatingRule(true)}>قاعدة جديدة</Button> : null}
+            />
+            {businessRules.length === 0 ? (
+              <EmptyState title="لا توجد قواعد عمل بعد" description="أضف أول قاعدة لتوثيق حالة خاصة أو حد استخدام." />
+            ) : (
+              <ul className="divide-y divide-[var(--v-border)]">
+                {businessRules.map((r) => {
+                  const linkedFlow = r.linkedFlowId ? flows.find((f) => f.id === r.linkedFlowId) : null;
+                  return (
+                    <li key={r.id} className="flex items-start justify-between gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-[var(--v-text)]">{r.title}</p>
+                          <Badge tone={ENFORCEMENT_TONE[r.enforcementPoint]}>{BUSINESS_RULE_ENFORCEMENT_POINT_LABELS[r.enforcementPoint]}</Badge>
+                          {linkedFlow && <span className="text-[11px] text-[var(--v-text-subtle)]">مرتبط بـ: {linkedFlow.name}</span>}
+                        </div>
+                        {r.triggerCondition && <p className="mt-1 text-xs text-[var(--v-text-secondary)]"><b>الشرط:</b> {r.triggerCondition}</p>}
+                        {r.thresholdValue && <p className="mt-1 text-xs text-[var(--v-text-secondary)]"><b>القيمة الحدّية:</b> {r.thresholdValue}</p>}
+                        {r.onViolation && <p className="mt-1 text-xs text-[var(--v-text-secondary)]"><b>عند التجاوز:</b> {r.onViolation}</p>}
+                      </div>
+                      {canWrite && (
+                        <div className="flex shrink-0 gap-1">
+                          <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditingRule(r)}>تعديل</Button>
+                          <Button size="sm" variant="ghost" icon={<Trash2 size={14} />}
+                            onClick={() => { if (!confirm(`حذف "${r.title}"؟`)) return; runAction(() => deleteBusinessRuleAction(projectId, r.id), "تم الحذف"); }}>حذف</Button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+
+          {/* System Messages */}
+          <Card>
+            <SectionHeader
+              title={<span className="inline-flex items-center gap-1.5"><MessageSquareText size={16} /> رسائل النظام ({systemMessages.length})</span>}
+              action={canWrite ? <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreatingMsg(true)}>رسالة جديدة</Button> : null}
+            />
+            {systemMessages.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                <FilterChip active={msgTypeFilter === "all"} label="الكل" onClick={() => setMsgTypeFilter("all")} />
+                {SYSTEM_MESSAGE_TYPES.map((t) => (
+                  <FilterChip key={t} active={msgTypeFilter === t} label={SYSTEM_MESSAGE_TYPE_LABELS[t]} onClick={() => setMsgTypeFilter(t)} />
+                ))}
+              </div>
+            )}
+            {systemMessages.length === 0 ? (
+              <EmptyState title="لا توجد رسائل نظام موثّقة بعد" description="وثّق كل رسالة نجاح/خطأ يراها المستخدم لضمان دقة الـ PRD." />
+            ) : (
+              (() => {
+                const filtered = msgTypeFilter === "all" ? systemMessages : systemMessages.filter((m) => m.messageType === msgTypeFilter);
+                if (filtered.length === 0) return <p className="py-3 text-center text-xs text-[var(--v-text-muted)]">لا رسائل من هذا النوع.</p>;
+                return (
+                  <ul className="divide-y divide-[var(--v-border)]">
+                    {filtered.map((m) => {
+                      const linkedFlow = m.linkedFlowId ? flows.find((f) => f.id === m.linkedFlowId) : null;
+                      return (
+                        <li key={m.id} className="flex items-start justify-between gap-3 py-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-[var(--v-text)]">{m.eventName}</p>
+                              <Badge tone={MESSAGE_TYPE_TONE[m.messageType]}>{SYSTEM_MESSAGE_TYPE_LABELS[m.messageType]}</Badge>
+                              {linkedFlow && <span className="text-[11px] text-[var(--v-text-subtle)]">مرتبط بـ: {linkedFlow.name}</span>}
+                            </div>
+                            {m.messageText && <p className="mt-1 text-xs text-[var(--v-text-secondary)]">{m.messageText}</p>}
+                          </div>
+                          {canWrite && (
+                            <div className="flex shrink-0 gap-1">
+                              <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditingMsg(m)}>تعديل</Button>
+                              <Button size="sm" variant="ghost" icon={<Trash2 size={14} />}
+                                onClick={() => { if (!confirm(`حذف "${m.eventName}"؟`)) return; runAction(() => deleteSystemMessageAction(projectId, m.id), "تم الحذف"); }}>حذف</Button>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()
+            )}
+          </Card>
+        </div>
+      </div>
+
       {/* Modals */}
       <PersonaDialog
         key={editingPersona?.id ?? (creatingPersona ? "new-persona" : "closed-persona")}
@@ -366,6 +486,30 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
           if (editingReq) runAction(() => updateRequirementAction(projectId, editingReq.id, input), "تم التحديث");
           else runAction(() => createRequirementAction(projectId, input), "تم الإنشاء");
           setCreatingReq(false); setEditingReq(null);
+        }}
+      />
+      <RuleDialog
+        key={editingRule?.id ?? (creatingRule ? "new-rule" : "closed-rule")}
+        open={creatingRule || editingRule !== null}
+        onClose={() => { setCreatingRule(false); setEditingRule(null); }}
+        item={editingRule}
+        flows={flows}
+        onSave={(input) => {
+          if (editingRule) runAction(() => updateBusinessRuleAction(projectId, editingRule.id, input), "تم التحديث");
+          else runAction(() => createBusinessRuleAction(projectId, input), "تم الإنشاء");
+          setCreatingRule(false); setEditingRule(null);
+        }}
+      />
+      <MessageDialog
+        key={editingMsg?.id ?? (creatingMsg ? "new-msg" : "closed-msg")}
+        open={creatingMsg || editingMsg !== null}
+        onClose={() => { setCreatingMsg(false); setEditingMsg(null); }}
+        item={editingMsg}
+        flows={flows}
+        onSave={(input) => {
+          if (editingMsg) runAction(() => updateSystemMessageAction(projectId, editingMsg.id, input), "تم التحديث");
+          else runAction(() => createSystemMessageAction(projectId, input), "تم الإنشاء");
+          setCreatingMsg(false); setEditingMsg(null);
         }}
       />
       {/* Brain Import Preview Modal */}
@@ -419,7 +563,7 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
 // ---------------------------------------------------------------------------
 // Shared sub-components
 // ---------------------------------------------------------------------------
-function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
+function SectionHeader({ title, action }: { title: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mb-4 flex items-center justify-between gap-3 border-b border-[var(--v-border)] pb-3">
       <h3 className="text-base font-semibold text-[var(--v-text)]">{title}</h3>
@@ -470,6 +614,21 @@ function Field({ label, span = 1, children }: { label: string; span?: 1 | 2; chi
       <label className="mb-1 block text-xs text-[var(--v-text-secondary)]">{label}</label>
       {children}
     </div>
+  );
+}
+function FilterChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-[var(--v-radius-full)] border px-2.5 py-1 text-[11px] font-medium transition ${
+        active
+          ? "border-[var(--v-primary)] bg-[var(--v-primary-tint)] text-[var(--v-primary)]"
+          : "border-[var(--v-border)] text-[var(--v-text-muted)] hover:border-[var(--v-primary)] hover:text-[var(--v-text)]"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -537,7 +696,7 @@ function FlowDialog({
   personas: PersonaRow[];
   onSave: (input: {
     personaId: string | null; name: string; description: string; flowType: FlowType;
-    triggerEvent: string; successOutcome: string; steps: { order: number; action: string; expectedResult: string; notes: string }[];
+    triggerEvent: string; successOutcome: string; steps: FlowStep[];
     notes: string;
   }) => void;
 }) {
@@ -548,7 +707,8 @@ function FlowDialog({
   const [triggerEvent, setTrigger] = useState(item?.triggerEvent ?? "");
   const [successOutcome, setOutcome] = useState(item?.successOutcome ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
-  const [steps, setSteps] = useState(item?.steps ?? []);
+  const [steps, setSteps] = useState<FlowStep[]>(item?.steps ?? []);
+  const [openDetail, setOpenDetail] = useState<Set<number>>(new Set());
 
   function addStep() {
     setSteps((s) => [...s, { order: s.length + 1, action: "", expectedResult: "", notes: "" }]);
@@ -558,6 +718,57 @@ function FlowDialog({
   }
   function removeStep(idx: number) {
     setSteps((s) => s.filter((_, i) => i !== idx).map((step, i) => ({ ...step, order: i + 1 })));
+    setOpenDetail((prev) => {
+      const next = new Set<number>();
+      for (const i of prev) {
+        if (i === idx) continue;
+        next.add(i > idx ? i - 1 : i);
+      }
+      return next;
+    });
+  }
+  function toggleDetail(idx: number) {
+    setOpenDetail((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }
+  function updateStepDetail(idx: number, patch: Partial<Pick<FlowStep, "successMessage">>) {
+    setSteps((s) => s.map((step, i) => (i === idx ? { ...step, ...patch } : step)));
+  }
+  function addUiElement(idx: number) {
+    setSteps((s) => s.map((step, i) => (i === idx
+      ? { ...step, uiElements: [...(step.uiElements ?? []), { fieldName: "", fieldType: "", validationRule: "" }] }
+      : step)));
+  }
+  function updateUiElement(idx: number, elIdx: number, patch: Partial<FlowStepUIElement>) {
+    setSteps((s) => s.map((step, i) => {
+      if (i !== idx) return step;
+      return { ...step, uiElements: (step.uiElements ?? []).map((el, j) => (j === elIdx ? { ...el, ...patch } : el)) };
+    }));
+  }
+  function removeUiElement(idx: number, elIdx: number) {
+    setSteps((s) => s.map((step, i) => (i === idx
+      ? { ...step, uiElements: (step.uiElements ?? []).filter((_, j) => j !== elIdx) }
+      : step)));
+  }
+  function addErrorMessage(idx: number) {
+    setSteps((s) => s.map((step, i) => (i === idx
+      ? { ...step, errorMessages: [...(step.errorMessages ?? []), ""] }
+      : step)));
+  }
+  function updateErrorMessage(idx: number, msgIdx: number, value: string) {
+    setSteps((s) => s.map((step, i) => {
+      if (i !== idx) return step;
+      return { ...step, errorMessages: (step.errorMessages ?? []).map((m, j) => (j === msgIdx ? value : m)) };
+    }));
+  }
+  function removeErrorMessage(idx: number, msgIdx: number) {
+    setSteps((s) => s.map((step, i) => (i === idx
+      ? { ...step, errorMessages: (step.errorMessages ?? []).filter((_, j) => j !== msgIdx) }
+      : step)));
   }
 
   return (
@@ -593,18 +804,90 @@ function FlowDialog({
             </p>
           )}
           <ul className="space-y-2">
-            {steps.map((step, idx) => (
-              <li key={idx} className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-2">
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="font-mono text-xs text-[var(--v-text-subtle)]">#{step.order}</span>
-                  <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => removeStep(idx)}>حذف</Button>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Input value={step.action} onChange={(e) => updateStep(idx, { action: e.target.value })} placeholder="الفعل" />
-                  <Input value={step.expectedResult} onChange={(e) => updateStep(idx, { expectedResult: e.target.value })} placeholder="النتيجة المتوقعة" />
-                </div>
-              </li>
-            ))}
+            {steps.map((step, idx) => {
+              const detailOpen = openDetail.has(idx);
+              const badgeLabel = stepDetailBadgeLabel(step);
+              return (
+                <li key={idx} className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-2">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="font-mono text-xs text-[var(--v-text-subtle)]">#{step.order}</span>
+                    {badgeLabel && <Badge tone="primary">{badgeLabel}</Badge>}
+                    <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => removeStep(idx)}>حذف</Button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Input value={step.action} onChange={(e) => updateStep(idx, { action: e.target.value })} placeholder="الفعل" />
+                    <Input value={step.expectedResult} onChange={(e) => updateStep(idx, { expectedResult: e.target.value })} placeholder="النتيجة المتوقعة" />
+                  </div>
+
+                  {/* تفاصيل تنفيذية (اختياري) — مطوية افتراضيًا عشان السيناريوهات
+                      البسيطة متتأثرش بصريًا. */}
+                  <button
+                    type="button"
+                    onClick={() => toggleDetail(idx)}
+                    className="mt-2 flex items-center gap-1 text-[11px] font-medium text-[var(--v-primary)] hover:underline"
+                  >
+                    {detailOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    تفاصيل تنفيذية (اختياري)
+                  </button>
+
+                  {detailOpen && (
+                    <div className="mt-2 space-y-3 rounded-[var(--v-radius-md)] border border-dashed border-[var(--v-border)] bg-[var(--v-bg)] p-2">
+                      {/* عناصر الواجهة */}
+                      <div>
+                        <div className="mb-1 flex items-center justify-between">
+                          <p className="text-[11px] font-semibold text-[var(--v-text)]">عناصر الواجهة</p>
+                          <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => addUiElement(idx)}>عنصر</Button>
+                        </div>
+                        {(step.uiElements ?? []).length === 0 ? (
+                          <p className="text-[11px] text-[var(--v-text-muted)]">لا عناصر واجهة موثّقة لهذه الخطوة.</p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {(step.uiElements ?? []).map((el, elIdx) => (
+                              <li key={elIdx} className="grid grid-cols-1 gap-1.5 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
+                                <Input value={el.fieldName} onChange={(e) => updateUiElement(idx, elIdx, { fieldName: e.target.value })} placeholder="اسم الحقل" />
+                                <Input value={el.fieldType} onChange={(e) => updateUiElement(idx, elIdx, { fieldType: e.target.value })} placeholder="النوع" />
+                                <Input value={el.validationRule} onChange={(e) => updateUiElement(idx, elIdx, { validationRule: e.target.value })} placeholder="قاعدة التحقق" />
+                                <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => removeUiElement(idx, elIdx)}>حذف</Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* رسالة النجاح */}
+                      <div>
+                        <label className="mb-1 block text-[11px] font-semibold text-[var(--v-text)]">رسالة النجاح</label>
+                        <Input
+                          value={step.successMessage ?? ""}
+                          onChange={(e) => updateStepDetail(idx, { successMessage: e.target.value })}
+                          placeholder="تم الحفظ بنجاح"
+                        />
+                      </div>
+
+                      {/* رسائل الخطأ */}
+                      <div>
+                        <div className="mb-1 flex items-center justify-between">
+                          <p className="text-[11px] font-semibold text-[var(--v-text)]">رسائل الخطأ</p>
+                          <Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => addErrorMessage(idx)}>رسالة خطأ</Button>
+                        </div>
+                        {(step.errorMessages ?? []).length === 0 ? (
+                          <p className="text-[11px] text-[var(--v-text-muted)]">لا رسائل خطأ موثّقة لهذه الخطوة.</p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {(step.errorMessages ?? []).map((msg, msgIdx) => (
+                              <li key={msgIdx} className="flex items-center gap-1.5">
+                                <Input value={msg} onChange={(e) => updateErrorMessage(idx, msgIdx, e.target.value)} placeholder="نص رسالة الخطأ" />
+                                <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => removeErrorMessage(idx, msgIdx)}>حذف</Button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
 
@@ -698,6 +981,112 @@ function RequirementDialog({
             linkedPersonaId: linkedPersonaId || null,
             linkedFlowId: linkedFlowId || null,
             tags,
+          })}>حفظ</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Business Rule Dialog
+// ---------------------------------------------------------------------------
+function RuleDialog({
+  open, onClose, item, flows, onSave,
+}: {
+  open: boolean; onClose: () => void; item: BusinessRuleRow | null;
+  flows: UserFlowRow[];
+  onSave: (input: {
+    title: string; triggerCondition: string; thresholdValue: string;
+    onViolation: string; enforcementPoint: BusinessRuleEnforcementPoint;
+    linkedFlowId: string | null; notes: string;
+  }) => void;
+}) {
+  const [title, setTitle] = useState(item?.title ?? "");
+  const [triggerCondition, setTriggerCondition] = useState(item?.triggerCondition ?? "");
+  const [thresholdValue, setThresholdValue] = useState(item?.thresholdValue ?? "");
+  const [onViolation, setOnViolation] = useState(item?.onViolation ?? "");
+  const [enforcementPoint, setEnforcementPoint] = useState<BusinessRuleEnforcementPoint>(item?.enforcementPoint ?? "server");
+  const [linkedFlowId, setLinkedFlow] = useState(item?.linkedFlowId ?? "");
+  const [notes, setNotes] = useState(item?.notes ?? "");
+
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-lg">
+      <div className="space-y-4 p-6">
+        <h2 className="text-lg font-semibold text-[var(--v-text)]">{item ? "تعديل قاعدة عمل" : "قاعدة عمل جديدة"}</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="اسم القاعدة *" span={2}><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="حد أقصى لعدد محاولات الدفع" /></Field>
+          <Field label="الشرط المُفعِّل"><Textarea value={triggerCondition} onChange={(e) => setTriggerCondition(e.target.value)} rows={2} placeholder="عند فشل الدفع 3 مرات متتالية" /></Field>
+          <Field label="القيمة الحدّية"><Input value={thresholdValue} onChange={(e) => setThresholdValue(e.target.value)} placeholder="3 مرات / لا يوجد حد" /></Field>
+          <Field label="ماذا يحدث عند التجاوز" span={2}><Textarea value={onViolation} onChange={(e) => setOnViolation(e.target.value)} rows={2} placeholder="يُقفَل الحساب مؤقتًا لمدة ساعة" /></Field>
+          <Field label="من يطبّقها">
+            <Select value={enforcementPoint} onChange={(e) => setEnforcementPoint(e.target.value as BusinessRuleEnforcementPoint)}>
+              {BUSINESS_RULE_ENFORCEMENT_POINTS.map((p) => <option key={p} value={p}>{BUSINESS_RULE_ENFORCEMENT_POINT_LABELS[p]}</option>)}
+            </Select>
+          </Field>
+          <Field label="ربط اختياري بتدفّق">
+            <Select value={linkedFlowId} onChange={(e) => setLinkedFlow(e.target.value)}>
+              <option value="">— بلا —</option>
+              {flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="ملاحظات" span={2}><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></Field>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button variant="primary" onClick={() => onSave({
+            title, triggerCondition, thresholdValue, onViolation, enforcementPoint,
+            linkedFlowId: linkedFlowId || null, notes,
+          })}>حفظ</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// System Message Dialog
+// ---------------------------------------------------------------------------
+function MessageDialog({
+  open, onClose, item, flows, onSave,
+}: {
+  open: boolean; onClose: () => void; item: SystemMessageRow | null;
+  flows: UserFlowRow[];
+  onSave: (input: {
+    eventName: string; messageType: SystemMessageType; messageText: string;
+    linkedFlowId: string | null; notes: string;
+  }) => void;
+}) {
+  const [eventName, setEventName] = useState(item?.eventName ?? "");
+  const [messageType, setMessageType] = useState<SystemMessageType>(item?.messageType ?? "info");
+  const [messageText, setMessageText] = useState(item?.messageText ?? "");
+  const [linkedFlowId, setLinkedFlow] = useState(item?.linkedFlowId ?? "");
+  const [notes, setNotes] = useState(item?.notes ?? "");
+
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-lg">
+      <div className="space-y-4 p-6">
+        <h2 className="text-lg font-semibold text-[var(--v-text)]">{item ? "تعديل رسالة نظام" : "رسالة نظام جديدة"}</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="اسم الحدث *" span={2}><Input value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="تسجيل دخول ناجح" /></Field>
+          <Field label="نوع الرسالة">
+            <Select value={messageType} onChange={(e) => setMessageType(e.target.value as SystemMessageType)}>
+              {SYSTEM_MESSAGE_TYPES.map((t) => <option key={t} value={t}>{SYSTEM_MESSAGE_TYPE_LABELS[t]}</option>)}
+            </Select>
+          </Field>
+          <Field label="ربط اختياري بتدفّق">
+            <Select value={linkedFlowId} onChange={(e) => setLinkedFlow(e.target.value)}>
+              <option value="">— بلا —</option>
+              {flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="نص الرسالة كما يظهر للمستخدم" span={2}><Textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} rows={2} placeholder="تم تسجيل الدخول بنجاح، مرحبًا بعودتك." /></Field>
+          <Field label="ملاحظات" span={2}><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></Field>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button variant="primary" onClick={() => onSave({
+            eventName, messageType, messageText, linkedFlowId: linkedFlowId || null, notes,
           })}>حفظ</Button>
         </div>
       </div>

@@ -43,7 +43,9 @@ import {
   type EvalCategory,
   type EvalSeverity,
 } from "@/lib/evaluation/types";
-import type { PRD } from "@/lib/types/database";
+import type { PRD, PRDBusinessRuleDetail, PRDSystemMessageDetail, PRDFlowSpecification } from "@/lib/types/database";
+import { SYSTEM_MESSAGE_TYPE_LABELS } from "@/lib/product-definition/business-rules-types";
+import { groupFlowSpecificationsByFlow } from "@/lib/product-definition/flow-step-detail";
 
 /**
  * Self-loading server component that renders the full handoff-package body.
@@ -339,6 +341,9 @@ export default async function HandoffPackageBody({ projectId, packageId, include
                 <PrdList title="متطلبات غير وظيفية (Non-Functional)" items={prd.non_functional_requirements} />
                 <PrdList title="مؤشّرات النجاح (Success Metrics)" items={prd.success_metrics} />
                 <PrdList title="المخاطر والافتراضات (Risks & Assumptions)" items={prd.risks_assumptions} />
+                <PrdBusinessRules title="قواعد العمل والحالات الخاصة (Business Rules)" items={prd.business_rules_detail} />
+                <PrdSystemMessages title="رسائل النظام الموحدة (System Messages)" items={prd.system_messages_detail} />
+                <PrdFlowSpecifications title="مواصفات التدفقات التفصيلية (Flow Specifications)" items={prd.flow_specifications} />
               </div>
             )}
           </ItemSection>
@@ -832,6 +837,101 @@ function PrdList({ title, items }: { title: string; items?: string[] | null }) {
       <ul className="mt-0.5 list-disc space-y-0.5 pr-5 text-[12px] text-slate-700">
         {items.map((it, i) => <li key={i}>{it}</li>)}
       </ul>
+    </div>
+  );
+}
+/**
+ * الأقسام المُهيكلة الثلاثة الجديدة (0116) — لقطات zero-invention من
+ * الجداول الحية وقت توليد PRD. مثل PrdList/PrdSection، بترجع null (بدون
+ * أي عنصر) لو المصفوفة فاضية — نفس نمط تجنّب الفراغات في هذه الصفحة.
+ */
+function PrdBusinessRules({ title, items }: { title: string; items?: PRDBusinessRuleDetail[] | null }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="break-inside-avoid">
+      <h4 className="text-[12px] font-semibold text-[#0A1735]">{title}</h4>
+      <table className="mt-1 w-full border-collapse text-[11px]">
+        <thead>
+          <tr className="border-b border-slate-300 text-right text-slate-500">
+            <th className="p-1 font-medium">القاعدة</th>
+            <th className="p-1 font-medium">الشرط</th>
+            <th className="p-1 font-medium">القيمة الحدّية</th>
+            <th className="p-1 font-medium">عند التجاوز</th>
+            <th className="p-1 font-medium">مين بيطبّقها</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((b, i) => (
+            <tr key={i} className="border-b border-slate-200 align-top text-slate-700 last:border-0">
+              <td className="p-1 font-semibold">{b.title || "—"}</td>
+              <td className="p-1">{b.trigger_condition || "—"}</td>
+              <td className="p-1">{b.threshold_value || "—"}</td>
+              <td className="p-1">{b.on_violation || "—"}</td>
+              <td className="p-1">{b.enforcement_point}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function PrdSystemMessages({ title, items }: { title: string; items?: PRDSystemMessageDetail[] | null }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="break-inside-avoid">
+      <h4 className="text-[12px] font-semibold text-[#0A1735]">{title}</h4>
+      <table className="mt-1 w-full border-collapse text-[11px]">
+        <thead>
+          <tr className="border-b border-slate-300 text-right text-slate-500">
+            <th className="p-1 font-medium">الحدث</th>
+            <th className="p-1 font-medium">النوع</th>
+            <th className="p-1 font-medium">النص</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((m, i) => (
+            <tr key={i} className="border-b border-slate-200 align-top text-slate-700 last:border-0">
+              <td className="p-1 font-semibold">{m.event_name || "—"}</td>
+              <td className="p-1">{SYSTEM_MESSAGE_TYPE_LABELS[m.message_type]}</td>
+              <td className="p-1">{m.message_text || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function PrdFlowSpecifications({ title, items }: { title: string; items?: PRDFlowSpecification[] | null }) {
+  if (!items || items.length === 0) return null;
+  const groups = groupFlowSpecificationsByFlow(items);
+  return (
+    <div className="break-inside-avoid">
+      <h4 className="text-[12px] font-semibold text-[#0A1735]">{title}</h4>
+      <div className="mt-1 space-y-2">
+        {groups.map((g, gi) => (
+          <div key={gi} className="rounded border border-slate-200 p-2">
+            <p className="text-[12px] font-semibold text-slate-800">{g.flowName}</p>
+            <ul className="mt-1 space-y-1.5">
+              {g.items.map((f, i) => (
+                <li key={i} className="text-[11px] text-slate-700">
+                  <p><b>الخطوة:</b> {f.step_action || "—"}</p>
+                  {f.ui_elements.length > 0 && (
+                    <ul className="mt-0.5 list-disc pr-5">
+                      {f.ui_elements.map((el, ei) => (
+                        <li key={ei}>{el.field_name} — {el.field_type} — {el.validation_rule}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {f.success_message && <p className="mt-0.5">رسالة نجاح: {f.success_message}</p>}
+                  {f.error_messages.map((err, ei) => (
+                    <p key={ei} className="mt-0.5">رسالة خطأ: {err}</p>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

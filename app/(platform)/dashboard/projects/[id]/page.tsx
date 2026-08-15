@@ -147,6 +147,8 @@ import {
   listFlows,
   listRequirements,
 } from "@/lib/product-definition/service";
+import { listBusinessRules } from "@/lib/product-definition/business-rules-service";
+import { listSystemMessages } from "@/lib/product-definition/system-messages-service";
 import {
   listStories,
   listAcceptanceCriteria,
@@ -593,6 +595,7 @@ export default async function ProjectDetailPage({
     commercialLifecycle, commercialContracts, commercialPayments,
     marketResearchItems, problemValidationItems,
     definitionPersonas, definitionFlows, definitionRequirements,
+    definitionBusinessRules, definitionSystemMessages,
     storiesRows, acceptanceCriteriaRows,
     evidenceLinkRows,
     evalScenarios, evalRunsRows,
@@ -609,6 +612,8 @@ export default async function ProjectDetailPage({
         listPersonas(project.id),
         listFlows(project.id),
         listRequirements(project.id),
+        listBusinessRules(project.id),
+        listSystemMessages(project.id),
         listStories(project.id),
         listAcceptanceCriteria(project.id),
         listEvidenceLinks(project.id),
@@ -624,7 +629,7 @@ export default async function ProjectDetailPage({
         listDecisionItems(project.id),
         listStageAssignments(project.id),
       ])
-    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
+    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
   const latestHandoffPackage = handoffPackagesRows.length > 0 ? handoffPackagesRows[0] : null;
   const [handoffItemsRows, handoffQuestionsRows, handoffDeliveriesRows] = latestHandoffPackage
     ? await Promise.all([
@@ -1630,6 +1635,8 @@ export default async function ProjectDetailPage({
             personas={definitionPersonas}
             flows={definitionFlows}
             requirements={definitionRequirements}
+            businessRules={definitionBusinessRules}
+            systemMessages={definitionSystemMessages}
             canWrite={canWriteCommercial}
           />
         ),
