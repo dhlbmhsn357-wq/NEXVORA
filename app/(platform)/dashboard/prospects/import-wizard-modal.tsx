@@ -11,7 +11,7 @@ import {
   createImportBatchAction,
   createProspectsFromImportAction,
 } from "./prospect-actions";
-import type { ProspectColumnMapping } from "@/lib/prospecting/import-service";
+import type { ProspectColumnMapping, SpreadsheetSheetInfo } from "@/lib/prospecting/import-service";
 import type { ImportRowInput } from "@/lib/prospecting/service";
 
 const MAPPABLE_FIELDS: { value: keyof ProspectColumnMapping; label: string }[] = [
@@ -62,10 +62,13 @@ export default function ImportWizardModal({
   const [step, setStep] = useState<Step>(1);
   const [busy, setBusy] = useState(false);
 
+  const [file, setFile] = useState<File | null>(null);
   const [filename, setFilename] = useState("");
   const [fileType, setFileType] = useState<"xlsx" | "csv">("xlsx");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [sheets, setSheets] = useState<SpreadsheetSheetInfo[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState("");
 
   const [headerToField, setHeaderToField] = useState<Record<string, string>>({});
 
@@ -81,27 +84,46 @@ export default function ImportWizardModal({
     return mapping as ProspectColumnMapping;
   }, [headerToField]);
 
-  async function handleFileChange(file: File) {
+  /**
+   * يقرأ الملف (أو يعيد قراءته بشيت مختلف لو `sheetName` اتحدد). لو الملف
+   * فيه أكتر من شيت ومفيش شيت متحدد بعد، بيقف في نفس الخطوة (1) ويعرض
+   * اختيار الشيت بدل ما يفترض الشيت الأول هو الصح — تفاديًا لقراءة شيت
+   * تقرير/ملخص نصّي غلط بدل جدول البيانات الفعلي.
+   */
+  async function parseFile(f: File, sheetName?: string) {
     setBusy(true);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", f);
+    if (sheetName) formData.append("sheetName", sheetName);
     const result = await parseUploadedFileAction(formData);
     setBusy(false);
     if (!result.ok) return toast.error(result.message ?? "فشل قراءة الملف.");
-    setFilename(file.name);
+
+    setFilename(f.name);
     setFileType(result.data.fileType);
     setHeaders(result.data.headers);
     setRows(result.data.rows);
+    setSheets(result.data.sheets);
+    setSelectedSheet(result.data.sheetName);
 
     // تخمين أولي بسيط بمطابقة أسماء الأعمدة لأسماء الحقول.
     const guessed: Record<string, string> = {};
     for (const h of result.data.headers) {
       const norm = h.trim().toLowerCase().replace(/\s+/g, "_");
-      const match = MAPPABLE_FIELDS.find((f) => f.value === norm);
+      const match = MAPPABLE_FIELDS.find((f2) => f2.value === norm);
       if (match) guessed[h] = match.value;
     }
     setHeaderToField(guessed);
-    setStep(2);
+  }
+
+  async function handleFileChange(f: File) {
+    setFile(f);
+    await parseFile(f);
+  }
+
+  async function handleSheetChange(sheetName: string) {
+    if (!file || sheetName === selectedSheet) return;
+    await parseFile(file, sheetName);
   }
 
   async function handleGoToStep3() {
@@ -172,13 +194,38 @@ export default function ImportWizardModal({
               accept=".xlsx,.csv"
               disabled={busy}
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileChange(file);
+                const f = e.target.files?.[0];
+                if (f) handleFileChange(f);
               }}
               className="block w-full text-sm text-[var(--v-text-secondary)] file:mr-3 file:rounded-[var(--v-radius-md)] file:border-0 file:bg-[var(--v-primary-tint)] file:px-3 file:py-2 file:text-[var(--v-primary)]"
             />
-            <div className="flex justify-end">
+
+            {sheets.length > 1 && (
+              <div className="space-y-1.5 rounded-[var(--v-radius-md)] border border-[var(--v-amber)]/30 bg-[var(--v-amber)]/5 p-3">
+                <p className="text-xs font-medium text-[var(--v-text)]">
+                  الملف فيه {sheets.length} شيتات — اخترنا لك تلقائيًا الشيت اللي فيه أكبر عدد صفوف، لكن راجع الاختيار قبل المتابعة:
+                </p>
+                <Select value={selectedSheet} onChange={(e) => handleSheetChange(e.target.value)} disabled={busy}>
+                  {sheets.map((s) => (
+                    <option key={s.name} value={s.name}>
+                      {s.name} — {s.rowCount} صف
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
+
+            {headers.length > 0 && (
+              <p className="text-xs text-[var(--v-text-muted)]">
+                تمّت قراءة {rows.length} صف من شيت &quot;{selectedSheet}&quot; بـ {headers.length} عمود. اضغط «متابعة» للتحقق من ربط الأعمدة.
+              </p>
+            )}
+
+            <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+              <Button variant="primary" disabled={headers.length === 0} loading={busy} onClick={() => setStep(2)}>
+                متابعة
+              </Button>
             </div>
           </div>
         )}

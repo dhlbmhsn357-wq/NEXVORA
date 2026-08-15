@@ -38,21 +38,68 @@ export function validateImportFile(filename: string, sizeBytes: number): FileVal
 export interface ParsedSpreadsheet {
   headers: string[];
   rows: Record<string, unknown>[];
+  /** اسم الشيت اللي فعليًا اتقرا — يفيد لو الاختيار كان تلقائيًا. */
+  sheetName: string;
+}
+
+export interface SpreadsheetSheetInfo {
+  name: string;
+  /** عدد صفوف البيانات (بدون صف العناوين) — يفيد لاختيار الشيت الصح تلقائيًا/يدويًا. */
+  rowCount: number;
+  /** عدد الأعمدة المكتشفة في صف العناوين. */
+  columnCount: number;
+}
+
+/**
+ * يسرد كل الشيتات (Sheets) في ملف Excel مع عدد صفوفها — عشان لو الملف فيه
+ * أكتر من شيت (مثلًا شيت "تقرير/ملخص" نصّي + شيت "بيانات" فعلي) الواجهة
+ * تقدر تعرض اختيار للمستخدم بدل ما تفترض الشيت الأول هو الصح دايمًا.
+ * ملفات .csv دايمًا شيت واحد.
+ */
+export function listSpreadsheetSheets(buffer: ArrayBuffer): SpreadsheetSheetInfo[] {
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  return workbook.SheetNames.map((name) => {
+    const sheet = workbook.Sheets[name];
+    const asRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, range: 0, blankrows: false });
+    const columnCount = (asRows[0] as unknown[] | undefined)?.length ?? 0;
+    return { name, rowCount: Math.max(0, asRows.length - 1), columnCount };
+  });
+}
+
+/**
+ * أفضل شيت افتراضي عند عدم تحديد المستخدم لواحد بعينه: الشيت اللي فيه أكبر
+ * عدد صفوف بيانات (غالبًا هو جدول البيانات الفعلي، مش شيت تقرير/ملخص نصّي
+ * قصير). لو كل الشيتات متساوية، ياخد الأول.
+ */
+function pickDefaultSheet(sheets: SpreadsheetSheetInfo[]): string | undefined {
+  if (sheets.length === 0) return undefined;
+  return sheets.reduce((best, s) => (s.rowCount > best.rowCount ? s : best), sheets[0]).name;
 }
 
 /**
  * يحلّل buffer ملف Excel/CSV إلى headers + rows. يرجّع كل الصفوف — الـ UI
  * (Part 2) هي المسؤولة عن عرض أول 10 فقط كـ Preview.
+ *
+ * لو الملف فيه أكتر من شيت ومفيش `sheetName` محدّد، بيختار تلقائيًا الشيت
+ * اللي فيه أكبر عدد صفوف (بدل الشيت الأول دايمًا) — لتفادي قراءة شيت
+ * تقرير/ملخص نصّي بدل جدول البيانات الفعلي.
  */
-export function parseSpreadsheetFile(buffer: ArrayBuffer, fileType: ProspectImportFileType): ParsedSpreadsheet {
+export function parseSpreadsheetFile(
+  buffer: ArrayBuffer,
+  fileType: ProspectImportFileType,
+  sheetName?: string
+): ParsedSpreadsheet {
   // SheetJS يتعامل مع .xlsx و.csv بنفس الـ API عبر XLSX.read — الباراميتر
   // محتفظ به في التوقيع لتوضيح النية للمستدعي ولإمكانية تخصيص لاحق لكل نوع.
   void fileType;
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) return { headers: [], rows: [] };
+  const sheets = listSpreadsheetSheets(buffer);
+  const resolvedSheetName = sheetName && workbook.SheetNames.includes(sheetName)
+    ? sheetName
+    : pickDefaultSheet(sheets);
+  if (!resolvedSheetName) return { headers: [], rows: [], sheetName: "" };
 
-  const sheet = workbook.Sheets[firstSheetName];
+  const sheet = workbook.Sheets[resolvedSheetName];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: false });
   const headerRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, range: 0, blankrows: false });
   const headers =
@@ -60,7 +107,7 @@ export function parseSpreadsheetFile(buffer: ArrayBuffer, fileType: ProspectImpo
       ?.map((h) => String(h ?? "").trim())
       .filter((h) => h !== "") ?? [];
 
-  return { headers, rows };
+  return { headers, rows, sheetName: resolvedSheetName };
 }
 
 /**

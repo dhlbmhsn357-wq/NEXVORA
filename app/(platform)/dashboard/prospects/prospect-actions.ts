@@ -42,9 +42,11 @@ import { checkExistingLeadMatch, executeConversion, type ConversionOutcome } fro
 import {
   validateImportFile,
   parseSpreadsheetFile,
+  listSpreadsheetSheets,
   previewImportRows,
   type ProspectColumnMapping,
   type ImportPreviewResult,
+  type SpreadsheetSheetInfo,
 } from "@/lib/prospecting/import-service";
 import type { ProspectRow, ProspectWithActivities } from "@/lib/prospecting/types";
 
@@ -125,19 +127,36 @@ export async function createProspectsFromImportAction(
  */
 export async function parseUploadedFileAction(
   formData: FormData
-): Promise<Result<{ headers: string[]; rows: Record<string, unknown>[]; fileType: "xlsx" | "csv" }>> {
+): Promise<
+  Result<{
+    headers: string[];
+    rows: Record<string, unknown>[];
+    fileType: "xlsx" | "csv";
+    sheetName: string;
+    /** كل الشيتات المتاحة في الملف (شيت واحد دائمًا لملفات csv). لو أكتر من شيت، الواجهة تعرض اختيار. */
+    sheets: SpreadsheetSheetInfo[];
+  }>
+> {
   const auth = await requireRole([...MANAGE_ROLES]);
   if (!auth.ok) return fail(auth.message ?? "غير مصرّح.");
 
   const file = formData.get("file");
   if (!(file instanceof File)) return fail("لم يتم اختيار ملف.");
 
+  // لو المستخدم اختار شيت بعينه (بعد ما شاف قائمة الشيتات)، بييجي هنا.
+  const requestedSheet = formData.get("sheetName");
+
   const validation = validateImportFile(file.name, file.size);
   if (!validation.ok || !validation.fileType) return fail(validation.message ?? "ملف غير صالح.");
 
   const buffer = await file.arrayBuffer();
-  const parsed = parseSpreadsheetFile(buffer, validation.fileType);
-  return { ok: true, data: { ...parsed, fileType: validation.fileType } };
+  const sheets = listSpreadsheetSheets(buffer);
+  const parsed = parseSpreadsheetFile(
+    buffer,
+    validation.fileType,
+    typeof requestedSheet === "string" && requestedSheet ? requestedSheet : undefined
+  );
+  return { ok: true, data: { ...parsed, fileType: validation.fileType, sheets } };
 }
 
 /** غلاف Server Action حول previewImportRows (pure function) — لاستدعائها من مكوّن "use client". */
