@@ -34,7 +34,7 @@ export interface RetrievalRequest {
   domainFilter?: SourceDomain[];
   /** عدد المرشّحين الخام من RPC قبل ترتيب/قصّ الحقيقة الحالية. افتراضي 18. */
   matchCount?: number;
-  /** أدنى تشابه مقبول (cosine). افتراضي 0.7 — نفس عتبة match_knowledge_memory الشائعة في المشروع، تحفظ توازن استدعاء/دقة معقول لأسئلة قصيرة بالعربي والإنجليزي. */
+  /** أدنى تشابه مقبول (cosine). افتراضي 0.5 — راجع DEFAULT_MATCH_THRESHOLD تحت. */
   matchThreshold?: number;
 }
 
@@ -50,7 +50,17 @@ const MAX_FINAL_ENTRIES = 8;
 /** حجم افتراضي للمرشّحين الخام من RPC — أكبر من MAX_FINAL_ENTRIES بهامش كافٍ عشان ترتيب الحقيقة الحالية يقدر يفضّل طبقة أعلى حتى لو تشابهها الخام أقل قليلًا. */
 const DEFAULT_MATCH_COUNT = 18;
 
-const DEFAULT_MATCH_THRESHOLD = 0.7;
+/**
+ * كان 0.7 (نفس عتبة match_knowledge_memory القديمة، مبنية على
+ * text-embedding-004). بعد التحويل لـ gemini-embedding-001 مع
+ * outputDimensionality=768 (0121_fix_deprecated_embedding_model)، توزيع
+ * درجات التشابه اختلف — أسئلة بديهية عن بيانات موجودة فعليًا كانت بترجع
+ * "لا توجد معلومات كافية" رغم وجود فهرسة صحيحة، لأن التشابه الخام كان
+ * بيقع تحت 0.7 مع الموديل الجديد. 0.5 أكثر تسامحًا؛ الدقة النهائية
+ * محفوظة برضه عن طريق ترتيب "الحقيقة الحالية" + قصّ MAX_FINAL_ENTRIES،
+ * مش الاعتماد على عتبة تشابه خام واحدة كبوابة وحيدة.
+ */
+const DEFAULT_MATCH_THRESHOLD = 0.5;
 
 /**
  * أقصى عدد حروف لمحتوى الصف الواحد وهو داخل سياق Phase C. قرار صريح:
