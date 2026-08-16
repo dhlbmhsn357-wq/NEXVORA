@@ -222,8 +222,12 @@ export class GeminiProvider implements AIProvider {
   }
 
   /**
-   * توليد Embedding حقيقي (768 بعد) عبر text-embedding-004 — نفس منطق
-   * تدوير المفاتيح في execute() بس بدون Retry/Timeout (ده شغل AIService).
+   * توليد Embedding حقيقي (768 بعد) — كان عبر text-embedding-004 (اتسحب من
+   * جوجل: "models/text-embedding-004 is not found for API version v1beta").
+   * الموديل الحالي gemini-embedding-001 بيرجّع 3072 بعد افتراضيًا، فلازم
+   * outputDimensionality=768 صراحة عشان يفضل متوافق مع vector(768) في
+   * knowledge_memory/project_embeddings من غير migration لتغيير أبعاد العمود.
+   * نفس منطق تدوير المفاتيح في execute() بس بدون Retry/Timeout (ده شغل AIService).
    */
   async embed(text: string, model: string): Promise<AIEmbeddingResponse> {
     const { ordered: keys } = await this.resolveKeys();
@@ -239,7 +243,9 @@ export class GeminiProvider implements AIProvider {
         res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: { parts: [{ text }] } }),
+          // outputDimensionality: gemini-embedding-001 بيرجّع 3072 بعد
+          // افتراضيًا — بنطلب 768 صراحة عشان يتوافق مع vector(768) الموجود.
+          body: JSON.stringify({ content: { parts: [{ text }] }, outputDimensionality: 768 }),
         });
       } catch (err) {
         return {

@@ -92,15 +92,11 @@ export async function askProjectAssistant(
   });
 
   if (!retrieval.ok) {
-    // ملاحظة تشخيصية مؤقتة: بنضيف نص الخطأ الفعلي بين قوسين عشان تشخيص
-    // أول ظهور لعطل الـ embedding بدقة بدون الحاجة لسجلات السيرفر. لو
-    // اتأكد السبب واستقر، نرجّع الرسالة لصيغتها العامة النظيفة.
-    const detail = truncateForLog(retrieval.error.message);
     const message =
       retrieval.error.code === "EMBEDDING_FAILED"
-        ? `تعذّر فهم السؤال حاليًا (فشل توليد embedding — ${detail}) — حاول مرة أخرى.`
-        : `تعذّر الوصول لمعرفة المشروع حاليًا (${detail}) — حاول مرة أخرى.`;
-    console.error(`[ProjectAssistant] retrieval failed for project ${input.projectId}: ${retrieval.error.code} — ${detail}`);
+        ? "تعذّر فهم السؤال حاليًا (فشل توليد embedding) — حاول مرة أخرى."
+        : "تعذّر الوصول لمعرفة المشروع حاليًا — حاول مرة أخرى.";
+    console.error(`[ProjectAssistant] retrieval failed for project ${input.projectId}: ${retrieval.error.code} — ${truncateForLog(retrieval.error.message)}`);
     return { ok: false, message };
   }
 

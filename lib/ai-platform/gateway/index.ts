@@ -36,7 +36,7 @@ import type { GatewayOutcome, GatewayRequest } from "./types";
 registerProvider({
   name: "gemini" as AIProviderName,
   capabilities: GEMINI_CAPABILITIES,
-  models: ["gemini-3.5-flash", "gemini-3.5-pro", "text-embedding-004"],
+  models: ["gemini-3.5-flash", "gemini-3.5-pro", "gemini-embedding-001"],
 });
 
 type DB = SupabaseClient;

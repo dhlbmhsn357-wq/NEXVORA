@@ -550,12 +550,13 @@ export class AIService {
 
     // حارس أمان: الـ Embeddings محتاجة موديل تضمين بأبعاد بعينها. لو الإعداد
     // اتظبط بالغلط على مزوّد لا يدعم embeddings (زي OpenAI في نظامنا، أو
-    // موديل محادثة زي gpt-5-mini)، نرجع تلقائيًّا لـ Gemini/text-embedding-004
+    // موديل محادثة زي gpt-5-mini)، نرجع تلقائيًّا لـ Gemini/gemini-embedding-001
     // بدل ما يفشل البحث الدلالي والذكاء المؤسسي بصمت. تبديل المزوّد لبقية
     // المهام (توليد النصوص) يفضل شغّال عادي — ده خاص بمهمة embedding بس.
+    // (text-embedding-004 اتسحب من جوجل — v1beta بترجع 404 عليه.)
     if (!provider.embed) {
       providerName = AIProviderName.GEMINI;
-      model = "text-embedding-004";
+      model = "gemini-embedding-001";
       provider = getProvider(providerName);
     }
     if (!provider.embed) {
