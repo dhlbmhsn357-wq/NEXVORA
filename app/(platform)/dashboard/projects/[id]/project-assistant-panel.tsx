@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Sparkles, Send, Copy, MessageSquarePlus, Plus } from "lucide-react";
+import { Sparkles, Send, Copy, MessageSquarePlus, Plus, RefreshCw } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Badge, { type BadgeTone } from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -14,6 +14,7 @@ import {
   getConversationAction,
   convertToOpenQuestionAction,
   getProjectKnowledgeSummaryAction,
+  rebuildProjectKnowledgeAction,
   type KnowledgeSummaryItem,
 } from "./project-assistant-actions";
 import { getSuggestedQuestions, type ProjectAssistantViewpoint } from "@/lib/project-assistant/suggested-questions";
@@ -103,6 +104,7 @@ export default function ProjectAssistantPanel({
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [rebuilding, setRebuilding] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const localIdRef = useRef(0);
 
@@ -214,6 +216,22 @@ export default function ProjectAssistantPanel({
     });
   }
 
+  async function handleRebuild() {
+    setRebuilding(true);
+    const res = await rebuildProjectKnowledgeAction(projectId);
+    setRebuilding(false);
+    if (!res.ok) {
+      toast.error(res.message);
+      return;
+    }
+    const { indexed, skipped, failed } = res.data!;
+    toast.success(`تم تحديث المعرفة: ${indexed} عنصر مفهرَس${failed > 0 ? ` (${failed} فشل)` : ""}.`);
+    const summaryRes = await getProjectKnowledgeSummaryAction(projectId);
+    if (summaryRes.ok && summaryRes.data) setKnowledgeSummary(summaryRes.data);
+    void skipped;
+  }
+
+  const canManage = role === "owner" || role === "admin" || role === "supervisor";
   const totalKnowledge = knowledgeSummary.reduce((sum, k) => sum + k.count, 0);
   const suggested = getSuggestedQuestions(role, viewpoint, knowledgeSummary);
   const showEmptyState = messages.length === 0;
@@ -251,6 +269,17 @@ export default function ProjectAssistantPanel({
             <Button variant="outline" size="sm" icon={<Plus size={14} />} onClick={startNewConversation}>
               محادثة جديدة
             </Button>
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<RefreshCw size={14} className={rebuilding ? "animate-spin" : ""} />}
+                onClick={handleRebuild}
+                disabled={rebuilding}
+              >
+                {rebuilding ? "جارٍ التحديث…" : "إعادة بناء المعرفة"}
+              </Button>
+            )}
           </div>
         </div>
 
