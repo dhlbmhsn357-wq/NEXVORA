@@ -150,6 +150,7 @@ import {
 } from "@/lib/product-definition/service";
 import { listBusinessRules } from "@/lib/product-definition/business-rules-service";
 import { listSystemMessages } from "@/lib/product-definition/system-messages-service";
+import { listStateMachines } from "@/lib/product-definition/state-machine-service";
 import {
   listStories,
   listAcceptanceCriteria,
@@ -596,7 +597,7 @@ export default async function ProjectDetailPage({
     commercialLifecycle, commercialContracts, commercialPayments,
     marketResearchItems, problemValidationItems,
     definitionPersonas, definitionFlows, definitionRequirements,
-    definitionBusinessRules, definitionSystemMessages,
+    definitionBusinessRules, definitionSystemMessages, definitionStateMachines,
     storiesRows, acceptanceCriteriaRows,
     evidenceLinkRows,
     evalScenarios, evalRunsRows,
@@ -615,6 +616,7 @@ export default async function ProjectDetailPage({
         listRequirements(project.id),
         listBusinessRules(project.id),
         listSystemMessages(project.id),
+        listStateMachines(project.id),
         listStories(project.id),
         listAcceptanceCriteria(project.id),
         listEvidenceLinks(project.id),
@@ -630,7 +632,7 @@ export default async function ProjectDetailPage({
         listDecisionItems(project.id),
         listStageAssignments(project.id),
       ])
-    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
+    : [null, [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []];
   const latestHandoffPackage = handoffPackagesRows.length > 0 ? handoffPackagesRows[0] : null;
   const [handoffItemsRows, handoffQuestionsRows, handoffDeliveriesRows] = latestHandoffPackage
     ? await Promise.all([
@@ -1651,6 +1653,7 @@ export default async function ProjectDetailPage({
             requirements={definitionRequirements}
             businessRules={definitionBusinessRules}
             systemMessages={definitionSystemMessages}
+            stateMachines={definitionStateMachines}
             canWrite={canWriteCommercial}
           />
         ),

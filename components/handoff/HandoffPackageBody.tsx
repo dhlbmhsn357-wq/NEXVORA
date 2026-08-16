@@ -43,9 +43,13 @@ import {
   type EvalCategory,
   type EvalSeverity,
 } from "@/lib/evaluation/types";
-import type { PRD, PRDBusinessRuleDetail, PRDSystemMessageDetail, PRDFlowSpecification } from "@/lib/types/database";
+import type {
+  PRD, PRDBusinessRuleDetail, PRDSystemMessageDetail, PRDFlowSpecification,
+  PRDPersonaModule, PRDStateMachineDetail,
+} from "@/lib/types/database";
 import { SYSTEM_MESSAGE_TYPE_LABELS } from "@/lib/product-definition/business-rules-types";
 import { groupFlowSpecificationsByFlow } from "@/lib/product-definition/flow-step-detail";
+import { stateChainString } from "@/lib/product-definition/state-machine-chain";
 
 /**
  * Self-loading server component that renders the full handoff-package body.
@@ -344,6 +348,8 @@ export default async function HandoffPackageBody({ projectId, packageId, include
                 <PrdBusinessRules title="قواعد العمل والحالات الخاصة (Business Rules)" items={prd.business_rules_detail} />
                 <PrdSystemMessages title="رسائل النظام الموحدة (System Messages)" items={prd.system_messages_detail} />
                 <PrdFlowSpecifications title="مواصفات التدفقات التفصيلية (Flow Specifications)" items={prd.flow_specifications} />
+                <PrdStateMachines title="آلات الحالة (State Machines)" items={prd.state_machines_detail} />
+                <PrdPersonaModules title="تقسيم حسب الشخصيات/الموديولات (Persona Modules)" items={prd.persona_modules} />
               </div>
             )}
           </ItemSection>
@@ -929,6 +935,83 @@ function PrdFlowSpecifications({ title, items }: { title: string; items?: PRDFlo
                 </li>
               ))}
             </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+/**
+ * القسمان الجديدان (0122 Part 2/2): state_machines_detail + persona_modules
+ * — نفس اتفاقية باقي أقسام PRD المُهيكلة في هذه الصفحة: null (بلا رندر)
+ * لو المصفوفة فاضية. آلات الحالة تُعرض بنفس سلسلة الأسهم (stateChainString)
+ * المستخدَمة في تبويب "تعريف المنتج" وتبويب "PRD" — اتساق بصري واحد عبر
+ * الثلاث واجهات.
+ */
+function PrdStateMachines({ title, items }: { title: string; items?: PRDStateMachineDetail[] | null }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="break-inside-avoid">
+      <h4 className="text-[12px] font-semibold text-[#0A1735]">{title}</h4>
+      <div className="mt-1 space-y-2">
+        {items.map((sm, i) => {
+          const chain = stateChainString(sm.states);
+          return (
+            <div key={i} className="rounded border border-slate-200 p-2">
+              <p className="text-[12px] font-semibold text-slate-800">{sm.name}</p>
+              {sm.description && <p className="mt-0.5 text-[11px] text-slate-600">{sm.description}</p>}
+              {chain && <p className="mt-1 text-[11px] text-slate-700" dir="ltr">{chain}</p>}
+              {sm.transitions.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {sm.transitions.map((t, ti) => (
+                    <li key={ti} className="text-[11px] text-slate-600" dir="ltr">
+                      {t.from} → {t.to}{t.trigger ? ` (${t.trigger})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+function PrdPersonaModules({ title, items }: { title: string; items?: PRDPersonaModule[] | null }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="break-inside-avoid">
+      <h4 className="text-[12px] font-semibold text-[#0A1735]">{title}</h4>
+      <div className="mt-1 space-y-3">
+        {items.map((m, i) => (
+          <div key={i} className="rounded border border-slate-200 p-2">
+            <p className="text-[12px] font-semibold text-slate-800">
+              موديول: {m.persona_name}
+              {m.persona_role && <span className="font-normal text-slate-500"> — {m.persona_role}</span>}
+            </p>
+            {m.user_stories.length > 0 && (
+              <div className="mt-1">
+                <p className="text-[11px] font-semibold text-slate-600">قصص المستخدم</p>
+                <ul className="mt-0.5 list-disc pr-5 text-[11px] text-slate-700">
+                  {m.user_stories.map((s, si) => (
+                    <li key={si}>{s.code ? `[${s.code}] ` : ""}{s.title}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {m.requirements.length > 0 && (
+              <div className="mt-1">
+                <p className="text-[11px] font-semibold text-slate-600">المتطلبات</p>
+                <ul className="mt-0.5 list-disc pr-5 text-[11px] text-slate-700">
+                  {m.requirements.map((r, ri) => (
+                    <li key={ri}>{r.code ? `[${r.code}] ` : ""}{r.title}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <PrdBusinessRules title="قواعد العمل" items={m.business_rules} />
+            <PrdSystemMessages title="رسائل النظام" items={m.system_messages} />
+            <PrdFlowSpecifications title="مواصفات التدفقات" items={m.flow_specifications} />
           </div>
         ))}
       </div>

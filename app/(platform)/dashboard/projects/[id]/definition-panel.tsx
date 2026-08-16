@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState, useTransition, useCallback } from "react"
 import { useRouter } from "next/navigation";
 import {
   Plus, Pencil, Trash2, Star, GitBranch, ListChecks, Target, CheckCircle2, CheckCheck, Download, Brain,
-  ShieldCheck, MessageSquareText, ChevronDown, ChevronUp,
+  ShieldCheck, MessageSquareText, ChevronDown, ChevronUp, Workflow,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -37,6 +37,8 @@ import {
   type SystemMessageRow, type SystemMessageType,
 } from "@/lib/product-definition/business-rules-types";
 import { stepDetailBadgeLabel } from "@/lib/product-definition/flow-step-detail";
+import type { StateMachineRow, StateMachineTransition } from "@/lib/product-definition/state-machine-types";
+import { stateChainString, transitionEndpointOptions } from "@/lib/product-definition/state-machine-chain";
 import {
   summarizePersonas, summarizeFlows, summarizeRequirements,
   deriveDefinitionReadiness,
@@ -48,6 +50,7 @@ import {
   planImportFromBrainAction, applyImportFromBrainAction,
   createBusinessRuleAction, updateBusinessRuleAction, deleteBusinessRuleAction,
   createSystemMessageAction, updateSystemMessageAction, deleteSystemMessageAction,
+  createStateMachineAction, updateStateMachineAction, deleteStateMachineAction,
 } from "./definition-actions";
 import type { BrainImportPlan } from "@/lib/product-definition/import-from-brain";
 
@@ -78,11 +81,12 @@ export interface DefinitionPanelProps {
   requirements: RequirementRow[];
   businessRules: BusinessRuleRow[];
   systemMessages: SystemMessageRow[];
+  stateMachines: StateMachineRow[];
   canWrite: boolean;
 }
 
 export default function DefinitionPanel(props: DefinitionPanelProps) {
-  const { projectId, personas, flows, requirements, businessRules, systemMessages, canWrite } = props;
+  const { projectId, personas, flows, requirements, businessRules, systemMessages, stateMachines, canWrite } = props;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -97,6 +101,10 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
   const [editingMsg, setEditingMsg] = useState<SystemMessageRow | null>(null);
   const [creatingMsg, setCreatingMsg] = useState(false);
   const [msgTypeFilter, setMsgTypeFilter] = useState<SystemMessageType | "all">("all");
+  const [editingSM, setEditingSM] = useState<StateMachineRow | null>(null);
+  const [creatingSM, setCreatingSM] = useState(false);
+
+  const personaNameById = useMemo(() => new Map(personas.map((p) => [p.id, p.name])), [personas]);
 
   // استيراد من Project Brain المعتمد
   const [brainPlan, setBrainPlan] = useState<BrainImportPlan | null>(null);
@@ -373,12 +381,14 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
               <ul className="divide-y divide-[var(--v-border)]">
                 {businessRules.map((r) => {
                   const linkedFlow = r.linkedFlowId ? flows.find((f) => f.id === r.linkedFlowId) : null;
+                  const linkedPersonaName = r.linkedPersonaId ? personaNameById.get(r.linkedPersonaId) : null;
                   return (
                     <li key={r.id} className="flex items-start justify-between gap-3 py-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium text-[var(--v-text)]">{r.title}</p>
                           <Badge tone={ENFORCEMENT_TONE[r.enforcementPoint]}>{BUSINESS_RULE_ENFORCEMENT_POINT_LABELS[r.enforcementPoint]}</Badge>
+                          {linkedPersonaName && <Badge tone="neutral">موديول: {linkedPersonaName}</Badge>}
                           {linkedFlow && <span className="text-[11px] text-[var(--v-text-subtle)]">مرتبط بـ: {linkedFlow.name}</span>}
                         </div>
                         {r.triggerCondition && <p className="mt-1 text-xs text-[var(--v-text-secondary)]"><b>الشرط:</b> {r.triggerCondition}</p>}
@@ -423,12 +433,14 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
                   <ul className="divide-y divide-[var(--v-border)]">
                     {filtered.map((m) => {
                       const linkedFlow = m.linkedFlowId ? flows.find((f) => f.id === m.linkedFlowId) : null;
+                      const linkedPersonaName = m.linkedPersonaId ? personaNameById.get(m.linkedPersonaId) : null;
                       return (
                         <li key={m.id} className="flex items-start justify-between gap-3 py-3">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-medium text-[var(--v-text)]">{m.eventName}</p>
                               <Badge tone={MESSAGE_TYPE_TONE[m.messageType]}>{SYSTEM_MESSAGE_TYPE_LABELS[m.messageType]}</Badge>
+                              {linkedPersonaName && <Badge tone="neutral">موديول: {linkedPersonaName}</Badge>}
                               {linkedFlow && <span className="text-[11px] text-[var(--v-text-subtle)]">مرتبط بـ: {linkedFlow.name}</span>}
                             </div>
                             {m.messageText && <p className="mt-1 text-xs text-[var(--v-text-secondary)]">{m.messageText}</p>}
@@ -446,6 +458,48 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
                   </ul>
                 );
               })()
+            )}
+          </Card>
+
+          {/* State Machines */}
+          <Card>
+            <SectionHeader
+              title={<span className="inline-flex items-center gap-1.5"><Workflow size={16} /> آلات الحالة (State Machines) ({stateMachines.length})</span>}
+              action={canWrite ? <Button size="sm" variant="primary" icon={<Plus size={14} />} onClick={() => setCreatingSM(true)}>آلة حالة جديدة</Button> : null}
+            />
+            {stateMachines.length === 0 ? (
+              <EmptyState
+                title="لا توجد آلات حالة موثّقة بعد"
+                description="وثّق دورة حياة أي طلب/عملية معقدة (مثال: طلب اختبار: مُستلم ← مجدول ← جارٍ ← مُقيَّم ← ناجح/راسب) لضمان دقة الـ PRD."
+              />
+            ) : (
+              <ul className="divide-y divide-[var(--v-border)]">
+                {stateMachines.map((sm) => {
+                  const linkedFlow = sm.linkedFlowId ? flows.find((f) => f.id === sm.linkedFlowId) : null;
+                  const linkedPersonaName = sm.linkedPersonaId ? personaNameById.get(sm.linkedPersonaId) : null;
+                  const chain = stateChainString(sm.states);
+                  return (
+                    <li key={sm.id} className="flex items-start justify-between gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-[var(--v-text)]">{sm.name}</p>
+                          {linkedPersonaName && <Badge tone="neutral">موديول: {linkedPersonaName}</Badge>}
+                          {linkedFlow && <span className="text-[11px] text-[var(--v-text-subtle)]">مرتبط بـ: {linkedFlow.name}</span>}
+                        </div>
+                        {sm.description && <p className="mt-1 text-xs text-[var(--v-text-secondary)]">{sm.description}</p>}
+                        {chain && <p className="mt-1 text-xs text-[var(--v-text)]" dir="ltr">{chain}</p>}
+                      </div>
+                      {canWrite && (
+                        <div className="flex shrink-0 gap-1">
+                          <Button size="sm" variant="ghost" icon={<Pencil size={14} />} onClick={() => setEditingSM(sm)}>تعديل</Button>
+                          <Button size="sm" variant="ghost" icon={<Trash2 size={14} />}
+                            onClick={() => { if (!confirm(`حذف "${sm.name}"؟`)) return; runAction(() => deleteStateMachineAction(projectId, sm.id), "تم الحذف"); }}>حذف</Button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </Card>
         </div>
@@ -494,6 +548,7 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
         onClose={() => { setCreatingRule(false); setEditingRule(null); }}
         item={editingRule}
         flows={flows}
+        personas={personas}
         onSave={(input) => {
           if (editingRule) runAction(() => updateBusinessRuleAction(projectId, editingRule.id, input), "تم التحديث");
           else runAction(() => createBusinessRuleAction(projectId, input), "تم الإنشاء");
@@ -506,10 +561,24 @@ export default function DefinitionPanel(props: DefinitionPanelProps) {
         onClose={() => { setCreatingMsg(false); setEditingMsg(null); }}
         item={editingMsg}
         flows={flows}
+        personas={personas}
         onSave={(input) => {
           if (editingMsg) runAction(() => updateSystemMessageAction(projectId, editingMsg.id, input), "تم التحديث");
           else runAction(() => createSystemMessageAction(projectId, input), "تم الإنشاء");
           setCreatingMsg(false); setEditingMsg(null);
+        }}
+      />
+      <StateMachineDialog
+        key={editingSM?.id ?? (creatingSM ? "new-sm" : "closed-sm")}
+        open={creatingSM || editingSM !== null}
+        onClose={() => { setCreatingSM(false); setEditingSM(null); }}
+        item={editingSM}
+        personas={personas}
+        flows={flows}
+        onSave={(input) => {
+          if (editingSM) runAction(() => updateStateMachineAction(projectId, editingSM.id, input), "تم التحديث");
+          else runAction(() => createStateMachineAction(projectId, input), "تم الإنشاء");
+          setCreatingSM(false); setEditingSM(null);
         }}
       />
       {/* Brain Import Preview Modal */}
@@ -992,14 +1061,14 @@ function RequirementDialog({
 // Business Rule Dialog
 // ---------------------------------------------------------------------------
 function RuleDialog({
-  open, onClose, item, flows, onSave,
+  open, onClose, item, flows, personas, onSave,
 }: {
   open: boolean; onClose: () => void; item: BusinessRuleRow | null;
-  flows: UserFlowRow[];
+  flows: UserFlowRow[]; personas: PersonaRow[];
   onSave: (input: {
     title: string; triggerCondition: string; thresholdValue: string;
     onViolation: string; enforcementPoint: BusinessRuleEnforcementPoint;
-    linkedFlowId: string | null; notes: string;
+    linkedFlowId: string | null; linkedPersonaId: string | null; notes: string;
   }) => void;
 }) {
   const [title, setTitle] = useState(item?.title ?? "");
@@ -1008,6 +1077,7 @@ function RuleDialog({
   const [onViolation, setOnViolation] = useState(item?.onViolation ?? "");
   const [enforcementPoint, setEnforcementPoint] = useState<BusinessRuleEnforcementPoint>(item?.enforcementPoint ?? "server");
   const [linkedFlowId, setLinkedFlow] = useState(item?.linkedFlowId ?? "");
+  const [linkedPersonaId, setLinkedPersona] = useState(item?.linkedPersonaId ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
 
   return (
@@ -1030,13 +1100,19 @@ function RuleDialog({
               {flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </Select>
           </Field>
+          <Field label="الشخصية المرتبطة (اختياري)" span={2}>
+            <Select value={linkedPersonaId} onChange={(e) => setLinkedPersona(e.target.value)}>
+              <option value="">— بلا ربط (عام) —</option>
+              {personas.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field>
           <Field label="ملاحظات" span={2}><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></Field>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>إلغاء</Button>
           <Button variant="primary" onClick={() => onSave({
             title, triggerCondition, thresholdValue, onViolation, enforcementPoint,
-            linkedFlowId: linkedFlowId || null, notes,
+            linkedFlowId: linkedFlowId || null, linkedPersonaId: linkedPersonaId || null, notes,
           })}>حفظ</Button>
         </div>
       </div>
@@ -1048,19 +1124,20 @@ function RuleDialog({
 // System Message Dialog
 // ---------------------------------------------------------------------------
 function MessageDialog({
-  open, onClose, item, flows, onSave,
+  open, onClose, item, flows, personas, onSave,
 }: {
   open: boolean; onClose: () => void; item: SystemMessageRow | null;
-  flows: UserFlowRow[];
+  flows: UserFlowRow[]; personas: PersonaRow[];
   onSave: (input: {
     eventName: string; messageType: SystemMessageType; messageText: string;
-    linkedFlowId: string | null; notes: string;
+    linkedFlowId: string | null; linkedPersonaId: string | null; notes: string;
   }) => void;
 }) {
   const [eventName, setEventName] = useState(item?.eventName ?? "");
   const [messageType, setMessageType] = useState<SystemMessageType>(item?.messageType ?? "info");
   const [messageText, setMessageText] = useState(item?.messageText ?? "");
   const [linkedFlowId, setLinkedFlow] = useState(item?.linkedFlowId ?? "");
+  const [linkedPersonaId, setLinkedPersona] = useState(item?.linkedPersonaId ?? "");
   const [notes, setNotes] = useState(item?.notes ?? "");
 
   return (
@@ -1080,14 +1157,188 @@ function MessageDialog({
               {flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </Select>
           </Field>
+          <Field label="الشخصية المرتبطة (اختياري)" span={2}>
+            <Select value={linkedPersonaId} onChange={(e) => setLinkedPersona(e.target.value)}>
+              <option value="">— بلا ربط (عام) —</option>
+              {personas.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field>
           <Field label="نص الرسالة كما يظهر للمستخدم" span={2}><Textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} rows={2} placeholder="تم تسجيل الدخول بنجاح، مرحبًا بعودتك." /></Field>
           <Field label="ملاحظات" span={2}><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></Field>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>إلغاء</Button>
           <Button variant="primary" onClick={() => onSave({
-            eventName, messageType, messageText, linkedFlowId: linkedFlowId || null, notes,
+            eventName, messageType, messageText,
+            linkedFlowId: linkedFlowId || null, linkedPersonaId: linkedPersonaId || null, notes,
           })}>حفظ</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// State Machine Dialog (0122 Part 2/2) — states builder + transitions builder
+// ---------------------------------------------------------------------------
+function StateMachineDialog({
+  open, onClose, item, personas, flows, onSave,
+}: {
+  open: boolean; onClose: () => void; item: StateMachineRow | null;
+  personas: PersonaRow[]; flows: UserFlowRow[];
+  onSave: (input: {
+    name: string; description: string; states: string[]; transitions: StateMachineTransition[];
+    linkedPersonaId: string | null; linkedFlowId: string | null; notes: string;
+  }) => void;
+}) {
+  const [name, setName] = useState(item?.name ?? "");
+  const [description, setDescription] = useState(item?.description ?? "");
+  const [states, setStates] = useState<string[]>(item?.states ?? []);
+  const [transitions, setTransitions] = useState<StateMachineTransition[]>(item?.transitions ?? []);
+  const [linkedPersonaId, setLinkedPersona] = useState(item?.linkedPersonaId ?? "");
+  const [linkedFlowId, setLinkedFlow] = useState(item?.linkedFlowId ?? "");
+  const [notes, setNotes] = useState(item?.notes ?? "");
+
+  const chainPreview = stateChainString(states);
+
+  function addState() {
+    setStates((s) => [...s, ""]);
+  }
+  function updateState(idx: number, value: string) {
+    setStates((s) => s.map((st, i) => (i === idx ? value : st)));
+  }
+  function removeState(idx: number) {
+    setStates((s) => s.filter((_, i) => i !== idx));
+  }
+  function moveState(idx: number, dir: -1 | 1) {
+    setStates((s) => {
+      const target = idx + dir;
+      if (target < 0 || target >= s.length) return s;
+      const next = [...s];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  }
+
+  function addTransition() {
+    setTransitions((t) => [...t, { from: "", to: "", trigger: "" }]);
+  }
+  function updateTransition(idx: number, patch: Partial<StateMachineTransition>) {
+    setTransitions((t) => t.map((tr, i) => (i === idx ? { ...tr, ...patch } : tr)));
+  }
+  function removeTransition(idx: number) {
+    setTransitions((t) => t.filter((_, i) => i !== idx));
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-2xl">
+      <div className="space-y-4 p-6">
+        <h2 className="text-lg font-semibold text-[var(--v-text)]">{item ? "تعديل آلة حالة" : "آلة حالة جديدة"}</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="اسم الآلة *" span={2}><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="دورة حياة طلب الاختبار" /></Field>
+          <Field label="الوصف" span={2}><Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} /></Field>
+          <Field label="ربط اختياري بشخصية">
+            <Select value={linkedPersonaId} onChange={(e) => setLinkedPersona(e.target.value)}>
+              <option value="">— بلا ربط (عام) —</option>
+              {personas.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+          </Field>
+          <Field label="ربط اختياري بتدفّق">
+            <Select value={linkedFlowId} onChange={(e) => setLinkedFlow(e.target.value)}>
+              <option value="">— بلا —</option>
+              {flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </Select>
+          </Field>
+        </div>
+
+        {/* الحالات */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-[var(--v-text)]">الحالات ({states.length})</p>
+            <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={addState}>حالة</Button>
+          </div>
+          {states.length === 0 ? (
+            <p className="rounded-[var(--v-radius-md)] border border-dashed border-[var(--v-border)] p-3 text-center text-xs text-[var(--v-text-muted)]">
+              لا حالات بعد. أضف أول حالة (مثال: &quot;مُستلم&quot;).
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {states.map((st, idx) => (
+                <li key={idx} className="flex items-center gap-1.5">
+                  <span className="font-mono text-xs text-[var(--v-text-subtle)]">#{idx + 1}</span>
+                  <Input value={st} onChange={(e) => updateState(idx, e.target.value)} placeholder="اسم الحالة" />
+                  <Button size="sm" variant="ghost" icon={<ChevronUp size={12} />} onClick={() => moveState(idx, -1)} disabled={idx === 0}>أعلى</Button>
+                  <Button size="sm" variant="ghost" icon={<ChevronDown size={12} />} onClick={() => moveState(idx, 1)} disabled={idx === states.length - 1}>أسفل</Button>
+                  <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => removeState(idx)}>حذف</Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {chainPreview && (
+            <p className="mt-2 rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-surface)] p-2 text-xs text-[var(--v-text)]" dir="ltr">
+              {chainPreview}
+            </p>
+          )}
+        </div>
+
+        {/* الانتقالات */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-[var(--v-text)]">الانتقالات ({transitions.length})</p>
+            <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={addTransition}>انتقال</Button>
+          </div>
+          {transitions.length === 0 ? (
+            <p className="rounded-[var(--v-radius-md)] border border-dashed border-[var(--v-border)] p-3 text-center text-xs text-[var(--v-text-muted)]">
+              لا انتقالات بعد (اختياري).
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {transitions.map((t, idx) => {
+                // ملاحظة تصميمية (0122 Part 2/2): لو الحالة المشار إليها في
+                // from/to اتمسحت أو اتغيّر اسمها من قائمة الحالات أعلاه —
+                // بدل ما نمسحها بصمت أو نكسر الـ Select، بنضيفها كخيار
+                // إضافي في نفس الـ Select (transitionEndpointOptions) —
+                // فـ الـ Select يفضل شغال دايمًا ومفيش قيمة تتفقد بصمت،
+                // والمستخدم شايف بوضوح إنها لسه لازمها تصحيح قبل الحفظ.
+                const fromOptions = transitionEndpointOptions(states, t.from);
+                const toOptions = transitionEndpointOptions(states, t.to);
+                return (
+                  <li key={idx} className="grid grid-cols-1 gap-1.5 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
+                    <Select value={t.from} onChange={(e) => updateTransition(idx, { from: e.target.value })}>
+                      <option value="">— من حالة —</option>
+                      {fromOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </Select>
+                    <Select value={t.to} onChange={(e) => updateTransition(idx, { to: e.target.value })}>
+                      <option value="">— إلى حالة —</option>
+                      {toOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </Select>
+                    <Input value={t.trigger} onChange={(e) => updateTransition(idx, { trigger: e.target.value })} placeholder="المُحفِّز (اختياري)" />
+                    <Button size="sm" variant="ghost" icon={<Trash2 size={12} />} onClick={() => removeTransition(idx)}>حذف</Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <Field label="ملاحظات" span={2}><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></Field>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          <Button
+            variant="primary"
+            onClick={() => onSave({
+              name,
+              description,
+              states: states.map((s) => s.trim()).filter(Boolean),
+              transitions: transitions.filter((t) => t.from.trim() || t.to.trim() || t.trigger.trim()),
+              linkedPersonaId: linkedPersonaId || null,
+              linkedFlowId: linkedFlowId || null,
+              notes,
+            })}
+          >
+            حفظ
+          </Button>
         </div>
       </div>
     </Modal>
