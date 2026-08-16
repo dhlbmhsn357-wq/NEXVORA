@@ -151,6 +151,11 @@ const TASK_MAX_OUTPUT_TOKENS: Partial<Record<AITaskType, number>> = {
   [AITaskType.MIGRATION_GOLIVE_VERIFICATION]: LARGE_JSON_OUTPUT_TOKENS,
   [AITaskType.MIGRATION_HYPERCARE_ANALYSIS]: LARGE_JSON_OUTPUT_TOKENS,
   [AITaskType.DISCOVERY_ANALYSIS]: LARGE_JSON_OUTPUT_TOKENS,
+  // PRD أصبح 16 قسمًا (كان 11 قبل 0116/0122) — أقسام زي flow_specifications
+  // وpersona_modules (بتكرر نفس المحتوى مُجمَّعًا حسب الشخصية فوق الأقسام
+  // المسطّحة الأصلية) بتزوّد حجم JSON المطلوب بشكل حقيقي. الحد الافتراضي
+  // (16384) كان كافي لـ 11 قسم بس، وممكن يقطع مستند مفصّل بمستوى احترافي.
+  [AITaskType.PRD_GENERATION]: LARGE_JSON_OUTPUT_TOKENS,
   // migration_recovery: مخرَج صغير (اقتراح واحد) — لا يحتاج سقفًا كبيرًا.
   [AITaskType.PRD_INCREMENT_SECTION]: LARGE_JSON_OUTPUT_TOKENS,
   [AITaskType.DISCOVERY_FORM_GENERATION]: LARGE_JSON_OUTPUT_TOKENS,
