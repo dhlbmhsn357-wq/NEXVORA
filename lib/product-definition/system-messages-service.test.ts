@@ -16,6 +16,7 @@ describe("mapSystemMessage", () => {
       message_type: "error",
       message_text: "لا يوجد رصيد كافٍ لإتمام العملية",
       linked_flow_id: "f1",
+      linked_persona_id: "persona1",
       notes: "ملاحظة",
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-02T00:00:00.000Z",
@@ -29,6 +30,7 @@ describe("mapSystemMessage", () => {
       messageType: "error",
       messageText: "لا يوجد رصيد كافٍ لإتمام العملية",
       linkedFlowId: "f1",
+      linkedPersonaId: "persona1",
       notes: "ملاحظة",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
@@ -45,6 +47,7 @@ describe("mapSystemMessage", () => {
         message_type: t,
         message_text: "",
         linked_flow_id: null,
+        linked_persona_id: null,
         notes: "",
         created_at: "",
         updated_at: "",
@@ -52,6 +55,7 @@ describe("mapSystemMessage", () => {
       });
       expect(row.messageType).toBe(t);
       expect(row.linkedFlowId).toBeNull();
+      expect(row.linkedPersonaId).toBeNull();
     }
   });
 });

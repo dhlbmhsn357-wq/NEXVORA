@@ -18,6 +18,7 @@ type DbBusinessRule = {
   on_violation: string;
   enforcement_point: BusinessRuleEnforcementPoint;
   linked_flow_id: string | null;
+  linked_persona_id: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -34,6 +35,7 @@ export function mapBusinessRule(r: DbBusinessRule): BusinessRuleRow {
     onViolation: r.on_violation,
     enforcementPoint: r.enforcement_point,
     linkedFlowId: r.linked_flow_id,
+    linkedPersonaId: r.linked_persona_id,
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -59,6 +61,7 @@ export interface BusinessRuleInput {
   onViolation?: string;
   enforcementPoint?: BusinessRuleEnforcementPoint;
   linkedFlowId?: string | null;
+  linkedPersonaId?: string | null;
   notes?: string;
 }
 
@@ -78,6 +81,7 @@ export async function createBusinessRule(
       on_violation: input.onViolation ?? "",
       enforcement_point: input.enforcementPoint ?? "server",
       linked_flow_id: input.linkedFlowId ?? null,
+      linked_persona_id: input.linkedPersonaId ?? null,
       notes: input.notes ?? "",
       created_by: createdBy,
     })
@@ -99,6 +103,7 @@ export async function updateBusinessRule(
   if (patch.onViolation !== undefined) db.on_violation = patch.onViolation;
   if (patch.enforcementPoint !== undefined) db.enforcement_point = patch.enforcementPoint;
   if (patch.linkedFlowId !== undefined) db.linked_flow_id = patch.linkedFlowId;
+  if (patch.linkedPersonaId !== undefined) db.linked_persona_id = patch.linkedPersonaId;
   if (patch.notes !== undefined) db.notes = patch.notes;
   const { data, error } = await svc.from("business_rules").update(db).eq("id", id).select("*").single();
   if (error) throw error;

@@ -36,6 +36,7 @@ export interface BusinessRuleRow {
   onViolation: string; // ماذا يحدث عند التجاوز
   enforcementPoint: BusinessRuleEnforcementPoint; // مين بيطبّقها
   linkedFlowId: string | null; // ربط اختياري بتدفّق مستخدم
+  linkedPersonaId: string | null; // ربط اختياري بشخصية (0122 — لتجميع PRD حسب الموديول)
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -68,6 +69,7 @@ export interface SystemMessageRow {
   messageType: SystemMessageType;
   messageText: string; // نص الرسالة كاملًا كما يظهر للمستخدم
   linkedFlowId: string | null;
+  linkedPersonaId: string | null; // ربط اختياري بشخصية (0122 — لتجميع PRD حسب الموديول)
   notes: string;
   createdAt: string;
   updatedAt: string;

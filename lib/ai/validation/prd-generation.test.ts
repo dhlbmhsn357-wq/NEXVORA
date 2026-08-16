@@ -36,6 +36,48 @@ const validPayload = {
       error_messages: ["بيانات غير صحيحة"],
     },
   ],
+  persona_modules: [
+    {
+      persona_id: "pa",
+      persona_name: "مدير الفرع",
+      persona_role: "مدير",
+      user_stories: [
+        { code: "US-1", title: "تسجيل طلب صيانة", as_a: "مدير فرع", i_want: "أسجل طلب", so_that: "يتم متابعته", status: "draft" },
+      ],
+      requirements: [
+        { code: "REQ-1", title: "تسجيل دخول", description: "", priority: "must", status: "draft" },
+      ],
+      business_rules: [
+        {
+          title: "حد أقصى لإعادة الجدولة",
+          trigger_condition: "المستخدم يحاول إعادة جدولة الطلب",
+          threshold_value: "3 مرات",
+          on_violation: "منع إعادة الجدولة وعرض رسالة",
+          enforcement_point: "server",
+        },
+      ],
+      system_messages: [
+        { event_name: "تسجيل دخول ناجح", message_type: "success", message_text: "تم تسجيل الدخول بنجاح" },
+      ],
+      flow_specifications: [
+        {
+          flow_name: "تسجيل الدخول",
+          step_action: "إدخال البريد وكلمة المرور",
+          ui_elements: [],
+          success_message: "تم الدخول",
+          error_messages: [],
+        },
+      ],
+    },
+  ],
+  state_machines_detail: [
+    {
+      name: "دورة حياة طلب الصيانة",
+      description: "",
+      states: ["Request Received", "Scheduled", "Live", "Evaluated"],
+      transitions: [{ from: "Request Received", to: "Scheduled", trigger: "جدولة" }],
+    },
+  ],
 };
 
 describe("validatePRDGeneration", () => {
@@ -124,6 +166,96 @@ describe("validatePRDGeneration", () => {
     };
     expect(validatePRDGeneration(JSON.stringify(bad)).ok).toBe(false);
   });
+
+  it("accepts empty arrays for the 2 new 0122 sections (no persona modules / state machines case)", () => {
+    const payload = { ...validPayload, persona_modules: [], state_machines_detail: [] };
+    expect(validatePRDGeneration(JSON.stringify(payload)).ok).toBe(true);
+  });
+
+  it("rejects persona_modules missing persona_name", () => {
+    const bad = {
+      ...validPayload,
+      persona_modules: [
+        {
+          persona_id: null,
+          persona_name: "",
+          persona_role: null,
+          user_stories: [],
+          requirements: [],
+          business_rules: [],
+          system_messages: [],
+          flow_specifications: [],
+        },
+      ],
+    };
+    expect(validatePRDGeneration(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("accepts persona_modules with persona_id/persona_role = null (general/عام module)", () => {
+    const payload = {
+      ...validPayload,
+      persona_modules: [
+        {
+          persona_id: null,
+          persona_name: "عام",
+          persona_role: null,
+          user_stories: [],
+          requirements: [],
+          business_rules: [],
+          system_messages: [],
+          flow_specifications: [],
+        },
+      ],
+    };
+    expect(validatePRDGeneration(JSON.stringify(payload)).ok).toBe(true);
+  });
+
+  it("rejects persona_modules with an invalid nested business_rules enforcement_point", () => {
+    const bad = {
+      ...validPayload,
+      persona_modules: [
+        {
+          persona_id: "pa",
+          persona_name: "مدير فرع",
+          persona_role: null,
+          user_stories: [],
+          requirements: [],
+          business_rules: [
+            { title: "قاعدة", trigger_condition: "", threshold_value: "", on_violation: "", enforcement_point: "everywhere" },
+          ],
+          system_messages: [],
+          flow_specifications: [],
+        },
+      ],
+    };
+    expect(validatePRDGeneration(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("rejects state_machines_detail missing name", () => {
+    const bad = {
+      ...validPayload,
+      state_machines_detail: [{ name: "", description: "", states: [], transitions: [] }],
+    };
+    expect(validatePRDGeneration(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("rejects state_machines_detail with a non-string state", () => {
+    const bad = {
+      ...validPayload,
+      state_machines_detail: [{ name: "آلة", description: "", states: [1, 2], transitions: [] }],
+    };
+    expect(validatePRDGeneration(JSON.stringify(bad)).ok).toBe(false);
+  });
+
+  it("rejects state_machines_detail transitions missing a field", () => {
+    const bad = {
+      ...validPayload,
+      state_machines_detail: [
+        { name: "آلة", description: "", states: ["A", "B"], transitions: [{ from: "A", to: "B" }] },
+      ],
+    };
+    expect(validatePRDGeneration(JSON.stringify(bad)).ok).toBe(false);
+  });
 });
 
 describe("validatePRDSectionRegeneration", () => {
@@ -147,5 +279,38 @@ describe("validatePRDSectionRegeneration", () => {
 
   it("rejects invalid JSON", () => {
     expect(validatePRDSectionRegeneration("not json", "goals").ok).toBe(false);
+  });
+
+  it("accepts a valid state_machines_detail single-section response", () => {
+    const result = validatePRDSectionRegeneration(
+      JSON.stringify({
+        state_machines_detail: [
+          { name: "آلة", description: "", states: ["A", "B"], transitions: [{ from: "A", to: "B", trigger: "" }] },
+        ],
+      }),
+      "state_machines_detail"
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("accepts a valid persona_modules single-section response", () => {
+    const result = validatePRDSectionRegeneration(
+      JSON.stringify({
+        persona_modules: [
+          {
+            persona_id: null,
+            persona_name: "عام",
+            persona_role: null,
+            user_stories: [],
+            requirements: [],
+            business_rules: [],
+            system_messages: [],
+            flow_specifications: [],
+          },
+        ],
+      }),
+      "persona_modules"
+    );
+    expect(result.ok).toBe(true);
   });
 });

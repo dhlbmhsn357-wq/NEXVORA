@@ -18,6 +18,7 @@ describe("mapBusinessRule", () => {
       on_violation: "منع الإجراء وعرض رسالة",
       enforcement_point: "server",
       linked_flow_id: "f1",
+      linked_persona_id: "persona1",
       notes: "ملاحظة",
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-02T00:00:00.000Z",
@@ -33,6 +34,7 @@ describe("mapBusinessRule", () => {
       onViolation: "منع الإجراء وعرض رسالة",
       enforcementPoint: "server",
       linkedFlowId: "f1",
+      linkedPersonaId: "persona1",
       notes: "ملاحظة",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
@@ -50,12 +52,14 @@ describe("mapBusinessRule", () => {
       on_violation: "",
       enforcement_point: "both",
       linked_flow_id: null,
+      linked_persona_id: null,
       notes: "",
       created_at: "",
       updated_at: "",
       created_by: null,
     });
     expect(row.linkedFlowId).toBeNull();
+    expect(row.linkedPersonaId).toBeNull();
     expect(row.enforcementPoint).toBe("both");
     expect(row.createdBy).toBeNull();
   });

@@ -16,6 +16,7 @@ type DbSystemMessage = {
   message_type: SystemMessageType;
   message_text: string;
   linked_flow_id: string | null;
+  linked_persona_id: string | null;
   notes: string;
   created_at: string;
   updated_at: string;
@@ -30,6 +31,7 @@ export function mapSystemMessage(r: DbSystemMessage): SystemMessageRow {
     messageType: r.message_type,
     messageText: r.message_text,
     linkedFlowId: r.linked_flow_id,
+    linkedPersonaId: r.linked_persona_id,
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -53,6 +55,7 @@ export interface SystemMessageInput {
   messageType?: SystemMessageType;
   messageText?: string;
   linkedFlowId?: string | null;
+  linkedPersonaId?: string | null;
   notes?: string;
 }
 
@@ -70,6 +73,7 @@ export async function createSystemMessage(
       message_type: input.messageType ?? "info",
       message_text: input.messageText ?? "",
       linked_flow_id: input.linkedFlowId ?? null,
+      linked_persona_id: input.linkedPersonaId ?? null,
       notes: input.notes ?? "",
       created_by: createdBy,
     })
@@ -89,6 +93,7 @@ export async function updateSystemMessage(
   if (patch.messageType !== undefined) db.message_type = patch.messageType;
   if (patch.messageText !== undefined) db.message_text = patch.messageText;
   if (patch.linkedFlowId !== undefined) db.linked_flow_id = patch.linkedFlowId;
+  if (patch.linkedPersonaId !== undefined) db.linked_persona_id = patch.linkedPersonaId;
   if (patch.notes !== undefined) db.notes = patch.notes;
   const { data, error } = await svc.from("system_messages").update(db).eq("id", id).select("*").single();
   if (error) throw error;

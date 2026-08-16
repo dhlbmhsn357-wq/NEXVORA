@@ -2,6 +2,7 @@ import { PRD_SECTION_KEYS } from "@/lib/types/database";
 import type {
   AcceptanceCriterion, PRDSectionKey, UserStory,
   PRDBusinessRuleDetail, PRDSystemMessageDetail, PRDFlowSpecification,
+  PRDPersonaModule, PRDStateMachineDetail,
 } from "@/lib/types/database";
 
 export interface PRDGeneratedData {
@@ -19,6 +20,8 @@ export interface PRDGeneratedData {
   business_rules_detail: PRDBusinessRuleDetail[];
   system_messages_detail: PRDSystemMessageDetail[];
   flow_specifications: PRDFlowSpecification[];
+  persona_modules: PRDPersonaModule[];
+  state_machines_detail: PRDStateMachineDetail[];
 }
 
 export type PRDValidationResult =
@@ -135,6 +138,89 @@ function isFlowSpecificationArray(value: unknown): value is PRDFlowSpecification
   );
 }
 
+function isStateMachineTransitionArray(value: unknown): value is PRDStateMachineDetail["transitions"] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      return isString(o.from) && isString(o.to) && isString(o.trigger);
+    })
+  );
+}
+
+function isStateMachineDetailArray(value: unknown): value is PRDStateMachineDetail[] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      return (
+        isNonEmptyString(o.name) &&
+        isString(o.description) &&
+        Array.isArray(o.states) &&
+        o.states.every((s) => isString(s)) &&
+        isStateMachineTransitionArray(o.transitions)
+      );
+    })
+  );
+}
+
+function isPersonaModuleStoryArray(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      return (
+        (o.code === null || isString(o.code)) &&
+        isString(o.title) &&
+        isString(o.as_a) &&
+        isString(o.i_want) &&
+        isString(o.so_that) &&
+        isString(o.status)
+      );
+    })
+  );
+}
+
+function isPersonaModuleRequirementArray(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      return (
+        (o.code === null || isString(o.code)) &&
+        isString(o.title) &&
+        isString(o.description) &&
+        isString(o.priority) &&
+        isString(o.status)
+      );
+    })
+  );
+}
+
+function isPersonaModuleArray(value: unknown): value is PRDPersonaModule[] {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      if (typeof v !== "object" || v === null) return false;
+      const o = v as Record<string, unknown>;
+      return (
+        (o.persona_id === null || isString(o.persona_id)) &&
+        isNonEmptyString(o.persona_name) &&
+        (o.persona_role === null || isString(o.persona_role)) &&
+        isPersonaModuleStoryArray(o.user_stories) &&
+        isPersonaModuleRequirementArray(o.requirements) &&
+        isBusinessRuleDetailArray(o.business_rules) &&
+        isSystemMessageDetailArray(o.system_messages) &&
+        isFlowSpecificationArray(o.flow_specifications)
+      );
+    })
+  );
+}
+
 function validateSectionValue(key: PRDSectionKey, value: unknown): boolean {
   switch (key) {
     case "overview":
@@ -150,6 +236,10 @@ function validateSectionValue(key: PRDSectionKey, value: unknown): boolean {
       return isSystemMessageDetailArray(value);
     case "flow_specifications":
       return isFlowSpecificationArray(value);
+    case "persona_modules":
+      return isPersonaModuleArray(value);
+    case "state_machines_detail":
+      return isStateMachineDetailArray(value);
     default:
       return isStringArray(value);
   }

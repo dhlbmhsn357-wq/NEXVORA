@@ -37,6 +37,11 @@ import {
   type BusinessRuleEnforcementPoint, type BusinessRuleRow,
   type SystemMessageType, type SystemMessageRow,
 } from "@/lib/product-definition/business-rules-types";
+import {
+  listStateMachines, createStateMachine, updateStateMachine, deleteStateMachine,
+  type StateMachineInput,
+} from "@/lib/product-definition/state-machine-service";
+import type { StateMachineRow, StateMachineTransition } from "@/lib/product-definition/state-machine-types";
 
 type ActionResult<T = void> = { ok: true; data?: T } | { ok: false; message: string };
 
@@ -423,7 +428,8 @@ export async function createBusinessRuleAction(
   projectId: string,
   raw: {
     title: string; triggerCondition?: string; thresholdValue?: string;
-    onViolation?: string; enforcementPoint?: string; linkedFlowId?: string | null; notes?: string;
+    onViolation?: string; enforcementPoint?: string; linkedFlowId?: string | null;
+    linkedPersonaId?: string | null; notes?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const g = await guard();
@@ -437,6 +443,7 @@ export async function createBusinessRuleAction(
     onViolation: raw.onViolation ?? "",
     enforcementPoint: raw.enforcementPoint && isEnforcementPoint(raw.enforcementPoint) ? raw.enforcementPoint : "server",
     linkedFlowId: raw.linkedFlowId || null,
+    linkedPersonaId: raw.linkedPersonaId || null,
     notes: raw.notes ?? "",
   };
   try {
@@ -452,7 +459,8 @@ export async function updateBusinessRuleAction(
   projectId: string, id: string,
   patch: Partial<{
     title: string; triggerCondition: string; thresholdValue: string;
-    onViolation: string; enforcementPoint: string; linkedFlowId: string | null; notes: string;
+    onViolation: string; enforcementPoint: string; linkedFlowId: string | null;
+    linkedPersonaId: string | null; notes: string;
   }>
 ): Promise<ActionResult> {
   const g = await guard();
@@ -470,6 +478,7 @@ export async function updateBusinessRuleAction(
     clean.enforcementPoint = patch.enforcementPoint;
   }
   if (patch.linkedFlowId !== undefined) clean.linkedFlowId = patch.linkedFlowId;
+  if (patch.linkedPersonaId !== undefined) clean.linkedPersonaId = patch.linkedPersonaId;
   if (patch.notes !== undefined) clean.notes = patch.notes;
   try {
     await updateBusinessRule(id, clean);
@@ -508,7 +517,7 @@ export async function createSystemMessageAction(
   projectId: string,
   raw: {
     eventName: string; messageType?: string; messageText?: string;
-    linkedFlowId?: string | null; notes?: string;
+    linkedFlowId?: string | null; linkedPersonaId?: string | null; notes?: string;
   }
 ): Promise<ActionResult<{ id: string }>> {
   const g = await guard();
@@ -520,6 +529,7 @@ export async function createSystemMessageAction(
     messageType: raw.messageType && isSystemMessageType(raw.messageType) ? raw.messageType : "info",
     messageText: raw.messageText ?? "",
     linkedFlowId: raw.linkedFlowId || null,
+    linkedPersonaId: raw.linkedPersonaId || null,
     notes: raw.notes ?? "",
   };
   try {
@@ -535,7 +545,7 @@ export async function updateSystemMessageAction(
   projectId: string, id: string,
   patch: Partial<{
     eventName: string; messageType: string; messageText: string;
-    linkedFlowId: string | null; notes: string;
+    linkedFlowId: string | null; linkedPersonaId: string | null; notes: string;
   }>
 ): Promise<ActionResult> {
   const g = await guard();
@@ -551,6 +561,7 @@ export async function updateSystemMessageAction(
   }
   if (patch.messageText !== undefined) clean.messageText = patch.messageText;
   if (patch.linkedFlowId !== undefined) clean.linkedFlowId = patch.linkedFlowId;
+  if (patch.linkedPersonaId !== undefined) clean.linkedPersonaId = patch.linkedPersonaId;
   if (patch.notes !== undefined) clean.notes = patch.notes;
   try {
     await updateSystemMessage(id, clean);
@@ -566,6 +577,88 @@ export async function deleteSystemMessageAction(projectId: string, id: string): 
   if (!g.ok) return g;
   try {
     await deleteSystemMessage(id);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الحذف." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// State Machines — آلات الحالة (0122)
+// ---------------------------------------------------------------------------
+export async function listStateMachinesAction(projectId: string): Promise<ActionResult<StateMachineRow[]>> {
+  try {
+    const rows = await listStateMachines(projectId);
+    return { ok: true, data: rows };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل القراءة." };
+  }
+}
+
+export async function createStateMachineAction(
+  projectId: string,
+  raw: {
+    name: string; description?: string; states?: string[]; transitions?: StateMachineTransition[];
+    linkedPersonaId?: string | null; linkedFlowId?: string | null; notes?: string;
+  }
+): Promise<ActionResult<{ id: string }>> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const name = raw.name?.trim();
+  if (!name) return { ok: false, message: "اسم آلة الحالة مطلوب." };
+  const input: StateMachineInput = {
+    name,
+    description: raw.description ?? "",
+    states: raw.states ?? [],
+    transitions: raw.transitions ?? [],
+    linkedPersonaId: raw.linkedPersonaId || null,
+    linkedFlowId: raw.linkedFlowId || null,
+    notes: raw.notes ?? "",
+  };
+  try {
+    const row = await createStateMachine(projectId, input, g.userId);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true, data: { id: row.id } };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل الإنشاء." };
+  }
+}
+
+export async function updateStateMachineAction(
+  projectId: string, id: string,
+  patch: Partial<{
+    name: string; description: string; states: string[]; transitions: StateMachineTransition[];
+    linkedPersonaId: string | null; linkedFlowId: string | null; notes: string;
+  }>
+): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return g;
+  const clean: Partial<StateMachineInput> = {};
+  if (patch.name !== undefined) {
+    const t = patch.name.trim(); if (!t) return { ok: false, message: "اسم آلة الحالة مطلوب." };
+    clean.name = t;
+  }
+  if (patch.description !== undefined) clean.description = patch.description;
+  if (patch.states !== undefined) clean.states = patch.states;
+  if (patch.transitions !== undefined) clean.transitions = patch.transitions;
+  if (patch.linkedPersonaId !== undefined) clean.linkedPersonaId = patch.linkedPersonaId;
+  if (patch.linkedFlowId !== undefined) clean.linkedFlowId = patch.linkedFlowId;
+  if (patch.notes !== undefined) clean.notes = patch.notes;
+  try {
+    await updateStateMachine(id, clean);
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "فشل التحديث." };
+  }
+}
+
+export async function deleteStateMachineAction(projectId: string, id: string): Promise<ActionResult> {
+  const g = await guard();
+  if (!g.ok) return g;
+  try {
+    await deleteStateMachine(id);
     revalidatePath(`/dashboard/projects/${projectId}`);
     return { ok: true };
   } catch (e) {

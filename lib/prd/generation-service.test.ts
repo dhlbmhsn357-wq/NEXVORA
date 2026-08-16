@@ -167,6 +167,7 @@ describe("formatStructuredContextForPrompt", () => {
       formatStructuredContextForPrompt({
         requirements: [], stories: [], acceptanceCriteria: [],
         businessRules: [], systemMessages: [], flowsWithDetail: [],
+        personaModules: [], stateMachines: [],
       })
     ).toBe("");
   });
@@ -204,6 +205,8 @@ describe("formatStructuredContextForPrompt", () => {
       businessRules: [],
       systemMessages: [],
       flowsWithDetail: [],
+      personaModules: [],
+      stateMachines: [],
     });
     expect(out).toContain("المصدر الأساسي");
     expect(out).toContain("REQ-1");
@@ -213,6 +216,8 @@ describe("formatStructuredContextForPrompt", () => {
     expect(out).not.toContain("قواعد العمل والحالات الخاصة");
     expect(out).not.toContain("رسائل النظام");
     expect(out).not.toContain("مواصفات التدفقات التفصيلية");
+    expect(out).not.toContain("تقسيم حسب الشخصيات/الموديلات");
+    expect(out).not.toContain("آلات الحالة");
   });
 
   it("يبني الأقسام التلاتة الجديدة لما فيه business rules / system messages / flow detail، ويتجاهلها لما تكون فاضية", () => {
@@ -225,7 +230,7 @@ describe("formatStructuredContextForPrompt", () => {
           id: "b1", projectId: "p1", title: "حد أقصى لإعادة الجدولة",
           triggerCondition: "طلب إعادة جدولة", thresholdValue: "3 مرات",
           onViolation: "منع الإجراء", enforcementPoint: "server",
-          linkedFlowId: null, notes: "",
+          linkedFlowId: null, linkedPersonaId: null, notes: "",
           createdAt: "", updatedAt: "", createdBy: null,
         },
       ],
@@ -233,7 +238,7 @@ describe("formatStructuredContextForPrompt", () => {
         {
           id: "m1", projectId: "p1", eventName: "رصيد غير كافٍ",
           messageType: "error", messageText: "لا يوجد رصيد كافٍ لإتمام العملية",
-          linkedFlowId: null, notes: "",
+          linkedFlowId: null, linkedPersonaId: null, notes: "",
           createdAt: "", updatedAt: "", createdBy: null,
         },
       ],
@@ -252,6 +257,8 @@ describe("formatStructuredContextForPrompt", () => {
           createdAt: "", updatedAt: "", createdBy: null,
         },
       ],
+      personaModules: [],
+      stateMachines: [],
     });
     expect(out).toContain("قواعد العمل والحالات الخاصة");
     expect(out).toContain("حد أقصى لإعادة الجدولة");
@@ -262,6 +269,50 @@ describe("formatStructuredContextForPrompt", () => {
     expect(out).toContain("صيغة بريد صالحة");
     expect(out).toContain("تم الدخول");
     expect(out).toContain("بيانات غير صحيحة");
+  });
+
+  it("يبني قسم 'تقسيم حسب الشخصيات/الموديلات' لما فيه persona modules بمحتوى، ويتجاهل الموديولات الفاضية", () => {
+    const out = formatStructuredContextForPrompt({
+      requirements: [], stories: [], acceptanceCriteria: [],
+      businessRules: [], systemMessages: [], flowsWithDetail: [],
+      personaModules: [
+        {
+          personaId: "pa", personaName: "الطالب", personaRole: "متعلّم",
+          userStories: [{ id: "s1", code: "US-1", title: "تسجيل دخول", asA: "", iWant: "", soThat: "", status: "draft" }],
+          requirements: [], businessRules: [], systemMessages: [], flowSpecifications: [],
+        },
+        {
+          personaId: "pb", personaName: "المعلّم", personaRole: null,
+          userStories: [], requirements: [], businessRules: [], systemMessages: [], flowSpecifications: [],
+        },
+      ],
+      stateMachines: [],
+    });
+    expect(out).toContain("تقسيم حسب الشخصيات/الموديلات");
+    expect(out).toContain("الطالب");
+    expect(out).toContain("US-1");
+    expect(out).not.toContain("المعلّم");
+  });
+
+  it("يبني قسم 'آلات الحالة' بسلسلة الأسهم لما فيه state machines، ويتجاهله لما يكون فاضي", () => {
+    const out = formatStructuredContextForPrompt({
+      requirements: [], stories: [], acceptanceCriteria: [],
+      businessRules: [], systemMessages: [], flowsWithDetail: [],
+      personaModules: [],
+      stateMachines: [
+        {
+          id: "sm1", projectId: "p1", name: "دورة حياة طلب الاختبار", description: "",
+          states: ["Request Received", "Scheduled", "Live", "Evaluated"],
+          transitions: [{ from: "Request Received", to: "Scheduled", trigger: "جدولة" }],
+          linkedPersonaId: null, linkedFlowId: null, notes: "",
+          createdAt: "", updatedAt: "", createdBy: null,
+        },
+      ],
+    });
+    expect(out).toContain("آلات الحالة");
+    expect(out).toContain("دورة حياة طلب الاختبار");
+    expect(out).toContain("Request Received → Scheduled → Live → Evaluated");
+    expect(out).toContain("جدولة");
   });
 });
 

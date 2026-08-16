@@ -30,6 +30,8 @@ import type {
   PRDBusinessRuleDetail,
   PRDSystemMessageDetail,
   PRDFlowSpecification,
+  PRDPersonaModule,
+  PRDStateMachineDetail,
 } from "@/lib/types/database";
 import { SYSTEM_MESSAGE_TYPE_LABELS, type SystemMessageType } from "@/lib/product-definition/business-rules-types";
 import { groupFlowSpecificationsByFlow } from "@/lib/product-definition/flow-step-detail";
@@ -54,6 +56,11 @@ const sectionLabels: Record<PRDSectionKey, string> = {
   business_rules_detail: "قواعد العمل والحالات الخاصة",
   system_messages_detail: "رسائل النظام",
   flow_specifications: "مواصفات التدفقات التفصيلية",
+  // 0122 — تقسيم حسب الشخصيات/الموديلات + آلات الحالة. عرض للقراءة فقط
+  // هنا زي باقي الأقسام المُهيكلة؛ واجهة إدارة كاملة (إنشاء/تعديل آلات
+  // الحالة، ربط شخصية بقواعد العمل/رسائل النظام) هتضاف في الجزء الثاني (UI).
+  persona_modules: "تقسيم حسب الشخصيات/الموديلات",
+  state_machines_detail: "آلات الحالة (State Machines)",
 };
 
 type SectionType = "text" | "list" | "user_stories" | "acceptance_criteria" | "structured_detail";
@@ -77,6 +84,8 @@ const sectionTypes: Record<PRDSectionKey, SectionType> = {
   business_rules_detail: "structured_detail",
   system_messages_detail: "structured_detail",
   flow_specifications: "structured_detail",
+  persona_modules: "structured_detail",
+  state_machines_detail: "structured_detail",
 };
 
 /** الأقسام القابلة للعرض/التعديل بكارت SectionCard النصي العام. */
@@ -455,7 +464,9 @@ function StructuredSectionCard({
   const sourceLabel =
     sectionKey === "business_rules_detail" ? "قواعد العمل"
     : sectionKey === "system_messages_detail" ? "رسائل النظام"
-    : "تدفّقات المستخدم";
+    : sectionKey === "flow_specifications" ? "تدفّقات المستخدم"
+    : sectionKey === "state_machines_detail" ? "آلات الحالة"
+    : "الشخصيات + كل الأقسام المرتبطة بيها";
 
   return (
     <div className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] bg-[var(--v-bg)]">
@@ -522,16 +533,41 @@ function StructuredSectionView({ sectionKey, prd }: { sectionKey: PRDSectionKey;
     return <SystemMessagesTable items={items} />;
   }
 
-  const items = prd.flow_specifications;
-  if (items.length === 0) {
+  if (sectionKey === "flow_specifications") {
+    const items = prd.flow_specifications;
+    if (items.length === 0) {
+      return (
+        <p className="text-sm text-[var(--v-text-muted)]">
+          لا توجد تفاصيل تنفيذية موثّقة لأي خطوة تدفّق وقت التوليد — أضفها في «تعريف المنتج» (تفاصيل تنفيذية لكل
+          خطوة) ثم أعد توليد هذا القسم.
+        </p>
+      );
+    }
+    return <FlowSpecificationsList items={items} />;
+  }
+
+  if (sectionKey === "state_machines_detail") {
+    const items = prd.state_machines_detail;
+    if (items.length === 0) {
+      return (
+        <p className="text-sm text-[var(--v-text-muted)]">
+          لا توجد آلات حالة مُوثّقة وقت التوليد — أضفها في «تعريف المنتج» ثم أعد توليد هذا القسم.
+        </p>
+      );
+    }
+    return <StateMachinesList items={items} />;
+  }
+
+  const modules = prd.persona_modules;
+  if (modules.length === 0) {
     return (
       <p className="text-sm text-[var(--v-text-muted)]">
-        لا توجد تفاصيل تنفيذية موثّقة لأي خطوة تدفّق وقت التوليد — أضفها في «تعريف المنتج» (تفاصيل تنفيذية لكل
-        خطوة) ثم أعد توليد هذا القسم.
+        لا توجد شخصيات/موديولات ذات محتوى مرتبط وقت التوليد — اربط قصص/متطلبات/قواعد بشخصية في «تعريف المنتج»
+        ثم أعد توليد هذا القسم.
       </p>
     );
   }
-  return <FlowSpecificationsList items={items} />;
+  return <PersonaModulesList items={modules} />;
 }
 
 function BusinessRulesTable({ items }: { items: PRDBusinessRuleDetail[] }) {
@@ -640,6 +676,71 @@ function FlowSpecificationsList({ items }: { items: PRDFlowSpecification[] }) {
               </li>
             ))}
           </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StateMachinesList({ items }: { items: PRDStateMachineDetail[] }) {
+  return (
+    <div className="space-y-3">
+      {items.map((sm, i) => (
+        <div key={i} className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] p-2">
+          <p className="text-sm font-semibold text-[var(--v-text)]">{sm.name}</p>
+          {sm.description && <p className="mt-0.5 text-xs text-[var(--v-text-muted)]">{sm.description}</p>}
+          {sm.states.length > 0 && (
+            <p className="mt-2 text-xs text-[var(--v-text)]" dir="ltr">
+              {sm.states.join(" → ")}
+            </p>
+          )}
+          {sm.transitions.length > 0 && (
+            <ul className="mt-2 space-y-0.5">
+              {sm.transitions.map((t, ti) => (
+                <li key={ti} className="text-[11px] text-[var(--v-text-secondary)]" dir="ltr">
+                  {t.from} → {t.to}{t.trigger ? ` (${t.trigger})` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PersonaModulesList({ items }: { items: PRDPersonaModule[] }) {
+  return (
+    <div className="space-y-4">
+      {items.map((m, i) => (
+        <div key={i} className="rounded-[var(--v-radius-md)] border border-[var(--v-border)] p-2">
+          <p className="text-sm font-semibold text-[var(--v-text)]">
+            {m.persona_name}
+            {m.persona_role && <span className="text-[var(--v-text-muted)]"> — {m.persona_role}</span>}
+          </p>
+          {m.user_stories.length > 0 && (
+            <div className="mt-2">
+              <p className="text-[11px] font-medium text-[var(--v-text-muted)]">قصص المستخدم</p>
+              <ul className="mt-1 list-inside list-disc text-xs text-[var(--v-text-secondary)]">
+                {m.user_stories.map((s, si) => (
+                  <li key={si}>{s.code ? `[${s.code}] ` : ""}{s.title}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {m.requirements.length > 0 && (
+            <div className="mt-2">
+              <p className="text-[11px] font-medium text-[var(--v-text-muted)]">المتطلبات</p>
+              <ul className="mt-1 list-inside list-disc text-xs text-[var(--v-text-secondary)]">
+                {m.requirements.map((r, ri) => (
+                  <li key={ri}>{r.code ? `[${r.code}] ` : ""}{r.title}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {m.business_rules.length > 0 && <BusinessRulesTable items={m.business_rules} />}
+          {m.system_messages.length > 0 && <SystemMessagesTable items={m.system_messages} />}
+          {m.flow_specifications.length > 0 && <FlowSpecificationsList items={m.flow_specifications} />}
         </div>
       ))}
     </div>

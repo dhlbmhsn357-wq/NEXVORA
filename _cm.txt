@@ -1,0 +1,31 @@
+﻿PRD persona-module grouping + state machines -- backend (Part 1/2)
+
+Closes two structural gaps found when comparing NEXVORA's PRD output
+against a real detailed external spec (Quran-memorization app PRD):
+(1) content organized by persona/module (Student/Teacher/Admin-style)
+instead of one flat list per section, (2) explicit state-machine
+capture (e.g. Request Received -> Scheduled -> Live -> Evaluated ->
+Passed/Failed) instead of burying transitions as prose inside a
+business rule.
+
+Migration 0122 (additive, NOT auto-applied):
+- linked_persona_id added to business_rules/system_messages (user
+  stories/requirements/flows already had persona links).
+- New state_machines table (states + transitions, zero-invention,
+  user-authored only, same guarantee as business_rules_detail/
+  system_messages_detail from 0116).
+- prd/prd_versions gain persona_modules + state_machines_detail
+  (16 sections total, up from 14).
+
+- lib/prd/persona-module-grouping.ts: pure regrouping of already-
+  linked content by persona -- never drops unlinked items (falls
+  back to a "عام" bucket, only shown when it genuinely has content).
+  Every registered persona always appears as its own module, even
+  if currently empty, matching مثاني's explicit fixed module
+  structure.
+- lib/product-definition/state-machine-service.ts +
+  state-machine-types.ts: CRUD mirroring business-rules-service.ts.
+- PRD generation prompt/validators/export extended with the same
+  zero-invention guarantee already established for the 0116 sections.
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>

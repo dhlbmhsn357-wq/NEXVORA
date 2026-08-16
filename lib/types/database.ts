@@ -983,6 +983,57 @@ export interface PRDFlowSpecification {
   error_messages: string[];
 }
 
+/**
+ * أقسام الـ PRD الجديدة (0122) — تقسيم حسب الشخصية/الموديول + آلات الحالة.
+ *
+ * persona_modules: قسم تجميع/عرض بحت — كل عنصر فيه (قصة/متطلب/قاعدة عمل/
+ * رسالة نظام/خطوة تدفّق) منقول **كما هو بالضبط** من الأقسام الأخرى، مجرد
+ * معاد تجميعه حسب الشخصية المرتبطة — صفر اختراع.
+ *
+ * state_machines_detail: مصدره حصريًا جدول state_machines — نفس ضمان
+ * zero-invention المطبّق على business_rules_detail/system_messages_detail (0116).
+ */
+export interface PRDPersonaModuleStory {
+  code: string | null;
+  title: string;
+  as_a: string;
+  i_want: string;
+  so_that: string;
+  status: string;
+}
+
+export interface PRDPersonaModuleRequirement {
+  code: string | null;
+  title: string;
+  description: string;
+  priority: string;
+  status: string;
+}
+
+export interface PRDPersonaModule {
+  persona_id: string | null; // null = "عام / غير مرتبط بشخصية محددة"
+  persona_name: string;
+  persona_role: string | null;
+  user_stories: PRDPersonaModuleStory[];
+  requirements: PRDPersonaModuleRequirement[];
+  business_rules: PRDBusinessRuleDetail[];
+  system_messages: PRDSystemMessageDetail[];
+  flow_specifications: PRDFlowSpecification[];
+}
+
+export interface PRDStateMachineTransition {
+  from: string;
+  to: string;
+  trigger: string;
+}
+
+export interface PRDStateMachineDetail {
+  name: string;
+  description: string;
+  states: string[]; // بالترتيب: ["Request Received", "Scheduled", ...]
+  transitions: PRDStateMachineTransition[];
+}
+
 export type PRDSyncStatus = "idle" | "generating" | "failed";
 
 export type PRDVersionReason =
@@ -1007,6 +1058,8 @@ export const PRD_SECTION_KEYS = [
   "business_rules_detail",
   "system_messages_detail",
   "flow_specifications",
+  "persona_modules",
+  "state_machines_detail",
 ] as const;
 
 export type PRDSectionKey = (typeof PRD_SECTION_KEYS)[number];
@@ -1028,6 +1081,8 @@ export interface PRD {
   business_rules_detail: PRDBusinessRuleDetail[];
   system_messages_detail: PRDSystemMessageDetail[];
   flow_specifications: PRDFlowSpecification[];
+  persona_modules: PRDPersonaModule[];
+  state_machines_detail: PRDStateMachineDetail[];
   version: number;
   status: string;
   generated_from_brain_version: number | null;
@@ -1057,6 +1112,8 @@ export interface PRDVersion {
   business_rules_detail: PRDBusinessRuleDetail[] | null;
   system_messages_detail: PRDSystemMessageDetail[] | null;
   flow_specifications: PRDFlowSpecification[] | null;
+  persona_modules: PRDPersonaModule[] | null;
+  state_machines_detail: PRDStateMachineDetail[] | null;
   status: string | null;
   generated_from_brain_version: number | null;
   reason: PRDVersionReason;

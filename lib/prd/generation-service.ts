@@ -18,9 +18,11 @@ import {
 } from "@/lib/ai/prompt-framework";
 import type { PRDSectionKey, ProjectRecommendation } from "@/lib/types/database";
 import { isFeatureEnabled } from "@/lib/feature-flags";
-import type { RequirementRow, UserFlowRow, FlowStep } from "@/lib/product-definition/types";
+import type { RequirementRow, UserFlowRow, FlowStep, PersonaRow } from "@/lib/product-definition/types";
 import type { UserStoryRow, AcceptanceCriterionRow } from "@/lib/user-stories/types";
 import type { BusinessRuleRow, SystemMessageRow } from "@/lib/product-definition/business-rules-types";
+import type { StateMachineRow, StateMachineTransition } from "@/lib/product-definition/state-machine-types";
+import { groupByPersona, type PersonaModule } from "./persona-module-grouping";
 
 /**
  * سياق مُهيكل مصدره جداول Product Definition + User Stories + AC.
@@ -30,6 +32,11 @@ import type { BusinessRuleRow, SystemMessageRow } from "@/lib/product-definition
  * businessRules/systemMessages/flowsWithDetail (0116): مصدر zero-invention
  * صارم لأقسام business_rules_detail/system_messages_detail/flow_specifications —
  * لازم تكون موجودة فعليًا في الجداول المُهيكلة، ممنوع تُستنتج من Brain.
+ *
+ * personaModules/stateMachines (0122): personaModules قسم تجميع/عرض بحت —
+ * محسوب بـ groupByPersona من نفس البيانات المحمّلة فوق (بدون قراءة إضافية)،
+ * صفر اختراع. stateMachines مصدر zero-invention جديد بالكامل — من جدول
+ * state_machines مباشرة.
  */
 export interface StructuredPRDContext {
   requirements: RequirementRow[];
@@ -39,6 +46,10 @@ export interface StructuredPRDContext {
   systemMessages: SystemMessageRow[];
   /** تدفّقات فيها على الأقل خطوة واحدة بتفاصيل تنفيذية (uiElements/successMessage/errorMessages) — باقي التدفقات مُستبعدة عشان متعملش ضوضاء. */
   flowsWithDetail: UserFlowRow[];
+  /** تجميع كل ما سبق حسب الشخصية المرتبطة (0122) — محسوب، مش مصدر بيانات مستقل. */
+  personaModules: PersonaModule[];
+  /** آلات الحالة المُلتقطة من جدول state_machines (0122). */
+  stateMachines: StateMachineRow[];
 }
 
 /** يقرأ الجداول المُهيكلة بدون رمي أخطاء — أي فشل يرجع صف فاضي. */
@@ -46,7 +57,7 @@ export async function getStructuredContextForPRD(
   projectId: string,
   supabase: SupabaseClient
 ): Promise<StructuredPRDContext> {
-  const [reqRes, storiesRes, acRes, businessRulesRes, systemMessagesRes, flowsRes] = await Promise.all([
+  const [reqRes, storiesRes, acRes, businessRulesRes, systemMessagesRes, flowsRes, personasRes, stateMachinesRes] = await Promise.all([
     supabase
       .from("product_requirements")
       .select("*")
@@ -78,6 +89,17 @@ export async function getStructuredContextForPRD(
       .select("*")
       .eq("project_id", projectId)
       .order("flow_type", { ascending: true }),
+    supabase
+      .from("product_personas")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("is_primary", { ascending: false })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("state_machines")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false }),
   ]);
 
   const requirements = ((reqRes.data ?? []) as unknown[]).map((r) => {
@@ -210,7 +232,58 @@ export async function getStructuredContextForPRD(
     )
   );
 
-  return { requirements, stories, acceptanceCriteria, businessRules, systemMessages, flowsWithDetail };
+  const personas = ((personasRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      name: String(row.name ?? ""),
+      role: String(row.role ?? ""),
+      segment: String(row.segment ?? ""),
+      jobsToBeDone: String(row.jobs_to_be_done ?? ""),
+      goals: String(row.goals ?? ""),
+      pains: String(row.pains ?? ""),
+      channels: (row.channels as string[] | null) ?? [],
+      techSavviness: Number(row.tech_savviness ?? 50),
+      notes: String(row.notes ?? ""),
+      isPrimary: Boolean(row.is_primary),
+      sourceBrainItemKey: (row.source_brain_item_key as string | null) ?? null,
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as PersonaRow;
+  });
+
+  const stateMachines = ((stateMachinesRes.data ?? []) as unknown[]).map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ""),
+      projectId: String(row.project_id ?? ""),
+      name: String(row.name ?? ""),
+      description: String(row.description ?? ""),
+      states: (row.states as string[] | null) ?? [],
+      transitions: (row.transitions as StateMachineTransition[] | null) ?? [],
+      linkedPersonaId: (row.linked_persona_id as string | null) ?? null,
+      linkedFlowId: (row.linked_flow_id as string | null) ?? null,
+      notes: String(row.notes ?? ""),
+      createdAt: String(row.created_at ?? ""),
+      updatedAt: String(row.updated_at ?? ""),
+      createdBy: (row.created_by as string | null) ?? null,
+    } as StateMachineRow;
+  });
+
+  const personaModules = groupByPersona(personas, stories, requirements, businessRules, systemMessages, flowsWithDetail);
+
+  return {
+    requirements,
+    stories,
+    acceptanceCriteria,
+    businessRules,
+    systemMessages,
+    flowsWithDetail,
+    personaModules,
+    stateMachines,
+  };
 }
 
 /**
@@ -224,7 +297,16 @@ export function formatStructuredContextForPrompt(ctx: StructuredPRDContext): str
     ctx.acceptanceCriteria.length === 0 &&
     ctx.businessRules.length === 0 &&
     ctx.systemMessages.length === 0 &&
-    ctx.flowsWithDetail.length === 0
+    ctx.flowsWithDetail.length === 0 &&
+    (ctx.personaModules ?? []).every(
+      (m) =>
+        m.userStories.length === 0 &&
+        m.requirements.length === 0 &&
+        m.businessRules.length === 0 &&
+        m.systemMessages.length === 0 &&
+        m.flowSpecifications.length === 0
+    ) &&
+    (ctx.stateMachines ?? []).length === 0
   ) {
     return "";
   }
@@ -318,8 +400,52 @@ export function formatStructuredContextForPrompt(ctx: StructuredPRDContext): str
     }
   }
 
+  const personaModulesWithContent = (ctx.personaModules ?? []).filter(
+    (m) =>
+      m.userStories.length > 0 ||
+      m.requirements.length > 0 ||
+      m.businessRules.length > 0 ||
+      m.systemMessages.length > 0 ||
+      m.flowSpecifications.length > 0
+  );
+  if (personaModulesWithContent.length > 0) {
+    parts.push("\n### تقسيم حسب الشخصيات/الموديلات (Persona Modules)");
+    for (const m of personaModulesWithContent) {
+      const roleSuffix = m.personaRole ? ` (${m.personaRole})` : "";
+      parts.push(`- موديول: ${m.personaName}${roleSuffix}`);
+      for (const s of m.userStories) {
+        const code = s.code ? `[${s.code}] ` : "";
+        parts.push(`  • قصة: ${code}${s.title}`);
+      }
+      for (const r of m.requirements) {
+        const code = r.code ? `[${r.code}] ` : "";
+        parts.push(`  • متطلب: ${code}${r.title}`);
+      }
+      for (const b of m.businessRules) {
+        parts.push(`  • قاعدة عمل: ${b.title}`);
+      }
+      for (const msg of m.systemMessages) {
+        parts.push(`  • رسالة نظام: ${msg.eventName}`);
+      }
+      for (const f of m.flowSpecifications) {
+        parts.push(`  • تدفّق: ${f.flowName}`);
+      }
+    }
+  }
+
+  if ((ctx.stateMachines ?? []).length > 0) {
+    parts.push("\n### آلات الحالة (State Machines)");
+    for (const sm of ctx.stateMachines) {
+      parts.push(`- ${sm.name}${sm.description ? ` — ${sm.description}` : ""}`);
+      if (sm.states.length > 0) parts.push(`  الحالات: ${sm.states.join(" → ")}`);
+      for (const t of sm.transitions) {
+        parts.push(`  • انتقال: ${t.from} → ${t.to}${t.trigger ? ` (${t.trigger})` : ""}`);
+      }
+    }
+  }
+
   parts.push(
-    "\n**ملاحظة:** لأي عنصر موجود فوق، انقله كما هو في القسم المقابل من PRD (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements/business_rules_detail/system_messages_detail/flow_specifications). ممنوع إعادة اختراع عنصر موجود. لأقسام business_rules_detail/system_messages_detail/flow_specifications تحديدًا: لو مفيش عناصر هنا فوق لقسم منهم، أرجع مصفوفة فارغة `[]` — ممنوع تخترع بدائل."
+    "\n**ملاحظة:** لأي عنصر موجود فوق، انقله كما هو في القسم المقابل من PRD (user_stories/acceptance_criteria/functional_requirements/non_functional_requirements/business_rules_detail/system_messages_detail/flow_specifications/persona_modules/state_machines_detail). ممنوع إعادة اختراع عنصر موجود. لأقسام business_rules_detail/system_messages_detail/flow_specifications/persona_modules/state_machines_detail تحديدًا: لو مفيش عناصر هنا فوق لقسم منهم، أرجع مصفوفة فارغة `[]` — ممنوع تخترع بدائل. قسم persona_modules تحديدًا هو مجرد إعادة تجميع للعناصر الموجودة فوق حسب الشخصية — استخدم نفس البيانات بالظبط، ممنوع تخترع موديولات أو تنقل عناصر بين موديولات."
   );
 
   return parts.join("\n");

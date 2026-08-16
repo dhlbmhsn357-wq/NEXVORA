@@ -111,6 +111,65 @@ export function formatPRDAsMarkdown(projectName: string, prd: PRD): string {
     }
   }
 
+  lines.push("## تقسيم حسب الشخصيات/الموديلات");
+  if (prd.persona_modules.length === 0) {
+    lines.push("—");
+  } else {
+    for (const m of prd.persona_modules) {
+      const roleSuffix = m.persona_role ? ` — ${m.persona_role}` : "";
+      lines.push(`### موديول: ${m.persona_name}${roleSuffix}`);
+
+      if (m.user_stories.length > 0) {
+        lines.push("**قصص المستخدم:**");
+        for (const s of m.user_stories) {
+          const code = s.code ? `[${s.code}] ` : "";
+          lines.push(`- ${code}${s.title}`);
+        }
+      }
+      if (m.requirements.length > 0) {
+        lines.push("**المتطلبات:**");
+        for (const r of m.requirements) {
+          const code = r.code ? `[${r.code}] ` : "";
+          lines.push(`- ${code}${r.title}`);
+        }
+      }
+      if (m.business_rules.length > 0) {
+        lines.push("**قواعد العمل:**");
+        for (const b of m.business_rules) {
+          lines.push(`- ${escapeCell(b.title)}`);
+        }
+      }
+      if (m.system_messages.length > 0) {
+        lines.push("**رسائل النظام:**");
+        for (const msg of m.system_messages) {
+          lines.push(`- [${msg.message_type}] ${escapeCell(msg.event_name)}`);
+        }
+      }
+      if (m.flow_specifications.length > 0) {
+        lines.push("**التدفّقات:**");
+        for (const f of m.flow_specifications) {
+          lines.push(`- ${escapeCell(f.flow_name)}`);
+        }
+      }
+      lines.push("");
+    }
+  }
+
+  lines.push("## آلات الحالة (State Machines)");
+  if (prd.state_machines_detail.length === 0) {
+    lines.push("—");
+  } else {
+    for (const sm of prd.state_machines_detail) {
+      lines.push(`### ${sm.name}`);
+      if (sm.description) lines.push(sm.description);
+      if (sm.states.length > 0) lines.push(`**الحالات:** ${sm.states.join(" → ")}`);
+      for (const t of sm.transitions) {
+        lines.push(`- **انتقال:** ${t.from} → ${t.to}${t.trigger ? ` (${t.trigger})` : ""}`);
+      }
+      lines.push("");
+    }
+  }
+
   return lines.join("\n");
 }
 
