@@ -52,6 +52,7 @@ const taskTypeLabels: Record<AITaskType, string> = {
   [AITaskType.MEETING_SUMMARY]: "ملخص الاجتماع",
   [AITaskType.PRD_GENERATION]: "توليد PRD",
   [AITaskType.PRD_INCREMENT_SECTION]: "قسم PRD للزيادة",
+  [AITaskType.PROJECT_ASSISTANT_QA]: "مساعد المشروع — إجابة الأسئلة",
   [AITaskType.USER_STORY]: "قصص المستخدم",
   [AITaskType.PROMPT_GENERATION]: "توليد Prompts",
   [AITaskType.COMPETITOR_ANALYSIS]: "تحليل المنافسين",

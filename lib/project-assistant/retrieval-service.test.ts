@@ -37,7 +37,8 @@ vi.mock("@/lib/ai/service", () => ({
   },
 }));
 
-import { retrieveProjectKnowledge, MAX_ENTRY_CONTENT_CHARS } from "./retrieval-service";
+import { retrieveProjectKnowledge, fetchSupersededPredecessors, MAX_ENTRY_CONTENT_CHARS } from "./retrieval-service";
+import type { RetrievedEntry } from "./current-truth-ranking";
 
 function baseRow(overrides: Partial<Record<string, unknown>> & { id: string }) {
   return {
@@ -247,5 +248,131 @@ describe("retrieveProjectKnowledge — ranking, truncation, and error handling",
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe("RPC_FAILED");
+  });
+});
+
+// ============================================================
+// fetchSupersededPredecessors (Phase C) — الفجوة اللي رصدتها Phase B.
+// ============================================================
+
+function makeRetrievedEntry(overrides: Partial<RetrievedEntry> & { id: string }): RetrievedEntry {
+  return {
+    objectType: "decision",
+    objectId: `obj-${overrides.id}`,
+    title: overrides.id,
+    sourceTitle: overrides.id,
+    content: "content",
+    domain: null,
+    classification: null,
+    confidentiality: "internal",
+    status: "active",
+    version: null,
+    isCurrent: true,
+    isSuperseded: false,
+    supersededBy: null,
+    metadata: {},
+    similarity: 0.8,
+    currentTruthRank: 1,
+    ...overrides,
+  };
+}
+
+function predecessorRow(overrides: Partial<Record<string, unknown>> & { id: string; superseded_by: string }) {
+  return {
+    object_type: "decision",
+    object_id: `obj-${overrides.id}`,
+    title: overrides.id,
+    source_title: overrides.id,
+    content: "old content",
+    domain: null,
+    classification: null,
+    confidentiality: "internal",
+    status: "superseded",
+    version: null,
+    is_current: false,
+    is_superseded: true,
+    metadata: {},
+    ...overrides,
+  };
+}
+
+function makeSupabaseForPredecessors(rows: Array<Record<string, unknown>>, error: { message: string } | null = null) {
+  const inCalls: unknown[][] = [];
+  const supabase = {
+    from: vi.fn((_table: string) => ({
+      select: vi.fn((_cols: string) => ({
+        in: vi.fn(async (_col: string, ids: unknown[]) => {
+          inCalls.push(ids);
+          if (error) return { data: null, error };
+          return { data: rows, error: null };
+        }),
+      })),
+    })),
+  };
+  return { supabase, inCalls };
+}
+
+describe("fetchSupersededPredecessors", () => {
+  it("returns an empty map immediately without querying when there are no entries", async () => {
+    const { supabase } = makeSupabaseForPredecessors([]);
+    const result = await fetchSupersededPredecessors(supabase as never, []);
+    expect(result.size).toBe(0);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it("issues a single targeted query with all top-level entry ids at once (no N+1)", async () => {
+    const { supabase, inCalls } = makeSupabaseForPredecessors([]);
+    const entries = [makeRetrievedEntry({ id: "current-1" }), makeRetrievedEntry({ id: "current-2" })];
+
+    await fetchSupersededPredecessors(supabase as never, entries);
+
+    expect(supabase.from).toHaveBeenCalledTimes(1);
+    expect(inCalls).toHaveLength(1);
+    expect(inCalls[0]).toEqual(expect.arrayContaining(["current-1", "current-2"]));
+  });
+
+  it("maps a superseded predecessor row to its current-entry target id", async () => {
+    const { supabase } = makeSupabaseForPredecessors([
+      predecessorRow({ id: "old-1", superseded_by: "current-1" }),
+    ]);
+    const entries = [makeRetrievedEntry({ id: "current-1" })];
+
+    const result = await fetchSupersededPredecessors(supabase as never, entries);
+
+    expect(result.has("current-1")).toBe(true);
+    expect(result.get("current-1")?.map((e) => e.id)).toEqual(["old-1"]);
+    expect(result.get("current-1")?.[0].isSuperseded).toBe(true);
+  });
+
+  it("returns an empty map when no row has a matching superseded_by (no predecessor exists)", async () => {
+    const { supabase } = makeSupabaseForPredecessors([]);
+    const entries = [makeRetrievedEntry({ id: "current-1" })];
+
+    const result = await fetchSupersededPredecessors(supabase as never, entries);
+
+    expect(result.size).toBe(0);
+  });
+
+  it("excludes confidential predecessor rows when excludeConfidential=true (member permission gate)", async () => {
+    const { supabase } = makeSupabaseForPredecessors([
+      predecessorRow({ id: "old-confidential", superseded_by: "current-1", confidentiality: "confidential" }),
+      predecessorRow({ id: "old-internal", superseded_by: "current-1", confidentiality: "internal" }),
+    ]);
+    const entries = [makeRetrievedEntry({ id: "current-1" })];
+
+    const result = await fetchSupersededPredecessors(supabase as never, entries, true);
+
+    const ids = result.get("current-1")?.map((e) => e.id) ?? [];
+    expect(ids).not.toContain("old-confidential");
+    expect(ids).toContain("old-internal");
+  });
+
+  it("returns an empty map (never throws) when the query errors", async () => {
+    const { supabase } = makeSupabaseForPredecessors([], { message: "db down" });
+    const entries = [makeRetrievedEntry({ id: "current-1" })];
+
+    const result = await fetchSupersededPredecessors(supabase as never, entries);
+
+    expect(result.size).toBe(0);
   });
 });

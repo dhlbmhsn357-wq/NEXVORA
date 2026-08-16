@@ -79,6 +79,8 @@ export enum AITaskType {
   MIGRATION_RECOVERY = "migration_recovery",
   MIGRATION_GOLIVE_VERIFICATION = "migration_golive_verification",
   MIGRATION_HYPERCARE_ANALYSIS = "migration_hypercare_analysis",
+  /** مساعد المشروع (Phase C) — إجابة سؤال مبنية على أدلة مسترجَعة، مع حالة إجابة واستشهادات. */
+  PROJECT_ASSISTANT_QA = "project_assistant_qa",
 }
 
 export enum AIProviderName {

@@ -126,6 +126,11 @@ const TASK_TIMEOUT_MS: Partial<Record<AITaskType, number>> = {
   [AITaskType.KNOWLEDGE_INTELLIGENCE]: 110_000,
   [AITaskType.KNOWLEDGE_CROSS_VALIDATION]: 110_000,
   [AITaskType.PRD_INCREMENT_SECTION]: 110_000,
+  // مساعد المشروع: سياق مسترجَع محدود (~8 مقاطع × 1200 حرف) + رد JSON صغير
+  // (نص إجابة + حالة + قائمة معرّفات) — أثقل من مهمة نصية بسيطة بسبب حجم
+  // السياق لكن أخف بكتير من مهام الـ JSON الضخم متعدد الأقسام فوق، فمش
+  // محتاج الـ 110 ثانية ولا LARGE_JSON_OUTPUT_TOKENS.
+  [AITaskType.PROJECT_ASSISTANT_QA]: 60_000,
 };
 
 /**

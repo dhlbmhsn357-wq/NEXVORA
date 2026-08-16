@@ -174,3 +174,101 @@ export async function retrieveProjectKnowledge(
 
   return { ok: true, entries: ranked };
 }
+
+// ============================================================
+// fetchSupersededPredecessors (Phase C) — يقفل الفجوة اللي رصدتها Phase B:
+// match_project_assistant_knowledge بترجّع is_current=true بس، فالصفوف
+// المُستبدَلة (اللي هي بالظبط اللي محتاجينها عشان نشرح تعارض/تحديث)
+// أبدًا ما بترجعش من الاسترجاع العادي. هنا استعلام تكميلي رخيص ومستهدف —
+// مش re-query للبحث الدلالي ولا N+1: نداء واحد بـ
+// `where superseded_by = any(ids)` لكل معرّفات النتائج الحالية مرة واحدة.
+// ============================================================
+
+interface PredecessorRow {
+  id: string;
+  object_type: string;
+  object_id: string;
+  title: string | null;
+  source_title: string | null;
+  content: string;
+  domain: string | null;
+  classification: InformationClassification | null;
+  confidentiality: Confidentiality | null;
+  status: string | null;
+  version: number | null;
+  is_current: boolean;
+  is_superseded: boolean;
+  superseded_by: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+/**
+ * يجيب أي صف "قديم" (is_superseded=true) بيشاور عبر `superseded_by` لصف
+ * من `entries` الممرَّرة — عشان طبقة تركيب الإجابة (Phase C) تقدر تشوف
+ * القديم والحالي مع بعض وتشرح التعارض/التحديث ("كانت المعلومة X، اتعدّلت
+ * لـ Y"). استعلام مستهدف واحد بس، مش إعادة تشغيل للبحث الدلالي.
+ *
+ * `excludeConfidential`: نفس بوابة الصلاحيات المستخدمة في
+ * retrieveProjectKnowledge — لازم تتمرّر بنفس القيمة (requesterRole ===
+ * 'member') وإلا ممكن صف تاريخي سرّي يوصل لسياق الـ Prompt لمستخدم مش
+ * مصرَّح له، حتى لو النتيجة الحالية المقابلة له مش سرّية.
+ *
+ * يرجّع Map: مفتاحها id الصف "الحالي" (target)، وقيمتها كل الصفوف
+ * القديمة اللي بتستبدله (نادرًا أكتر من صف واحد، لكن ممكن نظريًا).
+ */
+export async function fetchSupersededPredecessors(
+  supabase: SupabaseClient,
+  entries: RetrievedEntry[],
+  excludeConfidential = false
+): Promise<Map<string, RetrievedEntry[]>> {
+  const targetIds = Array.from(new Set(entries.map((e) => e.id)));
+  if (targetIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("knowledge_memory")
+    .select(
+      "id, object_type, object_id, title, source_title, content, domain, classification, confidentiality, status, version, is_current, is_superseded, superseded_by, metadata"
+    )
+    .in("superseded_by", targetIds);
+
+  if (error || !data) return new Map();
+
+  const rows = data as PredecessorRow[];
+
+  const rawPredecessors = rows
+    // دفاع في العمق: لازم يكون فعلًا صف مُستبدَل بيشاور لصف موجود عندنا.
+    .filter((row) => row.is_superseded === true && row.superseded_by)
+    .filter((row) => !excludeConfidential || row.confidentiality !== "confidential")
+    .map((row) => ({
+      id: row.id,
+      objectType: row.object_type,
+      objectId: row.object_id,
+      title: row.title ?? "",
+      sourceTitle: row.source_title || row.title || "",
+      content: truncateContent(row.content),
+      domain: row.domain,
+      classification: row.classification,
+      confidentiality: row.confidentiality ?? "internal",
+      status: row.status,
+      version: row.version,
+      isCurrent: row.is_current,
+      isSuperseded: row.is_superseded,
+      supersededBy: row.superseded_by,
+      metadata: row.metadata ?? {},
+      // مفيش تشابه دلالي حقيقي هنا — الصف مش جاي من بحث متجهي، جاي من
+      // مطابقة عمود صريحة. 0 قيمة محايدة (أدنى قيمة ممكنة) بدل قيمة
+      // مصطنعة ممكن تتفهم غلط كأنها تشابه فعلي.
+      similarity: 0,
+    })) satisfies RawRetrievedEntry[];
+
+  const ranked = rankByCurrentTruth(rawPredecessors);
+
+  const byTarget = new Map<string, RetrievedEntry[]>();
+  for (const entry of ranked) {
+    if (!entry.supersededBy) continue;
+    const list = byTarget.get(entry.supersededBy) ?? [];
+    list.push(entry);
+    byTarget.set(entry.supersededBy, list);
+  }
+  return byTarget;
+}
