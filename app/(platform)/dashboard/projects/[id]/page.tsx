@@ -1619,7 +1619,7 @@ export default async function ProjectDetailPage({
           {
             key: "projectAssistant",
             label: "مساعد المشروع",
-            content: <ProjectAssistantPanel />,
+            content: <ProjectAssistantPanel projectId={project.id} role={currentUserRole} />,
           },
         ]
       : []),
