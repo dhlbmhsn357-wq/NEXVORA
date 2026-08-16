@@ -47,6 +47,7 @@ import WorkPanel from "./work-panel";
 import DeliveryLifecyclePanel from "./delivery-lifecycle-panel";
 import MilestonesPanel from "./milestones-panel";
 import TeamPanel from "./team-panel";
+import ProjectAssistantPanel from "./project-assistant-panel";
 import ProjectHealthStrip from "./_shared/project-health-strip";
 import { getProjectHealth, getTeamWorkload } from "@/lib/portfolio/service";
 import { listMilestones } from "@/lib/work/milestone-service";
@@ -1606,6 +1607,19 @@ export default async function ProjectDetailPage({
                 ]}
               />
             ),
+          },
+        ]
+      : []),
+    // Project Assistant (Phase A): تبويب أداة دائم (مش مرحلة سير عمل)،
+    // غير مُسجَّل في STAGE_REGISTRY ولا في مقاييس project-readiness — صفر
+    // أثر على نسبة الجاهزية. المحتوى الفعلي (محادثة + استرجاع + استشهادات)
+    // بييجي في Phase D؛ ده استب بسيط لحد ما يتبنى.
+    ...(workflowV2Enabled
+      ? [
+          {
+            key: "projectAssistant",
+            label: "مساعد المشروع",
+            content: <ProjectAssistantPanel />,
           },
         ]
       : []),

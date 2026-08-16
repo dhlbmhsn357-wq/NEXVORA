@@ -71,7 +71,11 @@ export const NEXVORA_TAB_PHASES: readonly TabPhase[] = [
     //  • overview اتفكّك: محتواه اتنقل لـ analysis + projectBrain
     // Restructure 2026-Q4: team في أول موقع لأنه إعداد أساسي (ملكية + فريق)
     //  بيتحدد مرة واحدة في بداية المشروع، ما بيتغيّرش يوميًا.
-    tabs: [e("team"), e("discovery"), e("analysis"), e("research")],
+    // Project Assistant (Phase A): مساعد المشروع تبويب أداة دائم (مش
+    //  مرحلة سير عمل) — ثابت بين team وdiscovery: «الفريق والملكية →
+    //  مساعد المشروع → Discovery». غير مُسجَّل في STAGE_REGISTRY عن قصد
+    //  (شوف lib/workflow/registry.ts) فما بيأثّرش على نسبة الجاهزية.
+    tabs: [e("team"), e("projectAssistant"), e("discovery"), e("analysis"), e("research")],
   },
   {
     key: "meetings",
