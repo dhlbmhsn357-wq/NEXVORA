@@ -131,6 +131,12 @@ const TASK_TIMEOUT_MS: Partial<Record<AITaskType, number>> = {
   // السياق لكن أخف بكتير من مهام الـ JSON الضخم متعدد الأقسام فوق، فمش
   // محتاج الـ 110 ثانية ولا LARGE_JSON_OUTPUT_TOKENS.
   [AITaskType.PROJECT_ASSISTANT_QA]: 60_000,
+  // تحليل أثر طلب تغيير (المرحلة ب): بيقرا سياق المنتج الحالي كامل عبر كل
+  // النطاقات (Requirements/Stories/AC/Business Rules/System Messages/
+  // State Machines/PRD/Decisions) ويرجّع JSON بعدد غير محدود من عناصر
+  // الأثر، كل عنصر بحقول proposed_change مهيكلة — نفس فئة DISCOVERY_ANALYSIS
+  // (مسح متعدد الأقسام + JSON غني)، مش مهمة نصية بسيطة زي QA.
+  [AITaskType.STANDARD_CHANGE_IMPACT_ANALYSIS]: 110_000,
 };
 
 /**
@@ -193,6 +199,8 @@ const TASK_MAX_OUTPUT_TOKENS: Partial<Record<AITaskType, number>> = {
   [AITaskType.PRODUCTION_FIX_PROMPT_GENERATION]: LARGE_JSON_OUTPUT_TOKENS,
   [AITaskType.PRODUCTION_MONITORING_REVIEW_VERDICT]: LARGE_JSON_OUTPUT_TOKENS,
   [AITaskType.PROMPT_REFINEMENT]: LARGE_JSON_OUTPUT_TOKENS,
+  // نفس فئة DISCOVERY_ANALYSIS — تحليل أثر متعدد العناصر عبر كل نطاقات المنتج.
+  [AITaskType.STANDARD_CHANGE_IMPACT_ANALYSIS]: LARGE_JSON_OUTPUT_TOKENS,
 };
 
 /** بعض المهام الثقيلة بتقلل المحاولات عشان الوقت الكلي يفضل معقول. */
@@ -237,6 +245,7 @@ const TASK_MAX_ATTEMPTS: Partial<Record<AITaskType, number>> = {
   [AITaskType.BRAIN_REVIEW_VALIDATION]: 2,
   [AITaskType.PRODUCTION_FIX_PROMPT_GENERATION]: 2,
   [AITaskType.PRODUCTION_MONITORING_REVIEW_VERDICT]: 2,
+  [AITaskType.STANDARD_CHANGE_IMPACT_ANALYSIS]: 2,
 };
 
 function sleep(ms: number) {

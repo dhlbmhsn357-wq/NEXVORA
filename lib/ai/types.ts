@@ -81,6 +81,8 @@ export enum AITaskType {
   MIGRATION_HYPERCARE_ANALYSIS = "migration_hypercare_analysis",
   /** مساعد المشروع (Phase C) — إجابة سؤال مبنية على أدلة مسترجَعة، مع حالة إجابة واستشهادات. */
   PROJECT_ASSISTANT_QA = "project_assistant_qa",
+  /** حزمة المنتج القياسية (المرحلة ب) — تحليل أثر طلب تغيير عميل على عناصر المنتج الحالية، بدون كتابة مباشرة على البيانات. */
+  STANDARD_CHANGE_IMPACT_ANALYSIS = "standard_change_impact_analysis",
 }
 
 export enum AIProviderName {
