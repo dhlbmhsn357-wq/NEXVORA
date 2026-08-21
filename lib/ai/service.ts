@@ -137,6 +137,11 @@ const TASK_TIMEOUT_MS: Partial<Record<AITaskType, number>> = {
   // الأثر، كل عنصر بحقول proposed_change مهيكلة — نفس فئة DISCOVERY_ANALYSIS
   // (مسح متعدد الأقسام + JSON غني)، مش مهمة نصية بسيطة زي QA.
   [AITaskType.STANDARD_CHANGE_IMPACT_ANALYSIS]: 110_000,
+  // توليد Prompt تغيير الـ Prototype (المرحلة ج): مدخل محدود (طلب تغيير
+  // واحد + قائمة أثر مُطبَّق واحدة فقط، مش سياق منتج كامل) ومخرج نص واحد
+  // (Prompt عملي، مش JSON غني متعدد الأقسام) — نفس فئة PROJECT_ASSISTANT_QA
+  // بالضبط، أخف بكتير من STANDARD_CHANGE_IMPACT_ANALYSIS.
+  [AITaskType.PROTOTYPE_CHANGE_PROMPT_GENERATION]: 60_000,
 };
 
 /**

@@ -82,6 +82,12 @@ export interface HandoffPackageRow {
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
+  // 0125 — علم "محتوى المشروع اتغيّر بعد آخر تجميع لهذه الحزمة". بيتظبّط
+  // من apply-changes-service.ts::applyApprovedImpacts (عبر
+  // lib/sector-standards/handoff-regeneration.ts)، وبيتصفّر تلقائيًا
+  // في applyAssembly لما حزمة طازجة تتجمّع.
+  needsRegeneration: boolean;
+  regenerationReason: string;
 }
 
 export interface HandoffItemRow {

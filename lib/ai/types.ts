@@ -83,6 +83,8 @@ export enum AITaskType {
   PROJECT_ASSISTANT_QA = "project_assistant_qa",
   /** حزمة المنتج القياسية (المرحلة ب) — تحليل أثر طلب تغيير عميل على عناصر المنتج الحالية، بدون كتابة مباشرة على البيانات. */
   STANDARD_CHANGE_IMPACT_ANALYSIS = "standard_change_impact_analysis",
+  /** حزمة المنتج القياسية (المرحلة ج) — توليد Prompt عملي لأداة Prototype خارجية، مبني حصريًا على أثر تغيير مُطبَّق فعليًا. */
+  PROTOTYPE_CHANGE_PROMPT_GENERATION = "prototype_change_prompt_generation",
 }
 
 export enum AIProviderName {

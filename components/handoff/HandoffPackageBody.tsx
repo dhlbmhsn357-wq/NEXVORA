@@ -485,6 +485,7 @@ type DbPkg = {
   id: string; project_id: string; version: number; title: string;
   status: HandoffPackageStatus; finalized_at: string | null; finalized_by: string | null;
   notes: string; created_at: string; updated_at: string; created_by: string | null;
+  needs_regeneration?: boolean; regeneration_reason?: string;
 };
 type DbItem = {
   id: string; package_id: string; project_id: string; item_key: string;
@@ -514,6 +515,8 @@ async function loadPackage(
     id: r.id, projectId: r.project_id, version: r.version, title: r.title,
     status: r.status, finalizedAt: r.finalized_at, finalizedBy: r.finalized_by,
     notes: r.notes, createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
+    needsRegeneration: r.needs_regeneration ?? false,
+    regenerationReason: r.regeneration_reason ?? "",
   };
 }
 

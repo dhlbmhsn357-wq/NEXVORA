@@ -54,6 +54,7 @@ const taskTypeLabels: Record<AITaskType, string> = {
   [AITaskType.PRD_INCREMENT_SECTION]: "قسم PRD للزيادة",
   [AITaskType.PROJECT_ASSISTANT_QA]: "مساعد المشروع — إجابة الأسئلة",
   [AITaskType.STANDARD_CHANGE_IMPACT_ANALYSIS]: "حزمة المنتج القياسية — تحليل أثر طلب تغيير",
+  [AITaskType.PROTOTYPE_CHANGE_PROMPT_GENERATION]: "حزمة المنتج القياسية — توليد Prompt تغيير الـ Prototype",
   [AITaskType.USER_STORY]: "قصص المستخدم",
   [AITaskType.PROMPT_GENERATION]: "توليد Prompts",
   [AITaskType.COMPETITOR_ANALYSIS]: "تحليل المنافسين",

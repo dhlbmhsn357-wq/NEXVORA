@@ -77,6 +77,19 @@ const { createBusinessRule, updateBusinessRule, deleteBusinessRule } = brMocks;
 const { createSystemMessage, updateSystemMessage, deleteSystemMessage } = smMocks;
 const { createStory, updateStory, deleteStory, createAc, updateAc, deleteAc } = storyMocks;
 
+// 0125 — Handoff regeneration flag + Standard learning signals
+const handoffMocks = vi.hoisted(() => ({
+  flagHandoffNeedsRegeneration: vi.fn(async (_projectId: string, _reason: string) => {}),
+}));
+vi.mock("./handoff-regeneration", () => handoffMocks);
+const { flagHandoffNeedsRegeneration } = handoffMocks;
+
+const learningMocks = vi.hoisted(() => ({
+  recordLearningSignal: vi.fn(async (_changeRequestId: string, _impact: unknown) => {}),
+}));
+vi.mock("./learning-signals-service", () => learningMocks);
+const { recordLearningSignal } = learningMocks;
+
 import { applyApprovedImpacts } from "./apply-changes-service";
 
 function makeImpact(overrides: Partial<Record<string, unknown>> & { id: string }) {
@@ -268,5 +281,72 @@ describe("applyApprovedImpacts — ترقية حالة طلب التغيير", (
     await applyApprovedImpacts("cr-1", ["a1"], "u1");
 
     expect(state.crStatusUpdates).toEqual(["applied"]);
+  });
+});
+
+describe("applyApprovedImpacts — 0125: علم إعادة تجميع Handoff", () => {
+  it("applied > 0 بيستدعي flagHandoffNeedsRegeneration بسبب يحتوي عنوان طلب التغيير", async () => {
+    state.setChangeRequest({ id: "cr-1", projectId: "p1", status: "approved", title: "تحديث سعر الحجز" });
+    state.setImpacts([makeImpact({ id: "ok1", artifactType: "requirement", impactType: "add", proposedChange: { title: "ok" } })]);
+
+    await applyApprovedImpacts("cr-1", ["ok1"], "u1");
+
+    expect(flagHandoffNeedsRegeneration).toHaveBeenCalledTimes(1);
+    const [projectId, reason] = flagHandoffNeedsRegeneration.mock.calls[0];
+    expect(projectId).toBe("p1");
+    expect(reason).toContain("تحديث سعر الحجز");
+  });
+
+  it("applied === 0 (كل العناصر فشلت) ما بيستدعيش flagHandoffNeedsRegeneration", async () => {
+    state.setImpacts([makeImpact({ id: "prd1", artifactType: "prd_section", impactType: "modify", artifactId: "prd-1" })]);
+
+    const result = await applyApprovedImpacts("cr-1", ["prd1"], "u1");
+
+    expect(result.applied).toBe(0);
+    expect(flagHandoffNeedsRegeneration).not.toHaveBeenCalled();
+  });
+
+  it("فشل flagHandoffNeedsRegeneration ما بيكسّرش نتيجة applyApprovedImpacts", async () => {
+    flagHandoffNeedsRegeneration.mockRejectedValueOnce(new Error("فشل تعليم متعمَّد"));
+    state.setImpacts([makeImpact({ id: "ok1", artifactType: "requirement", impactType: "add", proposedChange: { title: "ok" } })]);
+
+    const result = await applyApprovedImpacts("cr-1", ["ok1"], "u1");
+
+    expect(result.applied).toBe(1);
+    expect(result.failed).toEqual([]);
+  });
+});
+
+describe("applyApprovedImpacts — 0125: إشارات تعلّم Standard", () => {
+  it("recordLearningSignal بيتنادى مرة واحدة لكل أثر اتطبّق بنجاح", async () => {
+    state.setImpacts([
+      makeImpact({ id: "ok1", artifactType: "requirement", impactType: "add", proposedChange: { title: "ok" } }),
+      makeImpact({ id: "ok2", artifactType: "business_rule", impactType: "add", proposedChange: { title: "ok2" } }),
+    ]);
+
+    await applyApprovedImpacts("cr-1", ["ok1", "ok2"], "u1");
+
+    expect(recordLearningSignal).toHaveBeenCalledTimes(2);
+    expect(recordLearningSignal).toHaveBeenCalledWith("cr-1", expect.objectContaining({ id: "ok1", status: "applied" }));
+    expect(recordLearningSignal).toHaveBeenCalledWith("cr-1", expect.objectContaining({ id: "ok2", status: "applied" }));
+  });
+
+  it("عنصر فشل تطبيقه ما بيستدعيش recordLearningSignal له", async () => {
+    updateRequirement.mockRejectedValueOnce(new Error("فشل متعمّد"));
+    state.setImpacts([makeImpact({ id: "fail1", artifactType: "requirement", impactType: "modify", artifactId: "req-1", proposedChange: {} })]);
+
+    await applyApprovedImpacts("cr-1", ["fail1"], "u1");
+
+    expect(recordLearningSignal).not.toHaveBeenCalled();
+  });
+
+  it("فشل recordLearningSignal ما بيكسّرش نتيجة applyApprovedImpacts (تحذير فقط)", async () => {
+    recordLearningSignal.mockRejectedValueOnce(new Error("فشل تسجيل متعمَّد"));
+    state.setImpacts([makeImpact({ id: "ok1", artifactType: "requirement", impactType: "add", proposedChange: { title: "ok" } })]);
+
+    const result = await applyApprovedImpacts("cr-1", ["ok1"], "u1");
+
+    expect(result.applied).toBe(1);
+    expect(result.failed).toEqual([]);
   });
 });

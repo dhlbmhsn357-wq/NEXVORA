@@ -28,6 +28,8 @@ import { createAc, updateAc, deleteAc } from "@/lib/user-stories/service";
 import { listChangeImpacts, updateChangeImpactStatus, updateChangeRequestStatus, getChangeRequest } from "./change-request-service";
 import { SUPPORTED_APPLY_ARTIFACT_TYPES, type SupportedApplyArtifactType } from "./change-request-types";
 import type { ChangeImpactRow } from "./change-request-types";
+import { flagHandoffNeedsRegeneration } from "./handoff-regeneration";
+import { recordLearningSignal } from "./learning-signals-service";
 
 export interface ApplyApprovedImpactsResult {
   applied: number;
@@ -224,6 +226,16 @@ export async function applyApprovedImpacts(
       await applyOneImpact(changeRequest.projectId, impact, actorId);
       await updateChangeImpactStatus(impactId, "applied");
       applied += 1;
+
+      // 0125 — بذرة تعلّم Standard: أثر إضافي، مش حرِج لنجاح التطبيق
+      // نفسه. فشل التسجيل هنا (نادر — فشل كتابة قاعدة بيانات حقيقي) ما
+      // بيلغيش إن الأثر اتطبّق فعليًا على بيانات المنتج، فبنسجّله كـ
+      // تحذير بس ونكمل.
+      try {
+        await recordLearningSignal(changeRequestId, { ...impact, status: "applied" });
+      } catch (signalErr) {
+        console.error(`[ApplyChanges] فشل تسجيل إشارة تعلّم Standard لأثر ${impactId}:`, signalErr);
+      }
     } catch (err) {
       console.error(`[ApplyChanges] فشل تطبيق أثر ${impactId} (نوع ${impact.artifactType}):`, err);
       failed.push({ impactId, error: errMsg(err) });
@@ -237,6 +249,21 @@ export async function applyApprovedImpacts(
   const stillPending = refreshed.some((i) => i.status === "proposed" || i.status === "approved");
   if (!stillPending && refreshed.length > 0) {
     await updateChangeRequestStatus(changeRequestId, "applied");
+  }
+
+  // 0125 — لو اتطبّق أثر حقيقي فعلًا (applied > 0)، أي حزمة Handoff
+  // موجودة لنفس المشروع بقت محتوائيًا "قديمة" — علّمها محتاجة إعادة
+  // تجميع. فشل التعليم ده (نادر) مش سبب كافٍ لإفشال نتيجة applyApprovedImpacts
+  // كلها — الأثر الحقيقي على بيانات المنتج بالفعل اتسجّل بنجاح.
+  if (applied > 0) {
+    try {
+      await flagHandoffNeedsRegeneration(
+        changeRequest.projectId,
+        `تحديث بعد تطبيق تغيير: ${changeRequest.title}`
+      );
+    } catch (flagErr) {
+      console.error(`[ApplyChanges] فشل تعليم حزمة Handoff بالحاجة لإعادة التجميع لمشروع ${changeRequest.projectId}:`, flagErr);
+    }
   }
 
   return { applied, failed };

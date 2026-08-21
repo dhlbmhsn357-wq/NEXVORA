@@ -137,6 +137,18 @@ export async function applyAssembly(
       result.details.push({ itemKey: p.itemKey, action: p.action });
     }
   }
+
+  // 0125 — الحزمة اتجمّعت طازجة (حتى لو فيه عناصر متجاوَزة/فشلانة فرديًا)،
+  // فصفّر علم "محتاجة إعادة تجميع" لو كان مضبوطًا. فشل التصفير ده (نادر)
+  // ما بيلغيش نتيجة التجميع نفسها — بيتسجّل تحذير بس.
+  const { error: clearErr } = await svc
+    .from("handoff_packages")
+    .update({ needs_regeneration: false, regeneration_reason: "" })
+    .eq("id", packageId);
+  if (clearErr) {
+    console.error(`[Handoff] فشل تصفير علم إعادة التجميع لحزمة ${packageId}:`, clearErr);
+  }
+
   return result;
 }
 
