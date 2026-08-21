@@ -23,6 +23,12 @@ export interface WorkflowNavItem {
   label: string;
   content: ReactNode;
   category?: TabCategory;
+  /**
+   * 0126 — Standard Product Package: شارة نصّية صغيرة اختيارية بجانب اسم
+   * التبويب (مثال: "موروث + 3 تغييرات"). اختيارية تمامًا — `undefined` لأي
+   * تبويب قديم يعني صفر تغيير بصري (نفس السلوك قبل 0126 بالضبط).
+   */
+  badgeText?: string;
 }
 
 const STATUS_DOT_CLASS: Record<WorkflowStatus, string> = {
@@ -246,6 +252,11 @@ export default function WorkflowNav({
                 >
                   {state && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT_CLASS[state.status]}`} aria-hidden="true" />}
                   {item.label}
+                  {item.badgeText && (
+                    <span className="rounded-[var(--v-radius-full)] bg-[var(--v-primary-tint)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--v-primary)]">
+                      {item.badgeText}
+                    </span>
+                  )}
                   {isStale && <AlertCircle size={12} className="shrink-0 text-[var(--v-warning)]" aria-label="يحتاج إعادة توليد" />}
                 </button>
               );

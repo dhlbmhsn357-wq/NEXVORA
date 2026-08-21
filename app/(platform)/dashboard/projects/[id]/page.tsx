@@ -113,6 +113,13 @@ import PartnersPanel from "./_panels/partners-panel";
 import ChangeImpactPanel from "./_panels/change-impact-panel";
 import DecisionsPanel from "./_panels/decisions-panel";
 import StageOwnersPanel from "./_panels/stage-owners-panel";
+// 0126 — Standard Product Package (المرحلة د، الأخيرة).
+import ClientChangesPanel from "./_panels/client-changes-panel";
+import SectorStandardSettingsPanel from "./_panels/sector-standard-settings-panel";
+import { getProjectStandardLink } from "@/lib/sector-standards/service";
+import { listChangeRequests as listClientChangeRequests } from "@/lib/sector-standards/change-request-service";
+import { getAppliedImpactCountsByArtifactType } from "@/lib/sector-standards/standard-badges-service";
+import { getFitGapNotes } from "@/lib/sector-standards/fit-gap-service";
 import { listItems as listDecisionItems } from "@/lib/product-decisions/service";
 import { listAssignments as listStageAssignments } from "@/lib/stage-assignments/service";
 import { listQuestions as listHandoffQuestions, listDeliveries as listHandoffDeliveries } from "@/lib/handoff/service";
@@ -201,7 +208,7 @@ export default async function ProjectDetailPage({
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select(
-      "id, name, project_type, stage, ai_analysis, project_code, widget_key, archived_at, stage_changed_at, owner_id, lead_id, discovery_template_id, staging_url, production_url, workflow_version, mode, clients(company_name)"
+      "id, name, project_type, stage, ai_analysis, project_code, widget_key, archived_at, stage_changed_at, owner_id, lead_id, discovery_template_id, staging_url, production_url, workflow_version, mode, workflow_mode, is_sector_standard, sector_name, standard_version, clients(company_name)"
     )
     .eq("id", id)
     .single();
@@ -655,6 +662,56 @@ export default async function ProjectDetailPage({
   const canWriteCommercial = ["owner", "admin", "supervisor"].includes(currentUserRole);
   // Owner only can hard-delete
   const canDeleteProject = currentUserRole === "owner";
+
+  // ============================================================================
+  // 0126 — Standard Product Package (المرحلة د، الأخيرة). كل شيء هنا additive
+  // بحت ومحاط بـ try/catch — فشل أي جزء منه أبدًا ما يكسرش صفحة المشروع (زي
+  // نمط ensureProjectWorkspace في clone-service.ts). صفر تأثير على مشاريع
+  // workflow_mode='full_discovery' (الافتراضي لكل مشروع قديم) غير حساب
+  // isStandardBased نفسه (false دايمًا ليهم) — كل الفروع اللي بعد كده بتتجاهل.
+  // ============================================================================
+  const projectMeta = project as unknown as {
+    workflow_mode?: string;
+    is_sector_standard?: boolean;
+    sector_name?: string | null;
+    standard_version?: string | null;
+  };
+  const isStandardBased = projectMeta.workflow_mode === "standard_based";
+  const isSectorStandardProject = projectMeta.is_sector_standard === true;
+
+  let standardLink: Awaited<ReturnType<typeof getProjectStandardLink>> = null;
+  let standardLabel: string | null = null;
+  let sectorChangeRequestsRows: Awaited<ReturnType<typeof listClientChangeRequests>> = [];
+  let fitGapNotesRow: Awaited<ReturnType<typeof getFitGapNotes>> = null;
+  let appliedImpactCounts: Record<string, number> = {};
+
+  if (isStandardBased) {
+    try {
+      [standardLink, sectorChangeRequestsRows, fitGapNotesRow, appliedImpactCounts] = await Promise.all([
+        getProjectStandardLink(project.id),
+        listClientChangeRequests(project.id),
+        getFitGapNotes(project.id),
+        getAppliedImpactCountsByArtifactType(project.id),
+      ]);
+      if (standardLink) {
+        const { data: sourceStandard } = await supabase
+          .from("projects")
+          .select("name, sector_name")
+          .eq("id", standardLink.standardProjectId)
+          .maybeSingle();
+        const sourceLabel = sourceStandard?.sector_name || sourceStandard?.name || "Sector Standard";
+        standardLabel = `${sourceLabel} v${standardLink.standardVersionSnapshot}`;
+      }
+    } catch (err) {
+      console.error("[StandardProductPackage] فشل تحميل بيانات المرحلة د (تجاهل — الصفحة تكمل عادي):", err);
+    }
+  }
+
+  const definitionAppliedCount =
+    (appliedImpactCounts.requirement ?? 0) + (appliedImpactCounts.business_rule ?? 0) + (appliedImpactCounts.system_message ?? 0);
+  const storiesAppliedCount = (appliedImpactCounts.user_story ?? 0) + (appliedImpactCounts.acceptance_criteria ?? 0);
+  const definitionBadgeText = isStandardBased ? (definitionAppliedCount > 0 ? `موروث + ${definitionAppliedCount} تغييرات` : "موروث") : undefined;
+  const storiesBadgeText = isStandardBased ? (storiesAppliedCount > 0 ? `موروث + ${storiesAppliedCount} تغييرات` : "موروث") : undefined;
 
   // ===== NEXVORA Readiness (P3 6-metric system) =====
   // نحسب على الفور بدون snapshots — العناصر تُشتق تلقائيًا من نفس
@@ -1645,6 +1702,7 @@ export default async function ProjectDetailPage({
       {
         key: "definition",
         label: "تعريف المنتج",
+        badgeText: definitionBadgeText,
         content: (
           <DefinitionPanel
             projectId={project.id}
@@ -1661,6 +1719,7 @@ export default async function ProjectDetailPage({
       {
         key: "stories",
         label: "القصص والقبول",
+        badgeText: storiesBadgeText,
         content: (
           <StoriesPanel
             projectId={project.id}
@@ -1735,6 +1794,43 @@ export default async function ProjectDetailPage({
               }
               return m;
             })()}
+            canWrite={canWriteCommercial}
+          />
+        ),
+      },
+      // 0126 — Standard Product Package (المرحلة د): "تغييرات العميل" —
+      // يظهر فقط لمشاريع workflow_mode === 'standard_based' (Client
+      // Variant مبني على Sector Standard). صفر تأثير على أي مشروع
+      // full_discovery — التبويب أصلًا مش موجود في الـ array بتاعهم.
+      ...(isStandardBased ? [
+        {
+          key: "clientChanges",
+          label: "تغييرات العميل",
+          badgeText: sectorChangeRequestsRows.length > 0 ? `${sectorChangeRequestsRows.length}` : undefined,
+          content: (
+            <ClientChangesPanel
+              projectId={project.id}
+              standardLink={standardLink}
+              standardLabel={standardLabel}
+              changeRequests={sectorChangeRequestsRows}
+              fitGapNotes={fitGapNotesRow}
+              canWrite={canWriteCommercial}
+            />
+          ),
+        },
+      ] : []),
+      // 0126 — "إعدادات القطاع" — تبويب أداة دائم متاح لأي مشروع (زي
+      // projectAssistant)، مش مقيّد بـ workflow_mode. يسمح بتعليم أي
+      // مشروع كـ Sector Standard.
+      {
+        key: "sectorStandardSettings",
+        label: "إعدادات القطاع",
+        content: (
+          <SectorStandardSettingsPanel
+            projectId={project.id}
+            isSectorStandard={isSectorStandardProject}
+            sectorName={projectMeta.sector_name ?? null}
+            standardVersion={projectMeta.standard_version ?? null}
             canWrite={canWriteCommercial}
           />
         ),

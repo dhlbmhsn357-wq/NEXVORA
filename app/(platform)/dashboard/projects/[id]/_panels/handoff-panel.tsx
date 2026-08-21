@@ -192,6 +192,23 @@ export default function HandoffPanel({
         <Tile label="الإلزاميات" value={`${readiness.mandatoryCompleted}/${readiness.mandatoryTotal}`} tone={readiness.ready ? "success" : "danger"} />
       </div>
 
+      {/* 0126 — Standard Product Package: علم "يحتاج إعادة تجميع" بعد تطبيق
+          تغيير عميل معتمَد (change_impacts). بيتصفّر تلقائيًا من applyAssembly
+          نفسه لما الحزمة تتجمّع تاني — راجع lib/handoff/assembler.ts. */}
+      {latestPackage.needsRegeneration && (
+        <div className="flex flex-wrap items-center gap-2 rounded-[var(--v-radius-md)] border border-[var(--v-amber)] bg-[var(--v-amber)]/10 p-3">
+          <Badge tone="warning">يحتاج إعادة تجميع</Badge>
+          <p className="flex-1 text-xs text-[var(--v-amber)]">
+            {latestPackage.regenerationReason || "تغيّرت بيانات المشروع بعد آخر تجميع لهذه الحزمة."}
+          </p>
+          {canWrite && (
+            <Button size="sm" variant="ghost" icon={<Sparkles size={13} />} disabled={previewLoading} onClick={openPreview}>
+              إعادة التجميع الآن
+            </Button>
+          )}
+        </div>
+      )}
+
       <Card>
         <Header title="مؤشر الجاهزية" />
         <div className="space-y-3">
