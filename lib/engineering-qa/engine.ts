@@ -174,29 +174,42 @@ export class EngineeringQAEngine {
    * جسر لمحرك فرعي مستقل لسه بيشتغل، راجع stage-registry.ts)، الاستعادة
    * مسموحة حتى لو المرحلة "running" فعليًا وحديثة — دي مش تعارض تشغيل
    * مزدوج، دي استمرار طبيعي متوقع لنفس المرحلة (الـ Client بيعاود
-   * الاستدعاء كل Poll لحد ما المحرك الفرعي يخلص).
+   * الاستدعاء كل Poll لحد ما المحرك الفرعي يخلص). "البداية الجديدة" نفسها
+   * (الانتقال من مش-running لـ running) UPDATE ذري مشروط بالحالة — نفس
+   * ضمان الفرع غير-Continuable تحت، فمفيش تشغيل مزدوج حقيقي لبداية المرحلة.
    */
   static async tryClaimStageLock(reviewId: string, stageKey: string): Promise<boolean> {
     const supabase = createServiceClient();
     const definition = getStageDefinition(stageKey);
 
     if (definition?.continuable) {
-      const { data: current } = await supabase
+      // خطوة 1 — "بداية جديدة" (المرحلة مش running دلوقتي): UPDATE ذري
+      // مشروط بـ stage_status <> 'running'، بنفس نمط الفرع غير-Continuable
+      // تحت — بيضمن إن نقرة مزدوجة على Retry أو تبويبين متزامنين مايقدروش
+      // الاتنين يبدأوا نفس المرحلة من الصفر (كان ده بيسمح بإنشاء صفَّي
+      // static_reviews/security_reviews/... مكرّرين لنفس engineering_stage_id،
+      // مفيش unique constraint عليه في الداتابيز).
+      const { data: freshClaim, error: freshError } = await supabase
         .from("engineering_review_stages")
-        .select("stage_status")
+        .update({ stage_status: "running", last_error: null, started_at: new Date().toISOString() })
         .eq("review_id", reviewId)
         .eq("stage_key", stageKey)
-        .maybeSingle();
-      const isFreshStart = !current || current.stage_status !== "running";
+        .neq("stage_status", "running")
+        .select("id");
+      if (freshError) return false;
+      if ((freshClaim?.length ?? 0) > 0) return true;
+
+      // خطوة 2 — المرحلة أصلًا "running": ده استدعاء Poll طبيعي متوقع (مش
+      // تعارض) — الـ Continuable Stage محتاجة تُستدعى تاني كل Poll عشان
+      // تتقدّم لمحور/فحص جديد (راجع تعليق الدالة). العملية دي آمنة حتى مع
+      // تكرارها بالتوازي لأن التنفيذ الفعلي (AI Dispatch) محمي بقفل ذري
+      // منفصل على مستوى المحور نفسه (tryClaimCategoryLock في كل Engine).
       const { data, error } = await supabase
         .from("engineering_review_stages")
-        .update({
-          stage_status: "running",
-          last_error: null,
-          ...(isFreshStart ? { started_at: new Date().toISOString() } : {}),
-        })
+        .update({ stage_status: "running", last_error: null })
         .eq("review_id", reviewId)
         .eq("stage_key", stageKey)
+        .eq("stage_status", "running")
         .select("id");
       if (error) return false;
       return (data?.length ?? 0) > 0;
