@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck } from "lucide-react";
+import Link from "next/link";
+import { ClipboardCheck, FileDown } from "lucide-react";
+import { isPrintableStage } from "@/lib/engineering-qa/print-registry-keys";
 import {
   cancelEngineeringReview,
   createAndStartEngineeringReview,
@@ -483,6 +485,18 @@ export default function EngineeringQAPanel({
   const progress = calculateReviewProgress(stages);
   const etaSeconds = currentReview ? estimateRemainingSeconds(stages, progress.remainingStages) : null;
 
+  // معرّف مراجعة كل مرحلة — لبناء رابط "تصدير PDF" (qa-stage-print) من
+  // غير ما StageCard تحتاج تعرف شكل الـ 7 محركات المختلفة.
+  const printReviewIdByStageKey: Record<string, string | null> = {
+    static_code_audit: staticReview.currentReview?.id ?? null,
+    security_audit: securityReview.currentReview?.id ?? null,
+    database_audit: databaseReview.currentReview?.id ?? null,
+    architecture_audit: architectureReview.currentReview?.id ?? null,
+    code_quality_audit: codeQualityReview.currentReview?.id ?? null,
+    performance_audit: performanceReview.currentReview?.id ?? null,
+    prd_compliance_audit: prdComplianceReview.currentReview?.id ?? null,
+  };
+
   return (
     <div ref={rootRef}>
       <div className="mb-4 rounded-[var(--v-radius-lg)] border border-[var(--v-border)] bg-[var(--v-bg)] p-4">
@@ -577,6 +591,7 @@ export default function EngineeringQAPanel({
                 key={stage.id}
                 stage={stage}
                 results={results}
+                printReviewId={printReviewIdByStageKey[stage.stage_key] ?? null}
                 onRetry={() => handleRetryStage(stage.stage_key)}
                 expandedContent={
                   stage.stage_key === "static_code_audit" ? (
@@ -747,11 +762,14 @@ function StageCard({
   results,
   onRetry,
   expandedContent,
+  printReviewId,
 }: {
   stage: EngineeringReviewStage;
   results: EngineeringStageResult[];
   onRetry: () => void;
   expandedContent?: ReactNode;
+  /** id مراجعة المرحلة الحالية — لو موجود ومسموح بالطباعة، بيظهر رابط "تصدير PDF". */
+  printReviewId?: string | null;
 }) {
   const [expanded, setExpanded] = useState(!!expandedContent);
   const result = results.find((r) => r.stage_id === stage.id);
@@ -784,6 +802,16 @@ function StageCard({
             >
               {expanded ? "إخفاء التفاصيل" : "عرض التفاصيل"}
             </button>
+          )}
+          {printReviewId && isPrintableStage(stage.stage_key) && (
+            <Link
+              href={`/qa-stage-print/${stage.stage_key}/${printReviewId}`}
+              target="_blank"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[var(--v-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--v-primary)]"
+            >
+              <FileDown size={13} />
+              تصدير PDF
+            </Link>
           )}
           {(stage.stage_status === "failed" || stage.stage_status === "completed") && (
             <Button variant="outline" size="sm" onClick={onRetry}>
